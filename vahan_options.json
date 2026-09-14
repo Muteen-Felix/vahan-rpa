@@ -1,0 +1,2855 @@
+{
+  "reportType": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": false,
+    "totalOptions": 4,
+    "options": [
+      {
+        "index": 0,
+        "value": "0",
+        "text": "CALENDAR YEAR",
+        "label": "CALENDAR YEAR",
+        "selected": true,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "1",
+        "text": "FINANCIAL YEAR",
+        "label": "FINANCIAL YEAR",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "4",
+        "text": "Last 1 Year",
+        "label": "Last 1 Year",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "9",
+        "text": "1 Month Flexible",
+        "label": "1 Month Flexible",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": false,
+    "hasAllSelector": false,
+    "multiselectItemsCount": 0
+  },
+  "financialYearSelect": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 58,
+    "options": [
+      {
+        "index": 0,
+        "value": "2026-2027",
+        "text": "2026-2027",
+        "label": "2026-2027",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "2025-2026",
+        "text": "2025-2026",
+        "label": "2025-2026",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "2024-2025",
+        "text": "2024-2025",
+        "label": "2024-2025",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "2023-2024",
+        "text": "2023-2024",
+        "label": "2023-2024",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "2022-2023",
+        "text": "2022-2023",
+        "label": "2022-2023",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "2021-2022",
+        "text": "2021-2022",
+        "label": "2021-2022",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "2020-2021",
+        "text": "2020-2021",
+        "label": "2020-2021",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "2019-2020",
+        "text": "2019-2020",
+        "label": "2019-2020",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "2018-2019",
+        "text": "2018-2019",
+        "label": "2018-2019",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "2017-2018",
+        "text": "2017-2018",
+        "label": "2017-2018",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "2016-2017",
+        "text": "2016-2017",
+        "label": "2016-2017",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "2015-2016",
+        "text": "2015-2016",
+        "label": "2015-2016",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "2014-2015",
+        "text": "2014-2015",
+        "label": "2014-2015",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "2013-2014",
+        "text": "2013-2014",
+        "label": "2013-2014",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "2012-2013",
+        "text": "2012-2013",
+        "label": "2012-2013",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 15,
+        "value": "2011-2012",
+        "text": "2011-2012",
+        "label": "2011-2012",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 16,
+        "value": "2010-2011",
+        "text": "2010-2011",
+        "label": "2010-2011",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 17,
+        "value": "2009-2010",
+        "text": "2009-2010",
+        "label": "2009-2010",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 18,
+        "value": "2008-2009",
+        "text": "2008-2009",
+        "label": "2008-2009",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 19,
+        "value": "2007-2008",
+        "text": "2007-2008",
+        "label": "2007-2008",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 20,
+        "value": "2006-2007",
+        "text": "2006-2007",
+        "label": "2006-2007",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 21,
+        "value": "2005-2006",
+        "text": "2005-2006",
+        "label": "2005-2006",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 22,
+        "value": "2004-2005",
+        "text": "2004-2005",
+        "label": "2004-2005",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 23,
+        "value": "2003-2004",
+        "text": "2003-2004",
+        "label": "2003-2004",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 24,
+        "value": "2002-2003",
+        "text": "2002-2003",
+        "label": "2002-2003",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 25,
+        "value": "2001-2002",
+        "text": "2001-2002",
+        "label": "2001-2002",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 26,
+        "value": "2000-2001",
+        "text": "2000-2001",
+        "label": "2000-2001",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 27,
+        "value": "1999-2000",
+        "text": "1999-2000",
+        "label": "1999-2000",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 28,
+        "value": "1998-1999",
+        "text": "1998-1999",
+        "label": "1998-1999",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 29,
+        "value": "1997-1998",
+        "text": "1997-1998",
+        "label": "1997-1998",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 30,
+        "value": "1996-1997",
+        "text": "1996-1997",
+        "label": "1996-1997",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 31,
+        "value": "1995-1996",
+        "text": "1995-1996",
+        "label": "1995-1996",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 32,
+        "value": "1994-1995",
+        "text": "1994-1995",
+        "label": "1994-1995",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 33,
+        "value": "1993-1994",
+        "text": "1993-1994",
+        "label": "1993-1994",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 34,
+        "value": "1992-1993",
+        "text": "1992-1993",
+        "label": "1992-1993",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 35,
+        "value": "1991-1992",
+        "text": "1991-1992",
+        "label": "1991-1992",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 36,
+        "value": "1990-1991",
+        "text": "1990-1991",
+        "label": "1990-1991",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 37,
+        "value": "1989-1990",
+        "text": "1989-1990",
+        "label": "1989-1990",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 38,
+        "value": "1988-1989",
+        "text": "1988-1989",
+        "label": "1988-1989",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 39,
+        "value": "1987-1988",
+        "text": "1987-1988",
+        "label": "1987-1988",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 40,
+        "value": "1986-1987",
+        "text": "1986-1987",
+        "label": "1986-1987",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 41,
+        "value": "1985-1986",
+        "text": "1985-1986",
+        "label": "1985-1986",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 42,
+        "value": "1984-1985",
+        "text": "1984-1985",
+        "label": "1984-1985",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 43,
+        "value": "1983-1984",
+        "text": "1983-1984",
+        "label": "1983-1984",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 44,
+        "value": "1982-1983",
+        "text": "1982-1983",
+        "label": "1982-1983",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 45,
+        "value": "1981-1982",
+        "text": "1981-1982",
+        "label": "1981-1982",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 46,
+        "value": "1980-1981",
+        "text": "1980-1981",
+        "label": "1980-1981",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 47,
+        "value": "1979-1980",
+        "text": "1979-1980",
+        "label": "1979-1980",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 48,
+        "value": "1978-1979",
+        "text": "1978-1979",
+        "label": "1978-1979",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 49,
+        "value": "1977-1978",
+        "text": "1977-1978",
+        "label": "1977-1978",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 50,
+        "value": "1976-1977",
+        "text": "1976-1977",
+        "label": "1976-1977",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 51,
+        "value": "1975-1976",
+        "text": "1975-1976",
+        "label": "1975-1976",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 52,
+        "value": "1974-1975",
+        "text": "1974-1975",
+        "label": "1974-1975",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 53,
+        "value": "1973-1974",
+        "text": "1973-1974",
+        "label": "1973-1974",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 54,
+        "value": "1972-1973",
+        "text": "1972-1973",
+        "label": "1972-1973",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 55,
+        "value": "1971-1972",
+        "text": "1971-1972",
+        "label": "1971-1972",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 56,
+        "value": "1970-1971",
+        "text": "1970-1971",
+        "label": "1970-1971",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 57,
+        "value": "1969-1970",
+        "text": "1969-1970",
+        "label": "1969-1970",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 58
+  },
+  "stateName": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 36,
+    "options": [
+      {
+        "index": 0,
+        "value": "AN",
+        "text": "Andaman & Nicobar Island",
+        "label": "Andaman & Nicobar Island",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "AP",
+        "text": "Andhra Pradesh",
+        "label": "Andhra Pradesh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "AR",
+        "text": "Arunachal Pradesh",
+        "label": "Arunachal Pradesh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "AS",
+        "text": "Assam",
+        "label": "Assam",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "BR",
+        "text": "Bihar",
+        "label": "Bihar",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "CH",
+        "text": "Chandigarh",
+        "label": "Chandigarh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "CG",
+        "text": "Chhattisgarh",
+        "label": "Chhattisgarh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "DL",
+        "text": "Delhi",
+        "label": "Delhi",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "GA",
+        "text": "Goa",
+        "label": "Goa",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "GJ",
+        "text": "Gujarat",
+        "label": "Gujarat",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "HR",
+        "text": "Haryana",
+        "label": "Haryana",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "HP",
+        "text": "Himachal Pradesh",
+        "label": "Himachal Pradesh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "JK",
+        "text": "Jammu & Kashmir",
+        "label": "Jammu & Kashmir",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "JH",
+        "text": "Jharkhand",
+        "label": "Jharkhand",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "KA",
+        "text": "Karnataka",
+        "label": "Karnataka",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 15,
+        "value": "KL",
+        "text": "Kerala",
+        "label": "Kerala",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 16,
+        "value": "LA",
+        "text": "Ladakh",
+        "label": "Ladakh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 17,
+        "value": "LD",
+        "text": "Lakshadweep",
+        "label": "Lakshadweep",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 18,
+        "value": "MP",
+        "text": "Madhya Pradesh",
+        "label": "Madhya Pradesh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 19,
+        "value": "MH",
+        "text": "Maharashtra",
+        "label": "Maharashtra",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 20,
+        "value": "MN",
+        "text": "Manipur",
+        "label": "Manipur",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 21,
+        "value": "ML",
+        "text": "Meghalaya",
+        "label": "Meghalaya",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 22,
+        "value": "MZ",
+        "text": "Mizoram",
+        "label": "Mizoram",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 23,
+        "value": "NL",
+        "text": "Nagaland",
+        "label": "Nagaland",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 24,
+        "value": "OR",
+        "text": "Odisha",
+        "label": "Odisha",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 25,
+        "value": "PY",
+        "text": "Puducherry",
+        "label": "Puducherry",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 26,
+        "value": "PB",
+        "text": "Punjab",
+        "label": "Punjab",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 27,
+        "value": "RJ",
+        "text": "Rajasthan",
+        "label": "Rajasthan",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 28,
+        "value": "SK",
+        "text": "Sikkim",
+        "label": "Sikkim",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 29,
+        "value": "TN",
+        "text": "Tamil Nadu",
+        "label": "Tamil Nadu",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 30,
+        "value": "TG",
+        "text": "Telangana",
+        "label": "Telangana",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 31,
+        "value": "TR",
+        "text": "Tripura",
+        "label": "Tripura",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 32,
+        "value": "DD",
+        "text": "UT of DNH and DD",
+        "label": "UT of DNH and DD",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 33,
+        "value": "UP",
+        "text": "Uttar Pradesh",
+        "label": "Uttar Pradesh",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 34,
+        "value": "UK",
+        "text": "Uttarakhand",
+        "label": "Uttarakhand",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 35,
+        "value": "WB",
+        "text": "West Bengal",
+        "label": "West Bengal",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 36
+  },
+  "rtoCode": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 0,
+    "options": [],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 0
+  },
+  "vehicleEmission": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 26,
+    "options": [
+      {
+        "index": 0,
+        "value": "BHARAT STAGE I",
+        "text": "BHARAT STAGE I",
+        "label": "BHARAT STAGE I",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "BHARAT STAGE II",
+        "text": "BHARAT STAGE II",
+        "label": "BHARAT STAGE II",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "BHARAT STAGE III",
+        "text": "BHARAT STAGE III",
+        "label": "BHARAT STAGE III",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "BHARAT STAGE III/IV",
+        "text": "BHARAT STAGE III/IV",
+        "label": "BHARAT STAGE III/IV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "BHARAT STAGE IV",
+        "text": "BHARAT STAGE IV",
+        "label": "BHARAT STAGE IV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "BHARAT STAGE VI",
+        "text": "BHARAT STAGE VI",
+        "label": "BHARAT STAGE VI",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "Bharat  Trem  Stage III",
+        "text": "Bharat Trem Stage III",
+        "label": "Bharat Trem Stage III",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "Bharat  Trem  Stage III A",
+        "text": "Bharat Trem Stage III A",
+        "label": "Bharat Trem Stage III A",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "Bharat  Trem  Stage III B",
+        "text": "Bharat Trem Stage III B",
+        "label": "Bharat Trem Stage III B",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "Bharat Stage III  CEV",
+        "text": "Bharat Stage III CEV",
+        "label": "Bharat Stage III CEV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "CEV STAGE IV",
+        "text": "CEV STAGE IV",
+        "label": "CEV STAGE IV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "CEV STAGE V",
+        "text": "CEV STAGE V",
+        "label": "CEV STAGE V",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "EURO  6AD",
+        "text": "EURO 6AD",
+        "label": "EURO 6AD",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "EURO 1",
+        "text": "EURO 1",
+        "label": "EURO 1",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "EURO 2",
+        "text": "EURO 2",
+        "label": "EURO 2",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 15,
+        "value": "EURO 3",
+        "text": "EURO 3",
+        "label": "EURO 3",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 16,
+        "value": "EURO 4",
+        "text": "EURO 4",
+        "label": "EURO 4",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 17,
+        "value": "EURO 6",
+        "text": "EURO 6",
+        "label": "EURO 6",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 18,
+        "value": "EURO 6A",
+        "text": "EURO 6A",
+        "label": "EURO 6A",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 19,
+        "value": "EURO 6B",
+        "text": "EURO 6B",
+        "label": "EURO 6B",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 20,
+        "value": "EURO 6C",
+        "text": "EURO 6C",
+        "label": "EURO 6C",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 21,
+        "value": "EURO 6D",
+        "text": "EURO 6D",
+        "label": "EURO 6D",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 22,
+        "value": "Not Applicable",
+        "text": "Not Applicable",
+        "label": "Not Applicable",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 23,
+        "value": "Not Available",
+        "text": "Not Available",
+        "label": "Not Available",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 24,
+        "value": "TREM STAGE IV",
+        "text": "TREM STAGE IV",
+        "label": "TREM STAGE IV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 25,
+        "value": "TREM STAGE V",
+        "text": "TREM STAGE V",
+        "label": "TREM STAGE V",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 26
+  },
+  "vehicleMaker": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 5,
+    "options": [
+      {
+        "index": 0,
+        "value": "3EV INDUSTRIES PVT LTD",
+        "text": "3EV INDUSTRIES PVT LTD",
+        "label": "3EV INDUSTRIES PVT LTD",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "3GB TECHNOLOGY PVT LTD",
+        "text": "3GB TECHNOLOGY PVT LTD",
+        "label": "3GB TECHNOLOGY PVT LTD",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "3S INDUSTRIES PRIVATE LIMITED",
+        "text": "3S INDUSTRIES PRIVATE LIMITED",
+        "label": "3S INDUSTRIES PRIVATE LIMITED",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "786 ENGINEERING WORKS AP105382023",
+        "text": "786 ENGINEERING WORKS AP105382023",
+        "label": "786 ENGINEERING WORKS AP105382023",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "A AND Z MOTOR CO P LTD",
+        "text": "A AND Z MOTOR CO P LTD",
+        "label": "A AND Z MOTOR CO P LTD",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": false,
+    "multiselectItemsCount": 5
+  },
+  "vehicleCategoryGroup": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 11,
+    "options": [
+      {
+        "index": 0,
+        "value": "Ambulance/Hearses",
+        "text": "Ambulance/Hearses",
+        "label": "Ambulance/Hearses",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "Bus",
+        "text": "Bus",
+        "label": "Bus",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "Construction Equipment Vehicle",
+        "text": "Construction Equipment Vehicle",
+        "label": "Construction Equipment Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "Goods Vehicle",
+        "text": "Goods Vehicle",
+        "label": "Goods Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "Tractor",
+        "text": "Tractor",
+        "label": "Tractor",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "Public Service Vehicle",
+        "text": "Public Service Vehicle",
+        "label": "Public Service Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "Special Category Vehicles",
+        "text": "Special Category Vehicles",
+        "label": "Special Category Vehicles",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "Trailer",
+        "text": "Trailer",
+        "label": "Trailer",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "Four Wheeler",
+        "text": "Four Wheeler",
+        "label": "Four Wheeler",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "Three Wheeler",
+        "text": "Three Wheeler",
+        "label": "Three Wheeler",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "Two Wheeler",
+        "text": "Two Wheeler",
+        "label": "Two Wheeler",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 11
+  },
+  "vehicleSubCategory": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 17,
+    "options": [
+      {
+        "index": 0,
+        "value": "FOUR WHEELER (Invalid Carriage)",
+        "text": "FOUR WHEELER (Invalid Carriage)",
+        "label": "FOUR WHEELER (Invalid Carriage)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "HEAVY GOODS VEHICLE",
+        "text": "HEAVY GOODS VEHICLE",
+        "label": "HEAVY GOODS VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "HEAVY MOTOR VEHICLE",
+        "text": "HEAVY MOTOR VEHICLE",
+        "label": "HEAVY MOTOR VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "HEAVY PASSENGER VEHICLE",
+        "text": "HEAVY PASSENGER VEHICLE",
+        "label": "HEAVY PASSENGER VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "LIGHT GOODS VEHICLE",
+        "text": "LIGHT GOODS VEHICLE",
+        "label": "LIGHT GOODS VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "LIGHT MOTOR VEHICLE",
+        "text": "LIGHT MOTOR VEHICLE",
+        "label": "LIGHT MOTOR VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "LIGHT PASSENGER VEHICLE",
+        "text": "LIGHT PASSENGER VEHICLE",
+        "label": "LIGHT PASSENGER VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "MEDIUM GOODS VEHICLE",
+        "text": "MEDIUM GOODS VEHICLE",
+        "label": "MEDIUM GOODS VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "MEDIUM MOTOR VEHICLE",
+        "text": "MEDIUM MOTOR VEHICLE",
+        "label": "MEDIUM MOTOR VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "MEDIUM PASSENGER VEHICLE",
+        "text": "MEDIUM PASSENGER VEHICLE",
+        "label": "MEDIUM PASSENGER VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "OTHER THAN MENTIONED ABOVE",
+        "text": "OTHER THAN MENTIONED ABOVE",
+        "label": "OTHER THAN MENTIONED ABOVE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "THREE WHEELER (Invalid Carriage)",
+        "text": "THREE WHEELER (Invalid Carriage)",
+        "label": "THREE WHEELER (Invalid Carriage)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "THREE WHEELER(NT)",
+        "text": "THREE WHEELER(NT)",
+        "label": "THREE WHEELER(NT)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "THREE WHEELER(T)",
+        "text": "THREE WHEELER(T)",
+        "label": "THREE WHEELER(T)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "TWO WHEELER (Invalid Carriage)",
+        "text": "TWO WHEELER (Invalid Carriage)",
+        "label": "TWO WHEELER (Invalid Carriage)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 15,
+        "value": "TWO WHEELER(NT)",
+        "text": "TWO WHEELER(NT)",
+        "label": "TWO WHEELER(NT)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 16,
+        "value": "TWO WHEELER(T)",
+        "text": "TWO WHEELER(T)",
+        "label": "TWO WHEELER(T)",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 17
+  },
+  "vehicleClass": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 76,
+    "options": [
+      {
+        "index": 0,
+        "value": "Adapted Vehicle",
+        "text": "Adapted Vehicle",
+        "label": "Adapted Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "Agricultural Tractor",
+        "text": "Agricultural Tractor",
+        "label": "Agricultural Tractor",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "Ambulance",
+        "text": "Ambulance",
+        "label": "Ambulance",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "Animal Ambulance",
+        "text": "Animal Ambulance",
+        "label": "Animal Ambulance",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "Armoured/Specialised Vehicle",
+        "text": "Armoured/Specialised Vehicle",
+        "label": "Armoured/Specialised Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "Articulated Vehicle",
+        "text": "Articulated Vehicle",
+        "label": "Articulated Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "Auxiliary Trailer",
+        "text": "Auxiliary Trailer",
+        "label": "Auxiliary Trailer",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "Breakdown Van",
+        "text": "Breakdown Van",
+        "label": "Breakdown Van",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "Bulldozer",
+        "text": "Bulldozer",
+        "label": "Bulldozer",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "Bus",
+        "text": "Bus",
+        "label": "Bus",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "Camper Van / Trailer",
+        "text": "Camper Van / Trailer",
+        "label": "Camper Van / Trailer",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "Camper Van / Trailer (Private Use)",
+        "text": "Camper Van / Trailer (Private Use)",
+        "label": "Camper Van / Trailer (Private Use)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "Cash Van",
+        "text": "Cash Van",
+        "label": "Cash Van",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "Construction Equipment Vehicle",
+        "text": "Construction Equipment Vehicle",
+        "label": "Construction Equipment Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "Construction Equipment Vehicle (Commercial)",
+        "text": "Construction Equipment Vehicle (Commercial)",
+        "label": "Construction Equipment Vehicle (Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 15,
+        "value": "Crane Mounted Vehicle",
+        "text": "Crane Mounted Vehicle",
+        "label": "Crane Mounted Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 16,
+        "value": "Dumper",
+        "text": "Dumper",
+        "label": "Dumper",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 17,
+        "value": "Earth Moving Equipment",
+        "text": "Earth Moving Equipment",
+        "label": "Earth Moving Equipment",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 18,
+        "value": "Educational Institution Bus",
+        "text": "Educational Institution Bus",
+        "label": "Educational Institution Bus",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 19,
+        "value": "Excavator (Commercial)",
+        "text": "Excavator (Commercial)",
+        "label": "Excavator (Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 20,
+        "value": "Excavator (NT)",
+        "text": "Excavator (NT)",
+        "label": "Excavator (NT)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 21,
+        "value": "Fire Fighting Vehicle",
+        "text": "Fire Fighting Vehicle",
+        "label": "Fire Fighting Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 22,
+        "value": "Fire Tenders",
+        "text": "Fire Tenders",
+        "label": "Fire Tenders",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 23,
+        "value": "Fork Lift",
+        "text": "Fork Lift",
+        "label": "Fork Lift",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 24,
+        "value": "Goods Carrier",
+        "text": "Goods Carrier",
+        "label": "Goods Carrier",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 25,
+        "value": "Harvester",
+        "text": "Harvester",
+        "label": "Harvester",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 26,
+        "value": "Hearses",
+        "text": "Hearses",
+        "label": "Hearses",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 27,
+        "value": "Library Van",
+        "text": "Library Van",
+        "label": "Library Van",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 28,
+        "value": "Luxury Cab",
+        "text": "Luxury Cab",
+        "label": "Luxury Cab",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 29,
+        "value": "M-Cycle/Scooter",
+        "text": "M-Cycle/Scooter",
+        "label": "M-Cycle/Scooter",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 30,
+        "value": "M-Cycle/Scooter-With Side Car",
+        "text": "M-Cycle/Scooter-With Side Car",
+        "label": "M-Cycle/Scooter-With Side Car",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 31,
+        "value": "Maxi Cab",
+        "text": "Maxi Cab",
+        "label": "Maxi Cab",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 32,
+        "value": "Mobile Canteen",
+        "text": "Mobile Canteen",
+        "label": "Mobile Canteen",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 33,
+        "value": "Mobile Clinic",
+        "text": "Mobile Clinic",
+        "label": "Mobile Clinic",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 34,
+        "value": "Mobile Workshop",
+        "text": "Mobile Workshop",
+        "label": "Mobile Workshop",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 35,
+        "value": "Modular Hydraulic Trailer",
+        "text": "Modular Hydraulic Trailer",
+        "label": "Modular Hydraulic Trailer",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 36,
+        "value": "Moped",
+        "text": "Moped",
+        "label": "Moped",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 37,
+        "value": "Motor Cab",
+        "text": "Motor Cab",
+        "label": "Motor Cab",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 38,
+        "value": "Motor Car",
+        "text": "Motor Car",
+        "label": "Motor Car",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 39,
+        "value": "Motor Caravan",
+        "text": "Motor Caravan",
+        "label": "Motor Caravan",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 40,
+        "value": "Motor Cycle/Scooter-SideCar(T)",
+        "text": "Motor Cycle/Scooter-SideCar(T)",
+        "label": "Motor Cycle/Scooter-SideCar(T)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 41,
+        "value": "Motor Cycle/Scooter-Used For Hire",
+        "text": "Motor Cycle/Scooter-Used For Hire",
+        "label": "Motor Cycle/Scooter-Used For Hire",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 42,
+        "value": "Motor Cycle/Scooter-With Trailer",
+        "text": "Motor Cycle/Scooter-With Trailer",
+        "label": "Motor Cycle/Scooter-With Trailer",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 43,
+        "value": "Motorised Cycle (CC  25cc)",
+        "text": "Motorised Cycle (CC 25cc)",
+        "label": "Motorised Cycle (CC 25cc)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 44,
+        "value": "Omni Bus",
+        "text": "Omni Bus",
+        "label": "Omni Bus",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 45,
+        "value": "Omni Bus (Private Use)",
+        "text": "Omni Bus (Private Use)",
+        "label": "Omni Bus (Private Use)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 46,
+        "value": "Power Tiller",
+        "text": "Power Tiller",
+        "label": "Power Tiller",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 47,
+        "value": "Power Tiller (Commercial)",
+        "text": "Power Tiller (Commercial)",
+        "label": "Power Tiller (Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 48,
+        "value": "Private Service Vehicle",
+        "text": "Private Service Vehicle",
+        "label": "Private Service Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 49,
+        "value": "Private Service Vehicle (Individual Use)",
+        "text": "Private Service Vehicle (Individual Use)",
+        "label": "Private Service Vehicle (Individual Use)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 50,
+        "value": "Puller Tractor",
+        "text": "Puller Tractor",
+        "label": "Puller Tractor",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 51,
+        "value": "Quadricycle (Commercial)",
+        "text": "Quadricycle (Commercial)",
+        "label": "Quadricycle (Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 52,
+        "value": "Quadricycle (Private)",
+        "text": "Quadricycle (Private)",
+        "label": "Quadricycle (Private)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 53,
+        "value": "Recovery Vehicle",
+        "text": "Recovery Vehicle",
+        "label": "Recovery Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 54,
+        "value": "Road Roller",
+        "text": "Road Roller",
+        "label": "Road Roller",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 55,
+        "value": "School Bus",
+        "text": "School Bus",
+        "label": "School Bus",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 56,
+        "value": "Semi-Trailer (Commercial)",
+        "text": "Semi-Trailer (Commercial)",
+        "label": "Semi-Trailer (Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 57,
+        "value": "Snorked Ladders",
+        "text": "Snorked Ladders",
+        "label": "Snorked Ladders",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 58,
+        "value": "Three Wheeler (Goods)",
+        "text": "Three Wheeler (Goods)",
+        "label": "Three Wheeler (Goods)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 59,
+        "value": "Three Wheeler (Passenger)",
+        "text": "Three Wheeler (Passenger)",
+        "label": "Three Wheeler (Passenger)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 60,
+        "value": "Three Wheeler (Personal)",
+        "text": "Three Wheeler (Personal)",
+        "label": "Three Wheeler (Personal)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 61,
+        "value": "Tow Truck",
+        "text": "Tow Truck",
+        "label": "Tow Truck",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 62,
+        "value": "Tower Wagon",
+        "text": "Tower Wagon",
+        "label": "Tower Wagon",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 63,
+        "value": "Tractor (Commercial)",
+        "text": "Tractor (Commercial)",
+        "label": "Tractor (Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 64,
+        "value": "Tractor-Trolley(Commercial)",
+        "text": "Tractor-Trolley(Commercial)",
+        "label": "Tractor-Trolley(Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 65,
+        "value": "Trailer (Agricultural)",
+        "text": "Trailer (Agricultural)",
+        "label": "Trailer (Agricultural)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 66,
+        "value": "Trailer (Commercial)",
+        "text": "Trailer (Commercial)",
+        "label": "Trailer (Commercial)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 67,
+        "value": "Trailer For Personal Use",
+        "text": "Trailer For Personal Use",
+        "label": "Trailer For Personal Use",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 68,
+        "value": "Tree Trimming Vehicle",
+        "text": "Tree Trimming Vehicle",
+        "label": "Tree Trimming Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 69,
+        "value": "Vehicle Fitted With Compressor",
+        "text": "Vehicle Fitted With Compressor",
+        "label": "Vehicle Fitted With Compressor",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 70,
+        "value": "Vehicle Fitted With Generator",
+        "text": "Vehicle Fitted With Generator",
+        "label": "Vehicle Fitted With Generator",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 71,
+        "value": "Vehicle Fitted With Rig",
+        "text": "Vehicle Fitted With Rig",
+        "label": "Vehicle Fitted With Rig",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 72,
+        "value": "Vintage Motor Vehicle",
+        "text": "Vintage Motor Vehicle",
+        "label": "Vintage Motor Vehicle",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 73,
+        "value": "X-Ray Van",
+        "text": "X-Ray Van",
+        "label": "X-Ray Van",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 74,
+        "value": "e-Rickshaw with Cart (G)",
+        "text": "e-Rickshaw with Cart (G)",
+        "label": "e-Rickshaw with Cart (G)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 75,
+        "value": "e-Rickshaw(P)",
+        "text": "e-Rickshaw(P)",
+        "label": "e-Rickshaw(P)",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 76
+  },
+  "vehicleFuel": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 34,
+    "options": [
+      {
+        "index": 0,
+        "value": "BIO-CNG/BIO-GAS",
+        "text": "BIO-CNG/BIO-GAS",
+        "label": "BIO-CNG/BIO-GAS",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "CNG ONLY",
+        "text": "CNG ONLY",
+        "label": "CNG ONLY",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "DI-METHYL ETHER",
+        "text": "DI-METHYL ETHER",
+        "label": "DI-METHYL ETHER",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "DIESEL",
+        "text": "DIESEL",
+        "label": "DIESEL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "DIESEL/HYBRID",
+        "text": "DIESEL/HYBRID",
+        "label": "DIESEL/HYBRID",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "DUAL DIESEL/BIO CNG",
+        "text": "DUAL DIESEL/BIO CNG",
+        "label": "DUAL DIESEL/BIO CNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "DUAL DIESEL/CNG",
+        "text": "DUAL DIESEL/CNG",
+        "label": "DUAL DIESEL/CNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "DUAL DIESEL/LNG",
+        "text": "DUAL DIESEL/LNG",
+        "label": "DUAL DIESEL/LNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "ELECTRIC(BOV)",
+        "text": "ELECTRIC(BOV)",
+        "label": "ELECTRIC(BOV)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "ETHANOL(E100)",
+        "text": "ETHANOL(E100)",
+        "label": "ETHANOL(E100)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "FLEX-FUEL(BIO-DIESEL)",
+        "text": "FLEX-FUEL(BIO-DIESEL)",
+        "label": "FLEX-FUEL(BIO-DIESEL)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "FLEX-FUEL(ETHANOL)",
+        "text": "FLEX-FUEL(ETHANOL)",
+        "label": "FLEX-FUEL(ETHANOL)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "FUEL CELL HYDROGEN",
+        "text": "FUEL CELL HYDROGEN",
+        "label": "FUEL CELL HYDROGEN",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "HCNG",
+        "text": "HCNG",
+        "label": "HCNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "HYDROGEN(ICE)",
+        "text": "HYDROGEN(ICE)",
+        "label": "HYDROGEN(ICE)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 15,
+        "value": "LNG",
+        "text": "LNG",
+        "label": "LNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 16,
+        "value": "LPG ONLY",
+        "text": "LPG ONLY",
+        "label": "LPG ONLY",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 17,
+        "value": "METHANOL",
+        "text": "METHANOL",
+        "label": "METHANOL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 18,
+        "value": "NOT APPLICABLE",
+        "text": "NOT APPLICABLE",
+        "label": "NOT APPLICABLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 19,
+        "value": "PETROL",
+        "text": "PETROL",
+        "label": "PETROL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 20,
+        "value": "PETROL(E20)",
+        "text": "PETROL(E20)",
+        "label": "PETROL(E20)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 21,
+        "value": "PETROL(E20)/CNG",
+        "text": "PETROL(E20)/CNG",
+        "label": "PETROL(E20)/CNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 22,
+        "value": "PETROL(E20)/HYBRID",
+        "text": "PETROL(E20)/HYBRID",
+        "label": "PETROL(E20)/HYBRID",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 23,
+        "value": "PETROL(E20)/HYBRID/CNG",
+        "text": "PETROL(E20)/HYBRID/CNG",
+        "label": "PETROL(E20)/HYBRID/CNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 24,
+        "value": "PETROL(E20)/LPG",
+        "text": "PETROL(E20)/LPG",
+        "label": "PETROL(E20)/LPG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 25,
+        "value": "PETROL/CNG",
+        "text": "PETROL/CNG",
+        "label": "PETROL/CNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 26,
+        "value": "PETROL/HYBRID",
+        "text": "PETROL/HYBRID",
+        "label": "PETROL/HYBRID",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 27,
+        "value": "PETROL/HYBRID/CNG",
+        "text": "PETROL/HYBRID/CNG",
+        "label": "PETROL/HYBRID/CNG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 28,
+        "value": "PETROL/LPG",
+        "text": "PETROL/LPG",
+        "label": "PETROL/LPG",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 29,
+        "value": "PETROL/METHANOL",
+        "text": "PETROL/METHANOL",
+        "label": "PETROL/METHANOL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 30,
+        "value": "PLUG-IN HYBRID EV",
+        "text": "PLUG-IN HYBRID EV",
+        "label": "PLUG-IN HYBRID EV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 31,
+        "value": "PURE EV",
+        "text": "PURE EV",
+        "label": "PURE EV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 32,
+        "value": "SOLAR",
+        "text": "SOLAR",
+        "label": "SOLAR",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 33,
+        "value": "STRONG HYBRID EV",
+        "text": "STRONG HYBRID EV",
+        "label": "STRONG HYBRID EV",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 34
+  },
+  "evType": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 4,
+    "options": [
+      {
+        "index": 0,
+        "value": "ELECTRIC(BOV)",
+        "text": "ELECTRIC(BOV)",
+        "label": "ELECTRIC(BOV)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "PLUG-IN HYBRID EV",
+        "text": "PLUG-IN HYBRID EV",
+        "label": "PLUG-IN HYBRID EV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "PURE EV",
+        "text": "PURE EV",
+        "label": "PURE EV",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "STRONG HYBRID EV",
+        "text": "STRONG HYBRID EV",
+        "label": "STRONG HYBRID EV",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 4
+  },
+  "vehicleStatus": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 11,
+    "options": [
+      {
+        "index": 0,
+        "value": "ACTIVE",
+        "text": "ACTIVE",
+        "label": "ACTIVE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "CONFISCATED AUCTION VEHICLE",
+        "text": "CONFISCATED AUCTION VEHICLE",
+        "label": "CONFISCATED AUCTION VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "NOC ISSUED",
+        "text": "NOC ISSUED",
+        "label": "NOC ISSUED",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "RC CANCEL",
+        "text": "RC CANCEL",
+        "label": "RC CANCEL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "RC SURRENDER",
+        "text": "RC SURRENDER",
+        "label": "RC SURRENDER",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "RC SUSPENDED",
+        "text": "RC SUSPENDED",
+        "label": "RC SUSPENDED",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "SCRAP VEHICLE",
+        "text": "SCRAP VEHICLE",
+        "label": "SCRAP VEHICLE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "VEHICLE DE-REGISTERED",
+        "text": "VEHICLE DE-REGISTERED",
+        "label": "VEHICLE DE-REGISTERED",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "VEHICLE SUBMITTED FOR SCRAPPING",
+        "text": "VEHICLE SUBMITTED FOR SCRAPPING",
+        "label": "VEHICLE SUBMITTED FOR SCRAPPING",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "VEHICLE TO BE SCRAPPED",
+        "text": "VEHICLE TO BE SCRAPPED",
+        "label": "VEHICLE TO BE SCRAPPED",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "VEHICLE_SCRAPPED RC CANCEL",
+        "text": "VEHICLE_SCRAPPED RC CANCEL",
+        "label": "VEHICLE_SCRAPPED RC CANCEL",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 11
+  },
+  "vehicleOwnerType": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": true,
+    "totalOptions": 27,
+    "options": [
+      {
+        "index": 0,
+        "value": "AUTONOMOUS BODY",
+        "text": "AUTONOMOUS BODY",
+        "label": "AUTONOMOUS BODY",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "CENTRAL GOVERNMENT",
+        "text": "CENTRAL GOVERNMENT",
+        "label": "CENTRAL GOVERNMENT",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "CHARITABLE TRUST",
+        "text": "CHARITABLE TRUST",
+        "label": "CHARITABLE TRUST",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "DIVYANGJAN (Availing GST Concession)",
+        "text": "DIVYANGJAN (Availing GST Concession)",
+        "label": "DIVYANGJAN (Availing GST Concession)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "DIVYANGJAN (Without Availing GST Concession)",
+        "text": "DIVYANGJAN (Without Availing GST Concession)",
+        "label": "DIVYANGJAN (Without Availing GST Concession)",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "DRAMA/TAMASHA GROUPS",
+        "text": "DRAMA/TAMASHA GROUPS",
+        "label": "DRAMA/TAMASHA GROUPS",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "DRIVING TRAINING SCHOOL",
+        "text": "DRIVING TRAINING SCHOOL",
+        "label": "DRIVING TRAINING SCHOOL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "EDUCATIONAL INSTITUTE",
+        "text": "EDUCATIONAL INSTITUTE",
+        "label": "EDUCATIONAL INSTITUTE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "FIRM",
+        "text": "FIRM",
+        "label": "FIRM",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "GOVERNMENT BOARD",
+        "text": "GOVERNMENT BOARD",
+        "label": "GOVERNMENT BOARD",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "GOVERNMENT COMPANY",
+        "text": "GOVERNMENT COMPANY",
+        "label": "GOVERNMENT COMPANY",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "GOVERNMENT CORPORATION",
+        "text": "GOVERNMENT CORPORATION",
+        "label": "GOVERNMENT CORPORATION",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "GOVERNMENT DEPARTMENT",
+        "text": "GOVERNMENT DEPARTMENT",
+        "label": "GOVERNMENT DEPARTMENT",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "GOVERNMENT ENTITY",
+        "text": "GOVERNMENT ENTITY",
+        "label": "GOVERNMENT ENTITY",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "GOVERNMENT TRUST",
+        "text": "GOVERNMENT TRUST",
+        "label": "GOVERNMENT TRUST",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 15,
+        "value": "GOVT UNDERTAKING",
+        "text": "GOVT UNDERTAKING",
+        "label": "GOVT UNDERTAKING",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 16,
+        "value": "INDIVIDUAL",
+        "text": "INDIVIDUAL",
+        "label": "INDIVIDUAL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 17,
+        "value": "JOINT STOCK COMPANY",
+        "text": "JOINT STOCK COMPANY",
+        "label": "JOINT STOCK COMPANY",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 18,
+        "value": "LOCAL AUTHORITY",
+        "text": "LOCAL AUTHORITY",
+        "label": "LOCAL AUTHORITY",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 19,
+        "value": "MULTIPLE OWNER",
+        "text": "MULTIPLE OWNER",
+        "label": "MULTIPLE OWNER",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 20,
+        "value": "OTHERS",
+        "text": "OTHERS",
+        "label": "OTHERS",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 21,
+        "value": "POLICE DEPARTMENT",
+        "text": "POLICE DEPARTMENT",
+        "label": "POLICE DEPARTMENT",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 22,
+        "value": "SCHOOL",
+        "text": "SCHOOL",
+        "label": "SCHOOL",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 23,
+        "value": "SOCIAL WELFARE",
+        "text": "SOCIAL WELFARE",
+        "label": "SOCIAL WELFARE",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 24,
+        "value": "STATE GOVERNMENT",
+        "text": "STATE GOVERNMENT",
+        "label": "STATE GOVERNMENT",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 25,
+        "value": "STATE TRANSPORT CORP/DEPT",
+        "text": "STATE TRANSPORT CORP/DEPT",
+        "label": "STATE TRANSPORT CORP/DEPT",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 26,
+        "value": "STATE UNIVERSITIES",
+        "text": "STATE UNIVERSITIES",
+        "label": "STATE UNIVERSITIES",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": true,
+    "hasAllSelector": true,
+    "multiselectItemsCount": 27
+  },
+  "vehicleType": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": false,
+    "totalOptions": 3,
+    "options": [
+      {
+        "index": 0,
+        "value": "",
+        "text": "--- Select Vehicle Type ---",
+        "label": "--- Select Vehicle Type ---",
+        "selected": true,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "Transport",
+        "text": "Transport",
+        "label": "Transport",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "Non-Transport",
+        "text": "Non-Transport",
+        "label": "Non-Transport",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": false,
+    "hasAllSelector": false,
+    "multiselectItemsCount": 0
+  },
+  "fitnessCheck": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": false,
+    "totalOptions": 2,
+    "options": [
+      {
+        "index": 0,
+        "value": "0",
+        "text": "NO",
+        "label": "NO",
+        "selected": true,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "1",
+        "text": "YES",
+        "label": "YES",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": false,
+    "hasAllSelector": false,
+    "multiselectItemsCount": 0
+  },
+  "delhiNcr": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": false,
+    "totalOptions": 2,
+    "options": [
+      {
+        "index": 0,
+        "value": "0",
+        "text": "ALL STATES",
+        "label": "ALL STATES",
+        "selected": true,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "1",
+        "text": "YES",
+        "label": "YES",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": false,
+    "hasAllSelector": false,
+    "multiselectItemsCount": 0
+  },
+  "yAxis": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": false,
+    "totalOptions": 15,
+    "options": [
+      {
+        "index": 0,
+        "value": "",
+        "text": "",
+        "label": "--- Select Y-Axis ---",
+        "selected": true,
+        "disabled": false
+      },
+      {
+        "index": 1,
+        "value": "vehicleCategoryDescription",
+        "text": "",
+        "label": "Vehicle Category",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 2,
+        "value": "vehicleCategoryGroup",
+        "text": "",
+        "label": "Vehicle Category Group",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 3,
+        "value": "vehicleClass",
+        "text": "",
+        "label": "Vehicle Class",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 4,
+        "value": "vehicleType",
+        "text": "",
+        "label": "Vehicle Type ",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 5,
+        "value": "vehiclePollutionNorm",
+        "text": "",
+        "label": "Norms",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 6,
+        "value": "vehicleFuel",
+        "text": "",
+        "label": "Fuel",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 7,
+        "value": "vehicleMakerName",
+        "text": "",
+        "label": "Maker",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 8,
+        "value": "stateCode",
+        "text": "",
+        "label": "State Wise",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 9,
+        "value": "rtoName",
+        "text": "",
+        "label": "RTO Wise",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 10,
+        "value": "vehicleManufecturingYear",
+        "text": "",
+        "label": "Manufacturing  Year",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 11,
+        "value": "financialYear",
+        "text": "",
+        "label": "Financial Year",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 12,
+        "value": "last5FinancialYear",
+        "text": "",
+        "label": "Last 5 FINANCIAL YEAR",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 13,
+        "value": "calendarYear",
+        "text": "",
+        "label": "Calendar Year",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "index": 14,
+        "value": "monthWise",
+        "text": "",
+        "label": "Month Wise",
+        "selected": false,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": false,
+    "hasAllSelector": false,
+    "multiselectItemsCount": 0
+  },
+  "xAxis": {
+    "found": true,
+    "tagName": "SELECT",
+    "multiple": false,
+    "totalOptions": 1,
+    "options": [
+      {
+        "index": 0,
+        "value": "",
+        "text": "",
+        "label": "--- Select X-Axis ---",
+        "selected": true,
+        "disabled": false
+      }
+    ],
+    "hasMultiselectUI": false,
+    "hasAllSelector": false,
+    "multiselectItemsCount": 0
+  }
+}

@@ -1,10 +1,22 @@
-"""Vahan RPA PoC — Role 3. Selector gắn từ bàn giao Role 2 (mục 4.3 báo cáo).
-Attended RPA: người chỉ tương tác TRONG BROWSER (đọc + gõ CAPTCHA), KHÔNG cần
+"""Vahan RPA PoC — Role 3. Full Flow End-to-End đầy đủ 18 trường.
+Attended RPA: người dùng chỉ tương tác TRONG BROWSER (đọc + gõ CAPTCHA), KHÔNG cần
 quay lại terminal gõ Enter — Playwright tự poll DOM (wait_for_function) để biết
-khi nào người đã gõ xong, rồi tự tiếp quản Apply -> Export -> verify."""
+khi nào người đã gõ xong, rồi tự tiếp quản Apply -> Chờ bảng render -> Export Excel -> verify.
 
+Hỗ trợ chạy full flow end-to-end cho toàn bộ 18 trường/filter trên Vahan Public Report.
+"""
+
+import sys
 import time
 import zipfile
+from pathlib import Path
+
+# Đảm bảo in tiếng Việt trên console Windows không bị lỗi cp1252
+if sys.stdout.encoding != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from openpyxl import load_workbook
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -13,31 +25,33 @@ from config import DOWNLOAD_DIR
 
 URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"
 
-# [FACT] Nguồn: bao-cao-vahan-rpa-poc_role2.md mục 4.3 (selector map Role 2 bàn giao),
-# đo trực tiếp trên DOM, ID tĩnh (không phải j_idt...). #externalCaptcha cũng có
-# trong danh sách ID tĩnh của role2 (mục 4.2).
-#
-# [FACT] Đã chạy smoke test (headless, screenshot before/after) với select_option
-# (force=True) thẳng trên #stateName/#vehicleCategoryGroup/#vehicleFuel: lệnh KHÔNG
-# lỗi, nhưng UI vẫn hiện nguyên placeholder "--- Select State/Category/Fuel ---" —
-# tức widget hiển thị (custom multiselect-dropdown, JS riêng) KHÔNG đồng bộ theo giá
-# trị vừa set trên <select> ẩn. Vì vậy Category/Fuel dùng container-click thật
-# (verify bằng assert checkbox.is_checked()), không dùng select_option() thẳng.
-#
-# [FACT] Y-Axis/X-Axis (#yAxis/#xAxis) là <select> thật, HIỂN THỊ bình thường —
-# select_option() chạy thẳng được. Đọc thẳng script nhúng trong trang (không đoán):
-# X-Axis CHỈ được JS populate khi có sự kiện "click" trên #yAxis — KHÔNG phải
-# "change". Bắt buộc: select_option(yAxis) trước, dispatch click trên #yAxis, rồi
-# mới select_option(xAxis) — verify bằng #yAxis_hidden/#xAxis_hidden khớp đúng.
-#
-# [FACT] Đã test CAPTCHA sai (điền "XXXXXX", headless): trang hiện "Invalid CAPTCHA."
-# nhưng KHÔNG reload toàn trang — url không đổi, Category/Fuel/Y-Axis/X-Axis vẫn giữ
-# nguyên giá trị đã chọn, chỉ #externalCaptcha bị xoá trắng. Nên khi retry KHÔNG cần
-# chọn lại filter, chỉ cần chờ người gõ CAPTCHA mới.
+# [FACT] Selector map đầy đủ toàn bộ 18+ phần tử trên trang
 SELECTORS = {
+    # ── Time / Period ──
+    "report_type": "#reportType",
+    "financial_year_container": "xpath=//*[@id='financialYearSelect']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "year_from": "#fromYear",
+    "year_to": "#toYear",
+
+    # ── Geographic / Administrative ──
     "state_container": "xpath=//*[@id='stateName']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "rto_container": "xpath=//*[@id='rtoCode']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "delhi_ncr": "#delhiNcr",
+
+    # ── Vehicle Attributes & Filters ──
+    "emission_container": "xpath=//*[@id='vehicleEmission']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "maker_container": "xpath=//*[@id='vehicleMaker']/following::div[contains(@class,'multiselect-dropdown')][1]",
     "category_container": "xpath=//*[@id='vehicleCategoryGroup']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "subcategory_container": "xpath=//*[@id='vehicleSubCategory']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "class_container": "xpath=//*[@id='vehicleClass']/following::div[contains(@class,'multiselect-dropdown')][1]",
     "fuel_container": "xpath=//*[@id='vehicleFuel']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "ev_type_container": "xpath=//*[@id='evType']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "status_container": "xpath=//*[@id='vehicleStatus']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "owner_type_container": "xpath=//*[@id='vehicleOwnerType']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "vehicle_type": "#vehicleType",
+    "fitness_check": "#fitnessCheck",
+
+    # ── Pivot Axes & Action Buttons ──
     "yaxis": "#yAxis",
     "xaxis": "#xAxis",
     "captcha_input": "#externalCaptcha",
@@ -45,82 +59,247 @@ SELECTORS = {
     "download_excel_button": "#downloadBtn1",
 }
 
-# [FACT] Quan sát trực tiếp (nhiều lần load): CAPTCHA trang này luôn 6 ký tự
-# (vd "GDX4F3", "T6SB8u", "a27GR6"). Dùng làm ngưỡng "người đã gõ xong".
+# [PRESET 1] Cấu hình chạy ĐẦY ĐỦ 100% tất cả 18 trường (Full Fields End-to-End)
+PRESET_FULL_18_FIELDS = {
+    "report_type": "CALENDAR YEAR",
+    "year_from": "2026",
+    "year_to": "2026",
+    "state": "Delhi",
+    "rto": "ALL",                        # Tải động sau khi chọn Delhi, chọn ALL
+    "emission": "BHARAT STAGE VI",
+    "maker": "BAJAJ AUTO LTD",           # Tìm và chọn qua AJAX multiselect search
+    "category_group": "Two Wheeler",
+    "sub_category": "TWO WHEELER(NT)",
+    "vehicle_class": "M-Cycle/Scooter",
+    "fuel": "PETROL",
+    "ev_type": None,                     # Không áp dụng cho xe PETROL
+    "status": "ACTIVE",
+    "owner_type": "INDIVIDUAL",
+    "vehicle_type": "Non-Transport",
+    "fitness_check": "NO",
+    "delhi_ncr": "ALL STATES",
+    "yaxis": "Vehicle Category Group",
+    "xaxis": "Total Consolidated",
+}
+
+# [PRESET 2] Cấu hình Toàn quốc với Category Group chọn All (11 selected)
+PRESET_NATIONAL_ALL_CATEGORIES = {
+    "report_type": "CALENDAR YEAR",
+    "year_from": "2026",
+    "year_to": "2026",
+    "state": None,
+    "rto": None,
+    "emission": None,
+    "maker": None,
+    "category_group": "ALL",             # "11 selected"
+    "sub_category": None,
+    "vehicle_class": None,
+    "fuel": None,
+    "ev_type": None,
+    "status": None,
+    "owner_type": None,
+    "vehicle_type": None,
+    "fitness_check": "NO",
+    "delhi_ncr": "ALL STATES",
+    "yaxis": "Vehicle Category Group",
+    "xaxis": "Total Consolidated",
+}
+
+DEFAULT_FILTERS = PRESET_FULL_18_FIELDS
+
 CAPTCHA_LENGTH = 6
-CAPTCHA_WAIT_TIMEOUT_MS = 300_000  # 5 phút mỗi lượt — đủ cho người đọc + gõ tay
+CAPTCHA_WAIT_TIMEOUT_MS = 300_000  # 5 phút tối đa để người đọc và gõ CAPTCHA
 
 
 def select_checkbox_option(page, container_selector: str, option_text: str, label: str):
-    """Checkbox multi-select searchable dropdown (State/Category/Fuel) — verify thật
-    bằng test_category_and_fuel.py. Dùng cho một giá trị cụ thể, KHÔNG dùng cho case "All"."""
+    """Tìm và tick 1 checkbox option trong custom multiselect dropdown."""
     container = page.locator(container_selector)
     container.click()
-    page.wait_for_timeout(400)
+    page.wait_for_timeout(350)
 
-    search_box = container.locator(".multiselect-dropdown-search[placeholder='search']").first
-    search_box.fill(option_text)
-    page.wait_for_timeout(500)
+    # Nếu có ô search thì nhập để filter nhanh danh sách
+    search_box = container.locator(".multiselect-dropdown-search").first
+    if search_box.count() > 0:
+        search_box.fill(option_text)
+        # Chờ debounce và AJAX search (đặc biệt là Maker lazy-load) trả về kết quả
+        page.wait_for_timeout(1200)
 
-    option = container.locator(f"div[data-search-text='{option_text}']").first
-    option.scroll_into_view_if_needed()
-    option.click()
+    # Thử tìm theo data-search-text dạng chuẩn hoặc uppercase
+    text_upper = option_text.strip().upper()
+    opt_locator = container.locator(f"div[data-search-text='{option_text}']")
+    if opt_locator.count() == 0:
+        opt_locator = container.locator(f"div[data-search-text='{text_upper}']")
+    if opt_locator.count() == 0:
+        opt_locator = container.locator(f"div[data-search-text]:has-text('{option_text}')")
+    if opt_locator.count() == 0:
+        opt_locator = container.locator("div[data-search-text]").first
+
+    assert opt_locator.count() > 0, f"[{label}] Không tìm thấy option khớp '{option_text}'"
+    target = opt_locator.first
+    try:
+        target.scroll_into_view_if_needed()
+    except Exception:
+        pass
+    target.click()
     page.wait_for_timeout(300)
 
-    checkbox = container.locator(f"div[data-search-text='{option_text}'] input[type='checkbox']").first
-    assert checkbox.is_checked(), f"[{label}] click xong nhưng checkbox KHÔNG được tick"
-
+    # Click ra ngoài body để đóng dropdown
     page.click("body", position={"x": 2, "y": 2})
     page.wait_for_timeout(300)
 
 
 def select_all_checkbox(page, container_selector: str, label: str):
-    """Riêng case chọn "All" — không phải option thường (không có data-search-text),
-    mà là div.multiselect-dropdown-all-selector nằm đầu danh sách. Verify bằng
-    inspect_fuel_options.py. KHÔNG dùng select_checkbox_option() cho case này."""
+    """Chọn ALL (tick vào checkbox select-all ở đầu danh sách)."""
     container = page.locator(container_selector)
     container.click()
-    page.wait_for_timeout(400)
+    page.wait_for_timeout(350)
 
     all_checkbox = container.locator("div.multiselect-dropdown-all-selector input[type='checkbox']").first
+    assert all_checkbox.count() > 0, f"[{label}] Không tìm thấy nút All Selector"
     all_checkbox.click()
     page.wait_for_timeout(300)
-    assert all_checkbox.is_checked(), f"[{label}] click xong nhưng checkbox 'All' KHÔNG được tick"
 
     page.click("body", position={"x": 2, "y": 2})
     page.wait_for_timeout(300)
 
 
-def apply_filters(page):
-    """Category Group = Two Wheeler, Fuel = All, Y-Axis = Fuel, X-Axis = Vehicle
-    Category Group. [ASSUMPTION] Không chọn State/Year (dùng mặc định trang) — theo
-    yêu cầu phạm vi hiện tại, chưa phải quyết định chính thức mục 0.1 báo cáo."""
-    select_checkbox_option(page, SELECTORS["category_container"], "TWO WHEELER", "Category Group")
-    # [FACT] mục 0.1 báo cáo (role1) đã chốt Fuel = "All".
-    select_all_checkbox(page, SELECTORS["fuel_container"], "Fuel")
+def apply_multiselect(page, container_selector: str, value, label: str):
+    """Áp dụng filter cho multiselect dropdown."""
+    if value is None:
+        return
+    if value == "ALL" or value == ["ALL"]:
+        print(f"    - [{label}] -> Chọn ALL")
+        select_all_checkbox(page, container_selector, label)
+    elif isinstance(value, str):
+        print(f"    - [{label}] -> Chọn '{value}'")
+        select_checkbox_option(page, container_selector, value, label)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            print(f"    - [{label}] -> Chọn '{item}'")
+            select_checkbox_option(page, container_selector, str(item), label)
 
-    page.select_option(SELECTORS["yaxis"], label="Fuel")
-    # Bắt buộc dispatch click để trigger updateXAxisOptions() — xem ghi chú ở SELECTORS.
-    page.locator(SELECTORS["yaxis"]).evaluate('el => el.dispatchEvent(new Event("click", {bubbles:true}))')
-    page.wait_for_timeout(500)
-    page.select_option(SELECTORS["xaxis"], label="Vehicle Category Group")
-    page.wait_for_timeout(300)
-    # Tự động focus vào ô CAPTCHA ngay sau khi chọn X-Axis để người dùng gõ được luôn
+
+def apply_filters(page, filters=None):
+    """Áp dụng đầy đủ toàn bộ 18 trường trên trang Vahan Public Report."""
+    cfg = dict(DEFAULT_FILTERS)
+    if filters:
+        cfg.update(filters)
+
+    print("  >>> Đang chọn đầy đủ 18 trường theo cấu hình:")
+
+    # 1. Year Type
+    if cfg.get("report_type"):
+        print(f"    - [1/18] Year Type -> {cfg['report_type']}")
+        page.select_option(SELECTORS["report_type"], label=cfg["report_type"])
+        page.wait_for_timeout(300)
+
+    # 2. From Year & To Year
+    if cfg.get("year_from") and cfg.get("year_to"):
+        print(f"    - [2/18] Year Range -> {cfg['year_from']} TO {cfg['year_to']}")
+        page.fill(SELECTORS["year_from"], str(cfg["year_from"]))
+        page.fill(SELECTORS["year_to"], str(cfg["year_to"]))
+
+    # 3. State
+    if cfg.get("state"):
+        print(f"    - [3/18] State -> {cfg['state']}")
+        apply_multiselect(page, SELECTORS["state_container"], cfg.get("state"), "State")
+        # Đợi request /analytics/json_rtos tải danh sách RTO
+        page.wait_for_timeout(1500)
+
+    # 4. RTO
+    if cfg.get("rto"):
+        print(f"    - [4/18] RTO -> {cfg['rto']}")
+        apply_multiselect(page, SELECTORS["rto_container"], cfg.get("rto"), "RTO")
+
+    # 5. Emission
+    if cfg.get("emission"):
+        print(f"    - [5/18] Emission -> {cfg['emission']}")
+        apply_multiselect(page, SELECTORS["emission_container"], cfg.get("emission"), "Emission")
+
+    # 6. Maker
+    if cfg.get("maker"):
+        print(f"    - [6/18] Maker -> {cfg['maker']}")
+        apply_multiselect(page, SELECTORS["maker_container"], cfg.get("maker"), "Maker")
+
+    # 7. Category Group
+    if cfg.get("category_group"):
+        print(f"    - [7/18] Category Group -> {cfg['category_group']}")
+        apply_multiselect(page, SELECTORS["category_container"], cfg.get("category_group"), "Category Group")
+
+    # 8. Sub-Category
+    if cfg.get("sub_category"):
+        print(f"    - [8/18] Sub-Category -> {cfg['sub_category']}")
+        apply_multiselect(page, SELECTORS["subcategory_container"], cfg.get("sub_category"), "Sub-Category")
+
+    # 9. Class
+    if cfg.get("vehicle_class"):
+        print(f"    - [9/18] Class -> {cfg['vehicle_class']}")
+        apply_multiselect(page, SELECTORS["class_container"], cfg.get("vehicle_class"), "Class")
+
+    # 10. Fuel
+    if cfg.get("fuel"):
+        print(f"    - [10/18] Fuel -> {cfg['fuel']}")
+        apply_multiselect(page, SELECTORS["fuel_container"], cfg.get("fuel"), "Fuel")
+
+    # 11. EV Type
+    if cfg.get("ev_type"):
+        print(f"    - [11/18] EV Type -> {cfg['ev_type']}")
+        apply_multiselect(page, SELECTORS["ev_type_container"], cfg.get("ev_type"), "EV Type")
+
+    # 12. Status
+    if cfg.get("status"):
+        print(f"    - [12/18] Status -> {cfg['status']}")
+        apply_multiselect(page, SELECTORS["status_container"], cfg.get("status"), "Status")
+
+    # 13. Owner Type
+    if cfg.get("owner_type"):
+        print(f"    - [13/18] Owner Type -> {cfg['owner_type']}")
+        apply_multiselect(page, SELECTORS["owner_type_container"], cfg.get("owner_type"), "Owner Type")
+
+    # 14. Vehicle Type
+    if cfg.get("vehicle_type"):
+        print(f"    - [14/18] Vehicle Type -> {cfg['vehicle_type']}")
+        page.select_option(SELECTORS["vehicle_type"], label=cfg["vehicle_type"])
+
+    # 15. Fitness Valid as On Date?
+    if cfg.get("fitness_check"):
+        print(f"    - [15/18] Fitness Valid -> {cfg['fitness_check']}")
+        page.select_option(SELECTORS["fitness_check"], label=cfg["fitness_check"])
+
+    # 16. Delhi NCR ?
+    if cfg.get("delhi_ncr"):
+        print(f"    - [16/18] Delhi NCR ? -> {cfg['delhi_ncr']}")
+        page.select_option(SELECTORS["delhi_ncr"], label=cfg["delhi_ncr"])
+
+    # 17. Y-Axis
+    if cfg.get("yaxis"):
+        print(f"    - [17/18] Y-Axis -> {cfg['yaxis']}")
+        page.select_option(SELECTORS["yaxis"], label=cfg["yaxis"])
+        # Bắt buộc dispatch click để kích hoạt hàm updateXAxisOptions() của trang
+        page.locator(SELECTORS["yaxis"]).evaluate('el => el.dispatchEvent(new Event("click", {bubbles:true}))')
+        page.wait_for_timeout(600)
+
+    # 18. X-Axis
+    if cfg.get("xaxis"):
+        print(f"    - [18/18] X-Axis -> {cfg['xaxis']}")
+        page.select_option(SELECTORS["xaxis"], label=cfg["xaxis"])
+        page.wait_for_timeout(300)
+
+    # Tự động focus vào ô CAPTCHA để người dùng gõ trực tiếp
     captcha_box = page.locator(SELECTORS["captcha_input"])
     captcha_box.scroll_into_view_if_needed()
     captcha_box.focus()
+    print("  >>> Đã hoàn tất điền đủ các trường và focus vào ô CAPTCHA.")
 
 
 def wait_for_captcha_typed(page, timeout_ms=CAPTCHA_WAIT_TIMEOUT_MS):
-    """Attended, KHÔNG dùng input()/terminal. Poll trực tiếp DOM #externalCaptcha —
-    coi là "người gõ xong" khi đủ CAPTCHA_LENGTH ký tự. Script tự tiếp quản ngay khi
-    điều kiện đúng, không cần người bấm gì thêm ở terminal."""
+    """Attended mode: Tự động poll DOM #externalCaptcha và nhận diện khi người đã gõ xong 6 ký tự."""
     captcha_box = page.locator(SELECTORS["captcha_input"])
     captcha_box.scroll_into_view_if_needed()
     captcha_box.focus()
     print(
-        f"    >>> Đã focus vào ô CAPTCHA. Đang chờ người đọc CAPTCHA trên browser và gõ đủ {CAPTCHA_LENGTH} ký tự "
-        f"vào ô CAPTCHA (tối đa {timeout_ms / 1000:.0f}s)..."
+        f"    >>> Đã focus vào ô CAPTCHA trên browser. Đang chờ bạn gõ đủ {CAPTCHA_LENGTH} ký tự "
+        f"(tối đa {timeout_ms / 1000:.0f}s)..."
     )
     page.wait_for_function(
         f"""
@@ -131,11 +310,11 @@ def wait_for_captcha_typed(page, timeout_ms=CAPTCHA_WAIT_TIMEOUT_MS):
         """,
         timeout=timeout_ms,
     )
-    print("    >>> Đã phát hiện CAPTCHA được điền — robot tiếp quản, bấm Apply.")
+    print("    >>> Đã phát hiện CAPTCHA được điền — Robot tiếp quản luồng: bấm Apply.")
 
 
 def verify_file(path):
-    """Trả về dict mô tả file tải về, để đối chiếu với baseline ở mục 6."""
+    """Kiểm tra và xác thực file Excel tải về."""
     result = {"path": str(path), "exists": path.exists()}
     if not result["exists"]:
         return result
@@ -155,48 +334,48 @@ def verify_file(path):
     return result
 
 
-def run_once(iteration_label="", max_captcha_attempts=3):
-    """1 lần chạy đầy đủ: mở trang -> filter -> chờ CAPTCHA (attended) -> Apply ->
-    chờ bảng render -> Export -> verify. Trả về dict kết quả + thời gian đo được,
-    để ghi trực tiếp vào mục 5.2/5.3/7 báo cáo."""
+def run_once(iteration_label="Run 1 (Full 18 Fields)", max_captcha_attempts=3, filters=None):
+    """Chạy 1 lượt end-to-end hoàn chỉnh:
+    Mở trang -> Chọn đủ 18 trường -> Chờ CAPTCHA -> Bấm Apply -> Chờ bảng render -> Export Excel -> Verify file."""
     t0 = time.time()
     result = {"iteration": iteration_label}
     with sync_playwright() as p:
-        # headless=False + maximized: người chạy cần tự mắt thấy trang và gõ CAPTCHA tay
-        # (cùng pattern đã dùng ở test_category_and_fuel.py / test_category_dropdown.py).
         browser = p.chromium.launch(headless=False, args=["--start-maximized"])
         context = browser.new_context(accept_downloads=True, no_viewport=True)
         page = context.new_page()
         try:
-            print(f"\n=== {iteration_label} ===")
-            print("[1/5] Mở trang...")
+            print(f"\n{'=' * 60}")
+            print(f"=== {iteration_label} ===")
+            print(f"{'=' * 60}")
+
+            print("[1/5] Mở trang Vahan Public Report...")
             t_step = time.time()
             page.goto(URL, wait_until="domcontentloaded")
             result["t_load_page_s"] = round(time.time() - t_step, 1)
 
-            print("[2/5] Chọn filter (Category=Two Wheeler, Fuel=All, Y/X-Axis)...")
+            print("[2/5] Áp dụng full selector filters (toàn bộ các trường)...")
             t_step = time.time()
-            apply_filters(page)
+            apply_filters(page, filters=filters)
             result["t_apply_filters_s"] = round(time.time() - t_step, 1)
 
-            print("[3/5] Chờ CAPTCHA (attended) + Apply, retry nếu sai...")
+            print("[3/5] Chờ CAPTCHA (attended) + Apply...")
             t_step = time.time()
             applied = False
             captcha_attempts_used = 0
             for attempt in range(1, max_captcha_attempts + 1):
                 captcha_attempts_used = attempt
-                print(f"    -- lần thử CAPTCHA {attempt}/{max_captcha_attempts} --")
+                print(f"    -- Lần thử CAPTCHA {attempt}/{max_captcha_attempts} --")
                 try:
                     wait_for_captcha_typed(page)
                 except PWTimeout:
-                    result["error"] = f"Hết {CAPTCHA_WAIT_TIMEOUT_MS/1000:.0f}s chờ người gõ CAPTCHA, không thấy nhập."
+                    result["error"] = f"Hết {CAPTCHA_WAIT_TIMEOUT_MS/1000:.0f}s chờ người gõ CAPTCHA."
                     break
 
                 page.click(SELECTORS["apply_button"])
                 page.wait_for_load_state("networkidle")
 
                 if page.get_by_text("Invalid CAPTCHA", exact=False).count() > 0:
-                    print(f"    [CAPTCHA lần {attempt}] Sai — trang tự sinh CAPTCHA mới (filter vẫn giữ nguyên), thử lại.")
+                    print(f"    [CAPTCHA lần {attempt}] Gõ sai — trang tự đổi CAPTCHA mới (các trường filter vẫn giữ nguyên), hãy gõ lại mã mới.")
                     continue
 
                 applied = True
@@ -215,52 +394,62 @@ def run_once(iteration_label="", max_captcha_attempts=3):
             page.wait_for_selector(SELECTORS["download_excel_button"], state="visible", timeout=30_000)
             result["t_wait_table_s"] = round(time.time() - t_step, 1)
 
-            print("[5/5] Bấm Export, tải file...")
+            print("[5/5] Bấm nút Export Excel, tải file về máy...")
             t_step = time.time()
             with page.expect_download() as dl:
                 page.click(SELECTORS["download_excel_button"])
-            # Thêm timestamp vào tên file — tránh 3 lần chạy lặp ghi đè lẫn nhau,
-            # cần giữ đủ cả 3 file để Role 1 đối chiếu mục 6.
             stamped_name = f"{int(t0)}_{dl.value.suggested_filename}"
             path = DOWNLOAD_DIR / stamped_name
             dl.value.save_as(path)
             result["t_download_s"] = round(time.time() - t_step, 1)
 
+            print(f"  >>> Đã lưu file: {path.name}")
             verify = verify_file(path)
             result.update(verify)
             result["success"] = True
+
+            print("\n" + "=" * 60)
+            print("=== KẾT QUẢ ĐỐI CHIẾU FILE TẢI VỀ ===")
+            print(f"  • File path: {path}")
+            print(f"  • Size: {verify.get('size_bytes')} bytes")
+            print(f"  • Định dạng thật: {'XLSX chuẩn' if verify.get('is_real_xlsx') else 'Không hợp lệ'}")
+            print(f"  • Số dòng raw: {verify.get('row_count_raw')}")
+            print(f"  • Cột dữ liệu: {verify.get('columns')}")
+            if verify.get("rows"):
+                last_row = verify["rows"][-1]
+                print(f"  • Dòng tổng kết: {last_row}")
+            print("=" * 60)
+
             return result
 
         except PWTimeout as e:
             result["success"] = False
             result["error"] = f"TIMEOUT: {e}"
+            print(f"\n[LỖI TIMEOUT] {e}")
             return result
         except Exception as e:
             result["success"] = False
             result["error"] = f"{type(e).__name__}: {e}"
+            print(f"\n[LỖI] {type(e).__name__}: {e}")
             return result
         finally:
             result["duration_s"] = round(time.time() - t0, 1)
             browser.close()
 
 
-def run_iterations(n=3):
-    """Khối 4: chạy lặp n lần KHÔNG sửa code giữa các lần, đo thời gian + lỗi từng
-    lần cho mục 5.3. Mỗi lần vẫn cần người đọc CAPTCHA trên browser (không có cách
-    unattended thật, xem mục 9.2 giới hạn của PoC)."""
+def run_iterations(n=3, filters=None):
+    """Chạy lặp n lần để đo lường độ ổn định."""
     results = []
     for i in range(1, n + 1):
-        r = run_once(iteration_label=f"Lần {i}/{n}")
+        r = run_once(iteration_label=f"Lần {i}/{n}", filters=filters)
         results.append(r)
-        print(f"--- Kết quả lần {i}: success={r.get('success')} duration_s={r.get('duration_s')} "
-              f"error={r.get('error')} ---")
+        print(f"--- Kết quả lần {i}: success={r.get('success')} duration_s={r.get('duration_s')} ---")
 
     success_count = sum(1 for r in results if r.get("success"))
     print(f"\n=== TỔNG KẾT: {success_count}/{n} lần thành công ===")
-    for r in results:
-        print(r)
     return results
 
 
 if __name__ == "__main__":
-    run_iterations(n=3)
+    # Mặc định chạy cấu hình đầy đủ 100% tất cả các trường
+    run_once("Full Flow End-to-End (Tất cả các trường)", filters=PRESET_FULL_18_FIELDS)

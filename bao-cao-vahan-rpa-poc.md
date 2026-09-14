@@ -135,14 +135,30 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 | Có captcha / rate-limit / chặn sau N request? | Có CAPTCHA bắt buộc trước POST tạo báo cáo, Rate-limit/chặn sau N request chưa xác định |
 | Có phân trang không | Report dạng bảng thống kê |
 
-### 4.3 Selector map — BÀN GIAO CHO ROLE 3
+### 4.3 Selector map — BÀN GIAO CHO ROLE 3 (Full 18+ Selectors)
 | Phần tử | Selector | Cách định vị (id / attribute / text) | Ổn định? |
 |---|---|---|---|
-| Dropdown State | `#stateName` | ID; chọn option theo text chuẩn hoá, ví dụ `Delhi` | Cao — ID tĩnh. |
-| Dropdown Year | `#reportType`, `#fromYear`, `#toYear`; Financial Year: `#financialYearSelect` | ID | Cao — ID tĩnh. |
-| Category Group = Two Wheeler | `#vehicleCategoryGroup` | ID của `<select>`; option theo text chuẩn hoá `Two Wheeler` | Cao — ID tĩnh. |
-| Fuel | `#vehicleFuel` | ID tĩnh của `<select>` (`id="vehicleFuel"`, lưu ý name trong form payload là `vehicleFuels`); option theo text, ví dụ `PETROL`, `DIESEL`, `ELECTRIC(BOV)` | Cao — ID tĩnh. |
-| Nút Apply Filters | `#applyTrigger` | ID | Cao — ID tĩnh. |
+| Year Type | `#reportType` | ID của `<select>` (CALENDAR YEAR, FINANCIAL YEAR, v.v.) | Cao — ID tĩnh. |
+| From Year / To Year | `#fromYear`, `#toYear` | ID của `<input>` text (ví dụ `2026`) | Cao — ID tĩnh. |
+| Financial Year | `xpath=//*[@id='financialYearSelect']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#financialYearSelect` | Cao — ID tĩnh. |
+| State | `xpath=//*[@id='stateName']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#stateName` | Cao — ID tĩnh. |
+| RTO | `xpath=//*[@id='rtoCode']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#rtoCode` (phụ thuộc State) | Cao — ID tĩnh. |
+| Emission | `xpath=//*[@id='vehicleEmission']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleEmission` | Cao — ID tĩnh. |
+| Maker | `xpath=//*[@id='vehicleMaker']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleMaker` | Cao — ID tĩnh. |
+| Category Group | `xpath=//*[@id='vehicleCategoryGroup']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleCategoryGroup` | Cao — ID tĩnh. |
+| Sub-Category | `xpath=//*[@id='vehicleSubCategory']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleSubCategory` | Cao — ID tĩnh. |
+| Class | `xpath=//*[@id='vehicleClass']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleClass` | Cao — ID tĩnh. |
+| Fuel | `xpath=//*[@id='vehicleFuel']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleFuel` | Cao — ID tĩnh. |
+| EV Type | `xpath=//*[@id='evType']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#evType` | Cao — ID tĩnh. |
+| Status | `xpath=//*[@id='vehicleStatus']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleStatus` | Cao — ID tĩnh. |
+| Owner Type | `xpath=//*[@id='vehicleOwnerType']/following::div[contains(@class,'multiselect-dropdown')][1]` | Container multiselect sau `#vehicleOwnerType` | Cao — ID tĩnh. |
+| Vehicle Type | `#vehicleType` | ID của `<select>` (Transport / Non-Transport) | Cao — ID tĩnh. |
+| Fitness Valid as On Date? | `#fitnessCheck` | ID của `<select>` (NO=0 / YES=1) | Cao — ID tĩnh. |
+| Delhi NCR ? | `#delhiNcr` | ID của `<select>` (ALL STATES=0 / YES=1) | Cao — ID tĩnh. |
+| Y-Axis (Pivot) | `#yAxis` | ID của `<select>` | Cao — ID tĩnh. |
+| X-Axis (Pivot) | `#xAxis` | ID của `<select>` (populate sau click Y-Axis) | Cao — ID tĩnh. |
+| Ô nhập CAPTCHA | `#externalCaptcha` | ID của `<input>` text | Cao — ID tĩnh. |
+| Nút Apply Filters | `#applyTrigger` | ID button submit | Cao — ID tĩnh. |
 | Nút Export Excel | `#downloadBtn1` | ID | Hiển thị sau khi apply filter. |
 
 **Thời điểm bàn giao thực tế:** phút thứ ___ *(mục tiêu: phút 50)*

@@ -37,42 +37,59 @@ APPLY_TIMEOUT_MS = DEFAULT_TIMEOUT_MS
 # Role 2 phải xác định trong DevTools nó là loại nào và selector thật.
 # Selector dưới đây là CHỖ ĐỂ Ở (placeholder pattern), không phải giá trị đúng.
 SELECTORS = {
-    "state_container": None,       # selector của cả khối dropdown State (để click mở)
-    "year_from": None,             # ô "Year From" (input, không phải dropdown)
-    "year_to": None,               # ô "Year To"
-    # [FACT] verify bằng test_category_dropdown.py — chạy thật + xác nhận bằng mắt (Two Wheeler
-    # được tick đúng chỗ, không lẫn sang Fuel). Container = div.multiselect-dropdown ngay sau
-    # #vehicleCategoryGroup (hidden select) trong DOM order — dùng XPath following:: vì trang
-    # không có id/attribute riêng nào gắn thẳng vào div wrapper.
+    # Time / Period
+    "report_type": "#reportType",
+    "financial_year_container": "xpath=//*[@id='financialYearSelect']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "year_from": "#fromYear",
+    "year_to": "#toYear",
+
+    # Geographic / Administrative
+    "state_container": "xpath=//*[@id='stateName']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "rto_container": "xpath=//*[@id='rtoCode']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "delhi_ncr": "#delhiNcr",
+
+    # Vehicle Attributes
+    "emission_container": "xpath=//*[@id='vehicleEmission']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "maker_container": "xpath=//*[@id='vehicleMaker']/following::div[contains(@class,'multiselect-dropdown')][1]",
     "category_container": "xpath=//*[@id='vehicleCategoryGroup']/following::div[contains(@class,'multiselect-dropdown')][1]",
-    # [FACT] verify bằng test_category_and_fuel.py — hidden select thật là id=vehicleFuel
-    # (name=vehicleFuels), tìm bằng inspect_dom.py, KHÔNG đoán từ Category Group. Checkbox
-    # tick xong được assert is_checked()==True bằng code (không chỉ tin click không lỗi).
+    "subcategory_container": "xpath=//*[@id='vehicleSubCategory']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "class_container": "xpath=//*[@id='vehicleClass']/following::div[contains(@class,'multiselect-dropdown')][1]",
     "fuel_container": "xpath=//*[@id='vehicleFuel']/following::div[contains(@class,'multiselect-dropdown')][1]",
-    "yaxis_container": None,       # dropdown Y-Axis (pivot)
-    "xaxis_container": None,       # dropdown X-Axis (pivot)
-    "apply_button": None,
-    "captcha_input": None,         # ô nhập CAPTCHA
-    "download_excel_button": None, # nút "Download Excel Report" (KHÔNG phải CSV)
-    # Đã xác nhận: click bất kỳ đâu cũng đóng được dropdown checkbox — không cần
-    # selector riêng cho việc này, dùng click vào <body> (luôn tồn tại, xem hàm
-    # select_checkbox_option bên dưới).
+    "ev_type_container": "xpath=//*[@id='evType']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "status_container": "xpath=//*[@id='vehicleStatus']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "owner_type_container": "xpath=//*[@id='vehicleOwnerType']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "vehicle_type": "#vehicleType",
+    "fitness_check": "#fitnessCheck",
+
+    # Axes & Buttons
+    "yaxis_container": "#yAxis",
+    "xaxis_container": "#xAxis",
+    "apply_button": "#applyTrigger",
+    "captcha_input": "#externalCaptcha",
+    "download_excel_button": "#downloadBtn1",
 }
 
-# Giá trị filter — phải khớp đúng mục 0.1 (bộ filter chuẩn cả 3 người dùng chung)
+# Giá trị filter — hỗ trợ full selector
 FILTER_VALUES = {
-    "state": "___",
-    "year_from": "___",
-    "year_to": "___",
-    "category_group": "Two Wheeler",
-    # [FACT] mục 0.1 báo cáo đã chốt: Fuel = "All". Xác nhận qua inspect_fuel_options.py:
-    # "All" KHÔNG phải option thường (không có data-search-text) — là phần tử riêng
-    # div.multiselect-dropdown-all-selector, nằm đầu danh sách. KHÔNG dùng chung hàm
-    # select_checkbox_option() cho case này, xem select_all_checkbox() trong
-    # test_category_and_fuel.py.
-    "fuel": "All",
+    "report_type": "CALENDAR YEAR",
+    "year_from": "2026",
+    "year_to": "2026",
+    "state": None,
+    "rto": None,
+    "emission": None,
+    "maker": None,
+    "category_group": "ALL",  # 11 selected
+    "sub_category": None,
+    "vehicle_class": None,
+    "fuel": None,
+    "ev_type": None,
+    "status": None,
+    "owner_type": None,
+    "vehicle_type": None,
+    "fitness_check": "NO",
+    "delhi_ncr": "ALL STATES",
     "yaxis": "Vehicle Category Group",
-    "xaxis": "Fuel",
+    "xaxis": "Total Consolidated",
 }
 
 
