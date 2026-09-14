@@ -1,0 +1,117 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>VAHAN RPA Assistant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 16px;
+      background: #f8f9fa;
+      color: #24292e;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e1e4e8;
+    }
+    .header h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e3c72;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: #e1f5fe;
+      color: #0288d1;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .desc {
+      font-size: 12px;
+      color: #586069;
+      line-height: 1.4;
+      margin-bottom: 14px;
+    }
+    .steps {
+      background: #ffffff;
+      border: 1px solid #e1e4e8;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #444;
+    }
+    .btn-primary {
+      width: 100%;
+      background: #2ea44f;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .btn-primary:hover {
+      background: #2c974b;
+    }
+    .footer {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span>🤖</span>
+    <h2>VAHAN RPA Tool</h2>
+    <span class="badge">Attended</span>
+  </div>
+
+  <p class="desc">
+    Tự động hóa luồng trích xuất báo cáo VAHAN. Bạn chỉ cần nhập CAPTCHA khi robot yêu cầu.
+  </p>
+
+  <div class="steps">
+    <div class="step-item"><span>1️⃣</span> Chọn Category Group: Two Wheeler</div>
+    <div class="step-item"><span>2️⃣</span> Chọn Fuel: All</div>
+    <div class="step-item"><span>3️⃣</span> Set Y-Axis: Fuel / X-Axis: Vehicle Category Group</div>
+    <div class="step-item"><span>4️⃣</span> Bạn gõ CAPTCHA (tự phát hiện)</div>
+    <div class="step-item"><span>5️⃣</span> Tự động bấm Apply Filters</div>
+    <div class="step-item"><span>6️⃣</span> Tự động tải file Excel về máy</div>
+  </div>
+
+  <button id="btnStart" class="btn-primary">
+    <span>▶</span> Bắt Đầu Chạy Tự Động
+  </button>
+
+  <div id="statusMsg" class="footer">
+    Widget điều khiển cũng hiển thị ở góc trang web.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

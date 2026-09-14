@@ -31,8 +31,11 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 | RTO | Để trống — phụ thuộc State (bỏ trống khi State bỏ trống) |
 | Year / Registration Period | Mặc định của trang, không set cụ thể |
 | Category Group | Two Wheeler |
-| Fuel | PETROL |
-| Các filter khác để mặc định | Toàn bộ filter còn lại (Emission, Sub-Category, Class, EV Type, Owner Type, Vehicle Type, Fitness, Delhi NCR...) giữ nguyên mặc định của trang — flow này chỉ chủ động set Category Group và Fuel |
+| Fuel | All *(sửa từ `PETROL` — xem ghi chú ngay dưới bảng)* |
+| Y Axis / X Axis | Y-Axis = Fuel · X-Axis = Vehicle Category Group |
+| Các filter khác để mặc định | Toàn bộ filter còn lại (Emission, Sub-Category, Class, EV Type, Owner Type, Vehicle Type, Fitness, Delhi NCR...) giữ nguyên mặc định của trang — flow này chủ động set Category Group, Fuel, Y-Axis, X-Axis |
+
+`[FACT]` **Sửa lại hàng Fuel + bổ sung hàng Y/X-Axis (theo yêu cầu rà soát extension):** bảng này trước đó ghi `Fuel = PETROL` và không có hàng Y/X-Axis, nhưng mục 5.2/5.3/6/9.1 của chính báo cáo (dựa trên `poc_vahan.py` đã chạy 3/3 lần thành công, và lượt đối chiếu tay ngày 14/09/2026 ở mục 6) đều xác nhận bộ lọc thật đã dùng là Fuel = **All**, Y-Axis = Fuel, X-Axis = Vehicle Category Group — không phải PETROL. Sửa bảng này để khớp với dữ liệu đã chạy thật thay vì để 2 nguồn mâu thuẫn nhau trong cùng file. `extension-spike/content.js` đã được cập nhật theo đúng bộ lọc này.
 
 ---
 
