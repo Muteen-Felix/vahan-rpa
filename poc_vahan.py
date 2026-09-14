@@ -104,14 +104,22 @@ def apply_filters(page):
     page.locator(SELECTORS["yaxis"]).evaluate('el => el.dispatchEvent(new Event("click", {bubbles:true}))')
     page.wait_for_timeout(500)
     page.select_option(SELECTORS["xaxis"], label="Vehicle Category Group")
+    page.wait_for_timeout(300)
+    # Tự động focus vào ô CAPTCHA ngay sau khi chọn X-Axis để người dùng gõ được luôn
+    captcha_box = page.locator(SELECTORS["captcha_input"])
+    captcha_box.scroll_into_view_if_needed()
+    captcha_box.focus()
 
 
 def wait_for_captcha_typed(page, timeout_ms=CAPTCHA_WAIT_TIMEOUT_MS):
     """Attended, KHÔNG dùng input()/terminal. Poll trực tiếp DOM #externalCaptcha —
     coi là "người gõ xong" khi đủ CAPTCHA_LENGTH ký tự. Script tự tiếp quản ngay khi
     điều kiện đúng, không cần người bấm gì thêm ở terminal."""
+    captcha_box = page.locator(SELECTORS["captcha_input"])
+    captcha_box.scroll_into_view_if_needed()
+    captcha_box.focus()
     print(
-        f"    >>> Đang chờ người đọc CAPTCHA trên browser và gõ đủ {CAPTCHA_LENGTH} ký tự "
+        f"    >>> Đã focus vào ô CAPTCHA. Đang chờ người đọc CAPTCHA trên browser và gõ đủ {CAPTCHA_LENGTH} ký tự "
         f"vào ô CAPTCHA (tối đa {timeout_ms / 1000:.0f}s)..."
     )
     page.wait_for_function(
