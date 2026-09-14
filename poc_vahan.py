@@ -64,6 +64,7 @@ PRESET_FULL_18_FIELDS = {
     "report_type": "CALENDAR YEAR",
     "year_from": "2026",
     "year_to": "2026",
+    "delhi_ncr": "ALL STATES",          # BẮT BUỘC đặt trước state để tránh kích hoạt reset danh sách bang
     "state": "Delhi",
     "rto": "ALL",                        # Tải động sau khi chọn Delhi, chọn ALL
     "emission": "BHARAT STAGE VI",
@@ -77,7 +78,6 @@ PRESET_FULL_18_FIELDS = {
     "owner_type": "INDIVIDUAL",
     "vehicle_type": "Non-Transport",
     "fitness_check": "NO",
-    "delhi_ncr": "ALL STATES",
     "yaxis": "Vehicle Category Group",
     "xaxis": "Total Consolidated",
 }
@@ -199,77 +199,79 @@ def apply_filters(page, filters=None):
         page.fill(SELECTORS["year_from"], str(cfg["year_from"]))
         page.fill(SELECTORS["year_to"], str(cfg["year_to"]))
 
-    # 3. State
+    # 3. Delhi NCR ? (LƯU Ý QUAN TRỌNG: Phải đặt TRƯỚC State! Khi thay đổi Delhi NCR,
+    # trang sẽ kích hoạt filterStatesForDelhiNcr() xóa toàn bộ danh sách và làm mất State đã chọn)
+    if cfg.get("delhi_ncr"):
+        print(f"    - [3/18] Delhi NCR ? -> {cfg['delhi_ncr']}")
+        page.select_option(SELECTORS["delhi_ncr"], label=cfg["delhi_ncr"])
+        page.wait_for_timeout(400)
+
+    # 4. State
     if cfg.get("state"):
-        print(f"    - [3/18] State -> {cfg['state']}")
+        print(f"    - [4/18] State -> {cfg['state']}")
         apply_multiselect(page, SELECTORS["state_container"], cfg.get("state"), "State")
         # Đợi request /analytics/json_rtos tải danh sách RTO
         page.wait_for_timeout(1500)
 
-    # 4. RTO
+    # 5. RTO
     if cfg.get("rto"):
-        print(f"    - [4/18] RTO -> {cfg['rto']}")
+        print(f"    - [5/18] RTO -> {cfg['rto']}")
         apply_multiselect(page, SELECTORS["rto_container"], cfg.get("rto"), "RTO")
 
-    # 5. Emission
+    # 6. Emission
     if cfg.get("emission"):
-        print(f"    - [5/18] Emission -> {cfg['emission']}")
+        print(f"    - [6/18] Emission -> {cfg['emission']}")
         apply_multiselect(page, SELECTORS["emission_container"], cfg.get("emission"), "Emission")
 
-    # 6. Maker
+    # 7. Maker
     if cfg.get("maker"):
-        print(f"    - [6/18] Maker -> {cfg['maker']}")
+        print(f"    - [7/18] Maker -> {cfg['maker']}")
         apply_multiselect(page, SELECTORS["maker_container"], cfg.get("maker"), "Maker")
 
-    # 7. Category Group
+    # 8. Category Group
     if cfg.get("category_group"):
-        print(f"    - [7/18] Category Group -> {cfg['category_group']}")
+        print(f"    - [8/18] Category Group -> {cfg['category_group']}")
         apply_multiselect(page, SELECTORS["category_container"], cfg.get("category_group"), "Category Group")
 
-    # 8. Sub-Category
+    # 9. Sub-Category
     if cfg.get("sub_category"):
-        print(f"    - [8/18] Sub-Category -> {cfg['sub_category']}")
+        print(f"    - [9/18] Sub-Category -> {cfg['sub_category']}")
         apply_multiselect(page, SELECTORS["subcategory_container"], cfg.get("sub_category"), "Sub-Category")
 
-    # 9. Class
+    # 10. Class
     if cfg.get("vehicle_class"):
-        print(f"    - [9/18] Class -> {cfg['vehicle_class']}")
+        print(f"    - [10/18] Class -> {cfg['vehicle_class']}")
         apply_multiselect(page, SELECTORS["class_container"], cfg.get("vehicle_class"), "Class")
 
-    # 10. Fuel
+    # 11. Fuel
     if cfg.get("fuel"):
-        print(f"    - [10/18] Fuel -> {cfg['fuel']}")
+        print(f"    - [11/18] Fuel -> {cfg['fuel']}")
         apply_multiselect(page, SELECTORS["fuel_container"], cfg.get("fuel"), "Fuel")
 
-    # 11. EV Type
+    # 12. EV Type
     if cfg.get("ev_type"):
-        print(f"    - [11/18] EV Type -> {cfg['ev_type']}")
+        print(f"    - [12/18] EV Type -> {cfg['ev_type']}")
         apply_multiselect(page, SELECTORS["ev_type_container"], cfg.get("ev_type"), "EV Type")
 
-    # 12. Status
+    # 13. Status
     if cfg.get("status"):
-        print(f"    - [12/18] Status -> {cfg['status']}")
+        print(f"    - [13/18] Status -> {cfg['status']}")
         apply_multiselect(page, SELECTORS["status_container"], cfg.get("status"), "Status")
 
-    # 13. Owner Type
+    # 14. Owner Type
     if cfg.get("owner_type"):
-        print(f"    - [13/18] Owner Type -> {cfg['owner_type']}")
+        print(f"    - [14/18] Owner Type -> {cfg['owner_type']}")
         apply_multiselect(page, SELECTORS["owner_type_container"], cfg.get("owner_type"), "Owner Type")
 
-    # 14. Vehicle Type
+    # 15. Vehicle Type
     if cfg.get("vehicle_type"):
-        print(f"    - [14/18] Vehicle Type -> {cfg['vehicle_type']}")
+        print(f"    - [15/18] Vehicle Type -> {cfg['vehicle_type']}")
         page.select_option(SELECTORS["vehicle_type"], label=cfg["vehicle_type"])
 
-    # 15. Fitness Valid as On Date?
+    # 16. Fitness Valid as On Date?
     if cfg.get("fitness_check"):
-        print(f"    - [15/18] Fitness Valid -> {cfg['fitness_check']}")
+        print(f"    - [16/18] Fitness Valid -> {cfg['fitness_check']}")
         page.select_option(SELECTORS["fitness_check"], label=cfg["fitness_check"])
-
-    # 16. Delhi NCR ?
-    if cfg.get("delhi_ncr"):
-        print(f"    - [16/18] Delhi NCR ? -> {cfg['delhi_ncr']}")
-        page.select_option(SELECTORS["delhi_ncr"], label=cfg["delhi_ncr"])
 
     # 17. Y-Axis
     if cfg.get("yaxis"):
