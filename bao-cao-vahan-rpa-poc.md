@@ -27,22 +27,22 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 | Trường lọc | Giá trị |
 |---|---|
 | URL trang | https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en |
-| State | ___ |
-| RTO | ___ |
-| Year / Registration Period | ___ |
+| State | Để trống — mặc định toàn quốc (ALL STATES) của trang, không chọn cụ thể |
+| RTO | Để trống — phụ thuộc State (bỏ trống khi State bỏ trống) |
+| Year / Registration Period | Mặc định của trang, không set cụ thể |
 | Category Group | Two Wheeler |
 | Fuel | PETROL |
-| Các filter khác để mặc định | ___ |
+| Các filter khác để mặc định | Toàn bộ filter còn lại (Emission, Sub-Category, Class, EV Type, Owner Type, Vehicle Type, Fitness, Delhi NCR...) giữ nguyên mặc định của trang — flow này chỉ chủ động set Category Group và Fuel |
 
 ---
 
 ## 1. TÓM TẮT CHO MENTOR *(viết cuối cùng — 5 dòng, không hơn)*
 
-- **Làm được gì:** ___
-- **Chưa làm được gì:** ___
-- **Kết luận kỹ thuật quan trọng nhất:** ___
-- **Cần gì để đi tiếp:** ___
-- **Câu hỏi cần mentor trả lời:** ___
+- **Làm được gì:** [FACT] Đã kiểm chứng robot và một lượt làm tay cùng bộ lọc; cả hai trả 3 cột, 11 dòng dữ liệu và tổng `15.722.527`.
+- **Chưa làm được gì:** [BLOCKED] Chưa lấy được file Excel của lượt tay tại đường dẫn host-readable để so sánh byte/hash; chưa đo thời gian tay và thời gian setup độc lập.
+- **Kết luận kỹ thuật quan trọng nhất:** [FACT] 4 file robot có cùng nội dung và khớp bảng kết quả live của lượt tay cho Two Wheeler theo Fuel, All State, năm 2026.
+- **Cần gì để đi tiếp:** Ghi giờ một lượt tay cùng cấu hình, đo setup `S`, rồi đưa file Excel vừa tải vào thư mục làm việc để đối chiếu cấp file.
+- **Câu hỏi cần mentor trả lời:** Tiêu chí nghiệm thu có cần file/byte/hash trùng tuyệt đối, hay chấp nhận đối chiếu bảng dữ liệu cùng bộ lọc?
 
 ---
 
@@ -145,7 +145,7 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 | Nút Apply Filters | `#applyTrigger` | ID | Cao — ID tĩnh. |
 | Nút Export Excel | `#downloadBtn1` | ID | Hiển thị sau khi apply filter. |
 
-**Thời điểm bàn giao thực tế:** phút thứ ___ *(mục tiêu: phút 50)*
+**Thời điểm bàn giao thực tế:** phút thứ 40 *(mục tiêu: phút 50)*
 
 ### 4.4 Pháp lý
 - Đã đọc Terms of Use / Copyright Policy chưa: Đã đọc trang [Copyright Policy](https://analytics.parivahan.gov.in/analytics/copyright): cho phép tái sử dụng nội dung nếu sao chép chính xác, không gây hiểu nhầm và ghi nguồn; nội dung bên thứ ba cần xin phép chủ sở hữu. Liên kết **Terms of Use** trên trang hiện là `href="#"`, chưa lấy được nội dung Terms of Use để đánh giá.
@@ -195,7 +195,7 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 - Nguyên nhân gốc (không phải triệu chứng): `[FACT]` CAPTCHA là bước DUY NHẤT trong luồng phụ thuộc con người — mọi sai sót phát sinh đều nằm ở đây (đọc nhầm/gõ nhầm ký tự captcha), không nằm ở logic hay selector automation.
 
 ### 5.4 Bước dừng
-Nếu chưa chạy hết luồng: **dừng ở bước số ___**, vì lý do: ___
+`[FACT]` Không áp dụng — luồng đã chạy hết cả 9/9 bước (mục 5.2) và thành công cả 3/3 lần lặp (mục 5.3), không dừng giữa chừng.
 
 ---
 
@@ -203,30 +203,19 @@ Nếu chưa chạy hết luồng: **dừng ở bước số ___**, vì lý do: _
 
 > Lỗi nguy hiểm nhất của automation không phải là crash, mà là **tải về file sai mà không ai biết**.
 
-<!-- [Role 3 -> Role 1] Bàn giao thông tin file robot để đối chiếu — Role 1 tự điền
-bảng dưới, không sửa hộ. Cả 3 lần chạy lặp (mục 5.3) đều tải ra file GIỐNG HỆT
-nhau (cùng size/số dòng/tổng số) — dùng file nào trong 3 file cũng được:
-  - Đường dẫn: downloads/1789378528_table_data.xlsx (và 2 file cùng lúc chạy,
-    timestamp 1789378546 / 1789378566)
-  - Định dạng thật: xlsx (zipfile.is_zipfile() == True)
-  - Dung lượng: 16.864 bytes
-  - row_count_raw (verify_file, gồm cả 2 dòng tiêu đề gộp + dòng trống): 15
-  - Tên cột (dòng header thật, row index 2 trong rows): Fuel | Two Wheeler | Total
-  - Dòng "Total" (tổng số xe): 15.722.527
-  - Bộ filter đã dùng: Category Group = Two Wheeler, Fuel = All, Y-Axis = Fuel,
-    X-Axis = Vehicle Category Group — KHÔNG chọn State/Year (dùng mặc định trang,
-    xem [ASSUMPTION] mục 5.2 hàng 2-3). Nếu baseline tay của Role 1 có chọn
-    State/Year cụ thể, 2 file SẼ KHÔNG khớp — cần đối chiếu đúng cùng bộ filter. -->
-
-| Tiêu chí | Baseline (tay) | Robot | Khớp? |
+| Tiêu chí | Baseline tay — lượt kiểm chứng cùng bộ lọc | Robot | Khớp? |
 |---|---|---|---|
-| Tên/định dạng file | ___ | ___ | ___ |
-| Dung lượng | ___ | ___ | ___ |
-| Số dòng | ___ | ___ | ___ |
-| Tên cột | ___ | ___ | ___ |
-| **Con số tổng** | ___ | ___ | ___ |
+| Tên/định dạng file | Đã bấm **Download Excel Report** sau Apply, nhưng browser in-app chưa trả về đường dẫn file để đọc độc lập tên/định dạng | Lượt chạy kiểm chứng tạo `1789380014_table_data.xlsx`; 4 file robot đã nhận (`table_data-2.xlsx`, `1789378528_table_data.xlsx`, `1789378546_table_data.xlsx`, `1789378566_table_data.xlsx`) cũng là XLSX | Chưa chốt ở cấp file/byte |
+| Dung lượng | `n.a.` — không có file tải về ở đường dẫn host-readable | `16.864 bytes/file` | `n.a.` |
+| Số dòng | `11` dòng dữ liệu trên bảng kết quả live | `11` dòng dữ liệu/file (Sheet1, dòng 4–14) | Có (theo dữ liệu hiển thị) |
+| Tên cột | `Fuel`, `Two Wheeler`, `Total` | `Fuel`, `Two Wheeler`, `Total` | Có |
+| **Con số tổng** | **`15.722.527`** | **`15.722.527/file`** | Có |
 
-`[FACT]` Kết luận đối chiếu: ___
+`[FACT]` Xác minh thực chạy: ngày 14/09/2026, robot chạy thành công một lượt end-to-end và tạo `1789380014_table_data.xlsx` trong `18,8s`. File này là XLSX thật, `16.864 bytes`, có 15 dòng vật lý (11 dòng dữ liệu), tổng `15.722.527`; tổng 11 dòng dữ liệu cũng bằng `15.722.527`. Ma trận ô của file mới trùng 3 file timestamp sau khi chuẩn hoá dấu phân cách hàng nghìn; `table_data-2.xlsx` cũng cùng cấu trúc và tổng.
+
+`[FACT]` Kết luận đối chiếu: Lượt manual ngày 14/09/2026 đã Apply thành công với đúng bộ lọc của robot: năm 2026, All State, `Two Wheeler`, Fuel = All, Y = Fuel, X = Vehicle Category Group. Bảng live trả 11 dòng, 3 cột và tổng `15.722.527`, khớp với file robot. Vì vậy có bằng chứng dữ liệu đầu ra cùng cấu hình là tương đương.
+
+`[BLOCKED]` Chưa hoàn tất đối chiếu ở cấp file/byte: thao tác tải Excel đã được bấm nhưng browser in-app không cung cấp file mới tại đường dẫn host-readable để kiểm tra tên, dung lượng hoặc hash. `table_data (2).xlsx` là file lịch sử khác bộ lọc, không dùng làm baseline cho kết luận này.
 
 ---
 
@@ -234,12 +223,12 @@ nhau (cùng size/số dòng/tổng số) — dùng file nào trong 3 file cũng 
 
 | Chỉ số | Làm tay | Automation |
 |---|---|---|
-| Thời gian 1 lần chạy | ___ *(chờ Role 1 điền mục 3.2)* | `[FACT]` Trung bình `21,4s` (dải `17,6s`–`27,2s`, gồm cả thời gian người đọc+gõ CAPTCHA trên browser). Phần automation thuần (mở trang → chọn filter → Apply → Export → verify, KHÔNG tính thời gian người gõ CAPTCHA) luôn dưới `8s`/lần. |
-| Số thao tác của người | ___ *(chờ Role 1 điền mục 3.2)* | `[FACT]` `1` thao tác duy nhất — đọc và gõ CAPTCHA trực tiếp trên trang. Không cần chọn filter tay, không cần quay lại terminal bấm Enter (attended qua `page.wait_for_function()`, không dùng `input()`). |
-| Tỉ lệ thành công | ___ *(chờ Role 1 điền mục 3.4)* | `[FACT]` `3/3` (100%), trong đó `1/3` lần cần gõ lại CAPTCHA 1 lần (script tự retry, không cần can thiệp gì thêm ngoài gõ lại). |
-| Thời gian setup ban đầu (một lần) | — | `[ASSUMPTION]` Không đo tách riêng được trong phiên này — viết code và debug selector diễn ra xen kẽ nhiều vòng thử (xem lịch sử trong hội thoại/commit), không phải một khối thời gian liên tục để đo chính xác. Để `___`, cần đo lại có chủ đích nếu muốn số thật. |
+| Thời gian 1 lần chạy | `n.a.` — đã có lượt Apply và nhận bảng kết quả cùng bộ lọc, nhưng không bấm giờ độc lập; `30 giây` ở Mục 3.2 là bộ lọc khác nên không dùng làm `Ttay`. | `[FACT]` Lượt chạy kiểm chứng end-to-end: `18,8s` (mở trang `3,4s`, chọn filter `3,3s`, CAPTCHA + Apply `10,6s`, chờ bảng `0,0s`, tải file `0,5s`). Log có sẵn của repo: 3/3 lượt thành công, trung bình `21,4s`, dải `17,6–27,2s`. |
+| Số thao tác của người | 1 lần người dùng nhập CAPTCHA; số click không được đo độc lập. `~40 click` ở Mục 3.2 không được tái sử dụng cho cấu hình này. | `[FACT]` Người dùng chỉ cần nhập CAPTCHA trong browser (1 lần nhập, 6 ký tự); robot tự chọn filter, Apply, export và kiểm tra file. |
+| Tỉ lệ thành công | Apply + hiển thị bảng kết quả: `1/1` lượt cùng bộ lọc; đã bấm xuất Excel nhưng chưa lấy được file ở máy host. | `[FACT]` Lượt kiểm chứng hiện tại: `1/1` thành công khi CAPTCHA đúng. Log repo: `3/3` thành công; 1 lượt phải nhập lại CAPTCHA do lần đầu sai. 4 file robot được cung cấp đều là XLSX hợp lệ và có dữ liệu. |
+| Thời gian setup ban đầu (một lần) | — | `[BLOCKED]` Chưa đo được thời gian xây dựng/debug selector ban đầu. Phiên kiểm chứng dùng môi trường đã có Playwright và không tính vào thời gian chạy. |
 
-`[FACT]` Điểm hoà vốn ước tính — chạy bao nhiêu lần thì automation mới có lãi so với làm tay: ___ *(cần thời gian làm tay thật ở mục 3.2 từ Role 1 mới tính được — automation ổn định ở ~21s/lần bao gồm cả CAPTCHA, nhưng chưa có mẫu số để so sánh)*
+`[BLOCKED]` Phần đối chiếu dữ liệu cùng bộ lọc đã có kết quả khớp, nhưng chưa thể chốt điểm hòa vốn thực tế: lượt làm tay chưa có thời gian bấm giờ độc lập (`Ttay`) và thời gian setup `S` chưa đo. Khi đo lại cùng bộ filter, điểm hòa vốn là `S / (Ttay - Trobot)` lượt, chỉ có ý nghĩa khi `Ttay > Trobot`.
 
 ---
 
@@ -247,12 +236,12 @@ nhau (cùng size/số dòng/tổng số) — dùng file nào trong 3 file cũng 
 
 | # | Rủi ro | Mức độ | Ảnh hưởng | Cách giảm thiểu |
 |---|---|---|---|---|
-| 1 | Site đổi UI → selector vỡ | ___ | ___ | ___ |
-| 2 | Bị rate-limit / chặn khi chạy nhiều | ___ | ___ | ___ |
-| 3 | File tải về sai dữ liệu mà không báo lỗi | ___ | ___ | ___ |
-| 4 | Latency VN ↔ India gây timeout | ___ | ___ | ___ |
-| 5 | Ràng buộc Terms of Use | ___ | ___ | ___ |
-| 6 | ___ | ___ | ___ | ___ |
+| 1 | Site đổi UI → selector vỡ | **Trung bình** — `[FACT]` các control chính hiện có ID tĩnh, nhưng Category/Fuel là widget multiselect tùy chỉnh và thao tác đang phụ thuộc cấu trúc DOM `following::div`. | `[ASSUMPTION]` Nếu VAHAN đổi ID, cấu trúc wrapper hoặc thư viện giao diện, robot có thể dừng ở bước chọn filter hay Export; không làm sai dữ liệu âm thầm nếu giữ các assert hiện có. | Ưu tiên ID/attribute ổn định; gom selector tại một nơi; giữ assert checkbox và trạng thái nút Export; thêm smoke test chạy định kỳ và cảnh báo rõ bước/selector bị lỗi. |
+| 2 | Bị rate-limit / chặn khi chạy nhiều | **Trung bình, chưa đủ dữ liệu** — `[FACT]` chưa xác định rate-limit/chặn sau N request; mẫu hiện tại chỉ có 3 lần chạy liên tiếp. | `[ASSUMPTION]` Chạy với tần suất lớn có thể bị chậm, trả lỗi, khóa phiên/IP hoặc làm CAPTCHA khó hơn, khiến SLA không ổn định. | Xác nhận tần suất nghiệp vụ trước; giới hạn concurrency và tốc độ; dùng backoff có giới hạn; ghi HTTP status/thời điểm lỗi; thử tải tăng dần trong phạm vi được chủ hệ thống cho phép, không tự động retry vô hạn. |
+| 3 | File tải về sai dữ liệu mà không báo lỗi | **Cao** — lỗi không crash nhưng có thể đưa số liệu sai vào báo cáo hoặc hệ thống downstream. | `[FACT]` Robot hiện mới xác minh định dạng XLSX, số dòng, tên cột và tổng; `[ASSUMPTION]` nếu filter không được áp dụng đúng mà schema vẫn giống nhau, kiểm tra kỹ thuật đơn thuần có thể không phát hiện. | Đối chiếu với file baseline cùng đúng bộ filter; lưu metadata filter cùng file; kiểm tra định dạng thật, schema, số dòng, tổng và các invariant nghiệp vụ; không phát hành dữ liệu khi baseline/filter chưa được xác nhận. |
+| 4 | Latency VN ↔ India gây timeout | **Trung bình** — `[FACT]` 3 lần PoC hoàn tất trong `17,6–27,2s`, chưa gặp timeout; mẫu nhỏ và chỉ phản ánh một phiên chạy. | `[ASSUMPTION]` Mạng chậm hoặc portal quá tải có thể làm `goto`, submit filter hay chờ Export vượt timeout, gây thất bại từng lần và tăng thời gian xử lý. | Dùng explicit wait theo trạng thái DOM/network thay cho sleep cố định; đặt timeout riêng cho từng bước dựa trên số đo; retry có giới hạn cho lỗi mạng an toàn; log thời gian từng bước để điều chỉnh ngưỡng theo dữ liệu thật. |
+| 5 | Ràng buộc Terms of Use | **Cao / chưa thể kết luận được phép** — `[FACT]` đã đọc Copyright Policy nhưng liên kết Terms of Use hiện không cung cấp nội dung; chưa tìm thấy quy định về automated access. | `[ASSUMPTION]` Nếu automated access bị hạn chế, việc triển khai có thể phải dừng hoặc chuyển sang kênh dữ liệu được VAHAN cho phép; ngoài ra có rủi ro tuân thủ khi tái sử dụng/phân phối dữ liệu. | Xin xác nhận bằng văn bản từ mentor/VF India và chủ hệ thống về quyền truy cập tự động, tần suất, lưu trữ và phân phối; ghi nguồn; chưa chạy quy mô lớn hoặc production trước khi được phê duyệt. |
+| 6 | CAPTCHA khiến luồng không thể chạy unattended | **Cao** — `[FACT]` CAPTCHA bắt buộc trước mỗi lần Apply; 1/3 lần đo đã nhập sai và cần nhập lại. | `[FACT]` Mỗi lượt hiện cần một người đọc/nhập CAPTCHA, nên không phù hợp job nền hoặc lịch chạy hoàn toàn tự động; nếu không nhập trong 300 giây thì lần chạy thất bại. | Giữ mô hình attended và retry tối đa 3 lần trong PoC; làm rõ SLA/tần suất; hỏi chủ hệ thống về API hoặc cơ chế truy cập chính thức. |
 
 ---
 
@@ -263,14 +252,17 @@ nhau (cùng size/số dòng/tổng số) — dùng file nào trong 3 file cũng 
 | Phương án | Bằng chứng ủng hộ | Bằng chứng phản đối |
 |---|---|---|
 | A. RPA thao tác trên UI | [FACT] Tương thích trực tiếp với kiến trúc portal: file Excel được build hoàn toàn ở phía client (thư viện SheetJS parse dữ liệu từ DOM bảng hiển thị). Trình duyệt tự động (Playwright) tự nhiên kích hoạt được SheetJS để sinh file `.xlsx` chuẩn định dạng. | [FACT] Tốn tài nguyên tính toán hơn gọi HTTP thuần; phụ thuộc vào độ ổn định của DOM/selector; cần xử lý CAPTCHA trên giao diện. |
-| B. Gọi thẳng HTTP endpoint | [FACT] Tiết kiệm tài nguyên máy tính nếu server cung cấp API tải file trực tiếp. | [FACT] Server KHÔNG có endpoint HTTP trả về binary file Excel để replay trực tiếp. Form POST filter bị chặn bởi CAPTCHA bắt buộc và CSRF token theo phiên, response chỉ trả về HTML server-rendered. Muốn có file Excel từ HTTP thuần phải tự giải CAPTCHA, parse HTML table và tự code dựng lại file Excel — độ phức tạp và rủi ro cao hơn nhiều so với RPA browser. |
+| B. Gọi thẳng HTTP endpoint | [FACT] Tiết kiệm tài nguyên máy tính nếu server cung cấp API tải file trực tiếp. | [FACT] Server KHÔNG có endpoint HTTP trả về binary file Excel để replay trực tiếp. Form POST filter có CAPTCHA bắt buộc và CSRF token theo phiên, response chỉ trả về HTML server-rendered; không hỗ trợ tải file Excel trực tiếp qua HTTP. |
 
 **Đề xuất:** Chọn **Phương án A (RPA thao tác trên UI bằng Playwright)**.
-**Điều kiện để đề xuất này đúng:** Giải quyết được bước CAPTCHA (bằng CAPTCHA solver AI/OCR hoặc cơ chế attended RPA) và duy trì selector ổn định theo ID tĩnh đã xác định (`#stateName`, `#vehicleCategoryGroup`, `#vehicleFuel`, `#applyTrigger`, `#downloadBtn1`).
+**Điều kiện để đề xuất này đúng:** Vận hành theo mô hình Attended RPA (người dùng trực tiếp nhập CAPTCHA thủ công trên trình duyệt theo đúng quy định, tuyệt đối không bypass CAPTCHA) và duy trì selector ổn định theo ID tĩnh đã xác định (`#stateName`, `#vehicleCategoryGroup`, `#vehicleFuel`, `#applyTrigger`, `#downloadBtn1`).
 
 ### 9.2 Điều buổi này CHƯA chứng minh được
-- ___
-- ___
+- `[BLOCKED]` Đối chiếu cấp file/byte (tên file, dung lượng, hash) giữa baseline tay và file robot — baseline tay chưa tải được ở đường dẫn host-readable (mục 6); mới đối chiếu được ở cấp dữ liệu hiển thị/bảng.
+- `[BLOCKED]` Thời gian làm tay độc lập (`Ttay`) và thời gian setup automation ban đầu (`S`) — chưa đo được nên chưa tính được điểm hoà vốn thực tế (mục 7).
+- `[BLOCKED]` Tác động riêng của từng filter (vd. chỉ đổi Fuel, giữ nguyên các filter khác) — hai file baseline đã đối chiếu ở mục 3.4 thay đổi đồng thời nhiều filter, chưa cô lập được nhân quả.
+- `[BLOCKED]` Rate-limit hoặc ngưỡng chặn của VAHAN khi chạy nhiều lần liên tiếp — mẫu hiện tại chỉ có 3 lần chạy.
+- `[BLOCKED]` Terms of Use có cho phép automated access/scraping hay không — liên kết trên trang chưa trả nội dung để đọc.
 
 ---
 
@@ -292,7 +284,7 @@ nhau (cùng size/số dòng/tổng số) — dùng file nào trong 3 file cũng 
 
 > Báo cáo "dừng ở bước X vì Y, cần Z để đi tiếp" có giá trị hơn hẳn "chưa xong".
 
-- Đã đi được đến đâu: ___
-- Bị chặn ở đâu, do cái gì: ___
-- Cần gì để gỡ (quyền, công cụ, thông tin, thời gian): ___
-- Ước tính thời gian cần thêm: ___
+- Đã đi được đến đâu: `[FACT]` Recon đã kết luận dứt khoát câu hỏi giá trị nhất buổi — KHÔNG replay được request Export bằng HTTP client, vì file Excel do SheetJS dựng phía client, không phải response HTTP (mục 4.1). PoC Playwright chạy hết toàn bộ luồng, thành công 3/3 lần lặp, và dữ liệu output khớp với bảng kết quả live của một lượt làm tay cùng bộ lọc (mục 6).
+- Bị chặn ở đâu, do cái gì: `[BLOCKED]` Baseline tay chưa tải được file Excel ở đường dẫn host-readable (thao tác Download đã bấm nhưng browser in-app không trả file ra ngoài) nên chưa đối chiếu được cấp file/byte, chỉ mới đối chiếu ở cấp dữ liệu hiển thị. `[BLOCKED]` Thời gian làm tay độc lập (`Ttay`) và thời gian setup automation (`S`) chưa đo, nên chưa tính được điểm hoà vốn. `[BLOCKED]` Terms of Use chưa xác nhận được nội dung về automated access.
+- Cần gì để gỡ (quyền, công cụ, thông tin, thời gian): Môi trường/quyền để tải file baseline ra đường dẫn đọc được trên máy host (thay vì chỉ chạy trong browser in-app); một khối thời gian riêng (không xen kẽ việc khác) để bấm giờ một lượt tay end-to-end và đo thời gian setup automation; phản hồi của mentor/VF India cho các câu hỏi ở mục 10, đặc biệt là tiêu chí nghiệm thu (mục 1) và nội dung Terms of Use về automated access.
+- Ước tính thời gian cần thêm: `[ASSUMPTION]` Khoảng 30–45 phút cho một buổi ngắn tiếp theo: ~15 phút bấm giờ + tải file baseline tay, ~15 phút đối chiếu file/byte và đo `S`, phần còn lại dự phòng xử lý phát sinh. Đây là ước lượng dựa trên quy mô công việc còn lại, không phải số đo thực tế.

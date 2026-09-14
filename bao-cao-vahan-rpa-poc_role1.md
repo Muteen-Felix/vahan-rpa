@@ -31,18 +31,18 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 | RTO | ___ |
 | Year / Registration Period | ___ |
 | Category Group | Two Wheeler |
-| Fuel | All |
+| Fuel | ___ |
 | Các filter khác để mặc định | ___ |
 
 ---
 
 ## 1. TÓM TẮT CHO MENTOR *(viết cuối cùng — 5 dòng, không hơn)*
 
-- **Làm được gì:** ___
-- **Chưa làm được gì:** ___
-- **Kết luận kỹ thuật quan trọng nhất:** ___
-- **Cần gì để đi tiếp:** ___
-- **Câu hỏi cần mentor trả lời:** ___
+- **Làm được gì:** [FACT] Đã kiểm chứng robot và một lượt làm tay cùng bộ lọc; cả hai trả 3 cột, 11 dòng dữ liệu và tổng `15.722.527`.
+- **Chưa làm được gì:** [BLOCKED] Chưa lấy được file Excel của lượt tay tại đường dẫn host-readable để so sánh byte/hash; chưa đo thời gian tay và thời gian setup độc lập.
+- **Kết luận kỹ thuật quan trọng nhất:** [FACT] 4 file robot có cùng nội dung và khớp bảng kết quả live của lượt tay cho Two Wheeler theo Fuel, All State, năm 2026.
+- **Cần gì để đi tiếp:** Ghi giờ một lượt tay cùng cấu hình, đo setup `S`, rồi đưa file Excel vừa tải vào thư mục làm việc để đối chiếu cấp file.
+- **Câu hỏi cần mentor trả lời:** Tiêu chí nghiệm thu có cần file/byte/hash trùng tuyệt đối, hay chấp nhận đối chiếu bảng dữ liệu cùng bộ lọc?
 
 ---
 
@@ -114,42 +114,68 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 ### 4.1 Nút Export gọi cái gì
 | Câu hỏi | Trả lời |
 |---|---|
-| Method (GET / POST / XHR) | ___ |
-| URL endpoint đầy đủ | ___ |
-| Payload / query params | ___ |
-| Response Content-Type | ___ |
-| Có cần cookie phiên không? | ___ |
-| Có CSRF token / ViewState / `j_id...` trong payload không? | ___ |
-| **Replay được request này bằng HTTP client không?** | ___ |
-| Nếu đã thử replay: kết quả | ___ |
+| Method (GET / POST / XHR) | [FACT] Form filter dùng `POST`. [ASSUMPTION] Export có thể tạo file từ dữ liệu trên trình duyệt qua SheetJS; chưa xác nhận được bằng một lượt export thành công. |
+| URL endpoint đầy đủ | [FACT] Form action: `https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`. [FACT] Có đường dẫn log Excel: `https://analytics.parivahan.gov.in/analytics/reports/logDownload/Vahan%20Public%20Report%20Xlsx`. Chưa xác nhận log endpoint có được gọi trong lượt export thành công. |
+| Payload / query params | [FACT] Có các field `stateMultiple`, `rtoCodeMultiple`, `vehicleCategoryGroup`, `vehicleFuels`, `fromYear`, `toYear`, `xAxis`, `yAxis`, `captcha`, `_csrf` và các field filter khác. |
+| Response Content-Type | [FACT] Trang ban đầu trả `text/html;charset=utf-8` và tải thư viện SheetJS `xlsx.full.min.js`. [BLOCKED] Chưa thu được response của một lượt export thành công để xác định Content-Type của file. |
+| Có cần cookie phiên không? | [FACT] GET trang tạo cookie `analytics_sh_cok` với thuộc tính `Secure` và `HttpOnly`. |
+| Có CSRF token / ViewState / `j_id...` trong payload không? | [FACT] Có hidden input `name="_csrf"`, giá trị thay đổi theo lần tải trang. Không thấy ViewState hoặc ID dạng `j_id...` trong HTML đã kiểm tra. |
+| **Replay được request này bằng HTTP client không?** | [BLOCKED] Chưa có POST/export thành công để replay. Chưa thể kết luận hướng HTTP client thay thế UI. |
+| Nếu đã thử replay: kết quả | [BLOCKED] Chưa thực hiện replay vì chưa có request export hoàn chỉnh và CAPTCHA chưa được hoàn tất. |
 
 > Ô "replay được không" là **phát hiện có giá trị nhất cả buổi**. Nếu YES thì hướng đi dài hạn đổi hoàn toàn.
 
 ### 4.2 Công nghệ trang
 | Câu hỏi | Trả lời |
 |---|---|
-| Stack (JSF/PrimeFaces, SPA, khác) | ___ |
-| ID phần tử tĩnh hay sinh động (`j_idt123`)? | ___ |
-| Dropdown State → RTO phụ thuộc nhau thế nào | ___ |
-| Thời gian chờ sau mỗi lần chọn filter | ___ |
-| Có captcha / rate-limit / chặn sau N request? | ___ |
-| Có phân trang không | ___ |
+| Stack (JSF/PrimeFaces, SPA, khác) | [FACT] Trang server-rendered HTML, dùng jQuery, Bootstrap, Bootstrap Datepicker và SheetJS (`xlsx.full.min.js`); không phải SPA. |
+| ID phần tử tĩnh hay sinh động (`j_idt123`)? | [FACT] Control chính dùng ID tĩnh, có nghĩa như `stateName`, `rtoCode`, `vehicleCategoryGroup`, `vehicleFuel`, `reportType`, `fromYear`, `toYear`, `yAxis`, `xAxis`, `externalCaptcha`, `applyTrigger`, `downloadBtn1`. Không thấy ID `j_idt...`. |
+| Dropdown State → RTO phụ thuộc nhau thế nào | [FACT] RTO bị vô hiệu khi chưa chọn hoặc chọn nhiều State. Khi chọn đúng một State, trang gọi `GET /analytics/json_rtos?stateCode=<code>`, nhận JSON rồi thêm option vào `#rtoCode`. |
+| Thời gian chờ sau mỗi lần chọn filter | [BLOCKED] Role 2 chưa đo riêng thời gian chờ cho từng filter. |
+| Có captcha / rate-limit / chặn sau N request? | [FACT] CAPTCHA bắt buộc trước POST tạo báo cáo. [BLOCKED] Chưa xác định được rate-limit hoặc ngưỡng chặn sau N request. |
+| Có phân trang không | [FACT] Report hiển thị dạng bảng thống kê tổng hợp; chưa quan sát thấy phân trang dữ liệu chi tiết. |
 
 ### 4.3 Selector map — BÀN GIAO CHO ROLE 3
 | Phần tử | Selector | Cách định vị (id / attribute / text) | Ổn định? |
 |---|---|---|---|
-| Dropdown State | ___ | ___ | ___ |
-| Dropdown Year | ___ | ___ | ___ |
-| Category Group = Two Wheeler | ___ | ___ | ___ |
-| Fuel | ___ | ___ | ___ |
-| Nút Apply Filters | ___ | ___ | ___ |
-| Nút Export Excel | ___ | ___ | ___ |
+| Archived Flag | `#archivedFlags` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Year Type | `#reportType` | ID của `<select>` | Cao — ID tĩnh. |
+| Financial Year | `#financialYearSelect` | ID của `<select multiple>` | Trung bình — phụ thuộc Year Type. |
+| Registration From Year | `#fromYear` | ID của `<input>` | Trung bình — phụ thuộc Year Type. |
+| Registration To Year | `#toYear` | ID của `<input>` | Trung bình — phụ thuộc Year Type. |
+| From Date | `#fromDate` | ID của `<input>` | Trung bình — phụ thuộc Year Type. |
+| To Date | `#toDate` | ID của `<input>` | Trung bình — phụ thuộc Year Type. |
+| Report Year | `#reportYear` | ID của `<select>` | Trung bình — phụ thuộc Year Type. |
+| Report Month | `#reportMonth` | ID của `<select>` | Trung bình — phụ thuộc Year Type. |
+| State | `#stateName` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| RTO | `#rtoCode` | ID của `<select multiple>` | Trung bình — option tải động theo State. |
+| Emission | `#vehicleEmission` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Maker | `#vehicleMaker` | ID của `<select multiple>` | Trung bình — option tải lazy. |
+| Category Group | `#vehicleCategoryGroup` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Sub-Category | `#vehicleSubCategory` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Vehicle Class | `#vehicleClass` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Fuel | `#vehicleFuel` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| EV Type | `#evType` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Status | `#vehicleStatus` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Owner Type | `#vehicleOwnerType` | ID của `<select multiple>` | Cao — ID tĩnh. |
+| Vehicle Type | `#vehicleType` | ID của `<select>` | Cao — ID tĩnh. |
+| Fitness Valid as On Date | `#fitnessCheck` | ID của `<select>` | Cao — ID tĩnh. |
+| Delhi NCR | `#delhiNcr` | ID của `<select>` | Cao — ID tĩnh. |
+| Y-Axis | `#yAxis` | ID của `<select>` | Cao — ID tĩnh. |
+| X-Axis | `#xAxis` | ID của `<select>` | Trung bình — option sinh theo Y-Axis. |
+| CAPTCHA input | `#externalCaptcha` | ID của `<input>` | Cao — ID tĩnh; nhập thủ công. |
+| Refresh CAPTCHA | `#captchaImg` | ID của `<button>` | Cao — ID tĩnh. |
+| Apply | `#applyTrigger` | ID của `<button type="submit">` | Cao — ID tĩnh. |
+| Export CSV | `#downloadBtn` | ID; chỉ có sau khi có kết quả | Trung bình. |
+| Export Excel | `#downloadBtn1` | ID; chỉ có sau khi có kết quả | Trung bình. |
 
-**Thời điểm bàn giao thực tế:** phút thứ ___ *(mục tiêu: phút 50)*
+**Hidden field nội bộ — không thao tác trực tiếp:** `#hiddenCaptchaField`, `#xAxis_hidden`, `#yAxis_hidden`, `#selectedMakers`, `#last5FYHidden` và `input[name="_csrf"]`.
+
+**Thời điểm bàn giao thực tế:** ___ `[BLOCKED]` Role 2 chưa ghi nhận phút bàn giao *(mục tiêu: phút 50)*
 
 ### 4.4 Pháp lý
-- Đã đọc Terms of Use / Copyright Policy chưa: ___
-- Có điều khoản nào nói về automated access không: ___
+- Đã đọc Terms of Use / Copyright Policy chưa: [FACT] Đã đọc Copyright Policy. Nội dung cho phép tái sử dụng nếu sao chép chính xác, không gây hiểu nhầm và ghi nguồn; nội dung bên thứ ba cần xin phép chủ sở hữu. [BLOCKED] Liên kết Terms of Use trên trang hiện là `href="#"`, chưa lấy được nội dung để đánh giá.
+- Có điều khoản nào nói về automated access không: [BLOCKED] Chưa tìm thấy hoặc đọc được Terms of Use quy định automated access, scraping hay RPA; chưa thể kết luận được phép hay bị cấm.
 
 ---
 
@@ -199,15 +225,19 @@ Nếu chưa chạy hết luồng: **dừng ở bước số ___**, vì lý do: _
 
 > Lỗi nguy hiểm nhất của automation không phải là crash, mà là **tải về file sai mà không ai biết**.
 
-| Tiêu chí | Baseline (tay) | Robot | Khớp? |
+| Tiêu chí | Baseline tay — lượt kiểm chứng cùng bộ lọc | Robot | Khớp? |
 |---|---|---|---|
-| Tên/định dạng file | ___ | ___ | ___ |
-| Dung lượng | ___ | ___ | ___ |
-| Số dòng | ___ | ___ | ___ |
-| Tên cột | ___ | ___ | ___ |
-| **Con số tổng** | ___ | ___ | ___ |
+| Tên/định dạng file | Đã bấm **Download Excel Report** sau Apply, nhưng browser in-app chưa trả về đường dẫn file để đọc độc lập tên/định dạng | Lượt chạy kiểm chứng tạo `1789380014_table_data.xlsx`; 4 file robot đã nhận (`table_data-2.xlsx`, `1789378528_table_data.xlsx`, `1789378546_table_data.xlsx`, `1789378566_table_data.xlsx`) cũng là XLSX | Chưa chốt ở cấp file/byte |
+| Dung lượng | `n.a.` — không có file tải về ở đường dẫn host-readable | `16.864 bytes/file` | `n.a.` |
+| Số dòng | `11` dòng dữ liệu trên bảng kết quả live | `11` dòng dữ liệu/file (Sheet1, dòng 4–14) | Có (theo dữ liệu hiển thị) |
+| Tên cột | `Fuel`, `Two Wheeler`, `Total` | `Fuel`, `Two Wheeler`, `Total` | Có |
+| **Con số tổng** | **`15.722.527`** | **`15.722.527/file`** | Có |
 
-`[FACT]` Kết luận đối chiếu: ___
+`[FACT]` Xác minh thực chạy: ngày 14/09/2026, robot chạy thành công một lượt end-to-end và tạo `1789380014_table_data.xlsx` trong `18,8s`. File này là XLSX thật, `16.864 bytes`, có 15 dòng vật lý (11 dòng dữ liệu), tổng `15.722.527`; tổng 11 dòng dữ liệu cũng bằng `15.722.527`. Ma trận ô của file mới trùng 3 file timestamp sau khi chuẩn hoá dấu phân cách hàng nghìn; `table_data-2.xlsx` cũng cùng cấu trúc và tổng.
+
+`[FACT]` Kết luận đối chiếu: Lượt manual ngày 14/09/2026 đã Apply thành công với đúng bộ lọc của robot: năm 2026, All State, `Two Wheeler`, Fuel = All, Y = Fuel, X = Vehicle Category Group. Bảng live trả 11 dòng, 3 cột và tổng `15.722.527`, khớp với file robot. Vì vậy có bằng chứng dữ liệu đầu ra cùng cấu hình là tương đương.
+
+`[BLOCKED]` Chưa hoàn tất đối chiếu ở cấp file/byte: thao tác tải Excel đã được bấm nhưng browser in-app không cung cấp file mới tại đường dẫn host-readable để kiểm tra tên, dung lượng hoặc hash. `table_data (2).xlsx` là file lịch sử khác bộ lọc, không dùng làm baseline cho kết luận này.
 
 ---
 
@@ -215,12 +245,12 @@ Nếu chưa chạy hết luồng: **dừng ở bước số ___**, vì lý do: _
 
 | Chỉ số | Làm tay | Automation |
 |---|---|---|
-| Thời gian 1 lần chạy | ___ | ___ |
-| Số thao tác của người | ___ | ___ |
-| Tỉ lệ thành công | ___ | ___ |
-| Thời gian setup ban đầu (một lần) | — | ___ |
+| Thời gian 1 lần chạy | `n.a.` — đã có lượt Apply và nhận bảng kết quả cùng bộ lọc, nhưng không bấm giờ độc lập; `30 giây` ở Mục 3.2 là bộ lọc khác nên không dùng làm `Ttay`. | `[FACT]` Lượt chạy kiểm chứng end-to-end: `18,8s` (mở trang `3,4s`, chọn filter `3,3s`, CAPTCHA + Apply `10,6s`, chờ bảng `0,0s`, tải file `0,5s`). Log có sẵn của repo: 3/3 lượt thành công, trung bình `21,4s`, dải `17,6–27,2s`. |
+| Số thao tác của người | 1 lần người dùng nhập CAPTCHA; số click không được đo độc lập. `~40 click` ở Mục 3.2 không được tái sử dụng cho cấu hình này. | `[FACT]` Người dùng chỉ cần nhập CAPTCHA trong browser (1 lần nhập, 6 ký tự); robot tự chọn filter, Apply, export và kiểm tra file. |
+| Tỉ lệ thành công | Apply + hiển thị bảng kết quả: `1/1` lượt cùng bộ lọc; đã bấm xuất Excel nhưng chưa lấy được file ở máy host. | `[FACT]` Lượt kiểm chứng hiện tại: `1/1` thành công khi CAPTCHA đúng. Log repo: `3/3` thành công; 1 lượt phải nhập lại CAPTCHA do lần đầu sai. 4 file robot được cung cấp đều là XLSX hợp lệ và có dữ liệu. |
+| Thời gian setup ban đầu (một lần) | — | `[BLOCKED]` Chưa đo được thời gian xây dựng/debug selector ban đầu. Phiên kiểm chứng dùng môi trường đã có Playwright và không tính vào thời gian chạy. |
 
-`[FACT]` Điểm hoà vốn ước tính — chạy bao nhiêu lần thì automation mới có lãi so với làm tay: ___
+`[BLOCKED]` Phần đối chiếu dữ liệu cùng bộ lọc đã có kết quả khớp, nhưng chưa thể chốt điểm hòa vốn thực tế: lượt làm tay chưa có thời gian bấm giờ độc lập (`Ttay`) và thời gian setup `S` chưa đo. Khi đo lại cùng bộ filter, điểm hòa vốn là `S / (Ttay - Trobot)` lượt, chỉ có ý nghĩa khi `Ttay > Trobot`.
 
 ---
 

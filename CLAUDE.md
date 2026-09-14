@@ -44,6 +44,11 @@ việc của role khác thì comment, không tự sửa.
    đánh đổi mục 11 (tình trạng bàn giao) để lấy thêm thời gian debug.
 6. Không tự đặt requirement thay VF India — câu hỏi chưa rõ thì đưa vào mục 10
    để hỏi mentor, không tự giả định rồi viết như thể đã được xác nhận.
+7. **CẤM TUYỆT ĐỐI BYPASS CAPTCHA**: Nghiêm cấm mọi hành vi, ý định hoặc nghiên
+   cứu giải/bypass CAPTCHA tự động (OCR, AI solver, dịch vụ bên thứ ba, v.v.).
+   Xoá bỏ hoàn toàn mọi ý định bypass CAPTCHA trong dự án. Luôn tuân thủ quy định
+   và chính sách hệ thống: chỉ sử dụng mô hình Attended RPA (con người trực tiếp
+   quan sát và gõ CAPTCHA thủ công trên trình duyệt).
 
 ## Output discipline
 - Deliverable là file `bao-cao-vahan-rpa-poc.md` đã điền đầy đủ, không phải

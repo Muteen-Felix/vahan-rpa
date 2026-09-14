@@ -170,10 +170,10 @@ def step_apply_filters(page):
 
 def step_captcha_pause(page):
     """
-    CAPTCHA chặn trước mỗi lần Apply. PoC semi-automated — không cố tự giải CAPTCHA
-    (ngoài phạm vi, xem mục 4.4/mục 8 rủi ro #5). Browser đang mở (headless=False)
-    nên người dùng tự gõ trực tiếp vào ô CAPTCHA trên trình duyệt, script chỉ dừng
-    lại chờ Enter ở terminal. Hàm này được gọi lại mỗi lần thử vì CAPTCHA đổi liên tục.
+    Tuân thủ quy định: CẤM TUYỆT ĐỐI BYPASS CAPTCHA.
+    Luồng vận hành theo mô hình Attended RPA: người dùng trực tiếp quan sát
+    và gõ CAPTCHA vào ô trên trình duyệt, script chỉ đợi tín hiệu để tiếp tục.
+    Hàm này được gọi lại nếu nhập sai vì CAPTCHA đổi liên tục.
     """
     print(">>> Nhìn vào browser, đọc CAPTCHA HIỆN TẠI, gõ trực tiếp vào ô trên trang.")
     input(">>> Gõ xong CAPTCHA trên browser rồi nhấn Enter ở đây để script tiếp tục... ")
