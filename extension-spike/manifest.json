@@ -10,12 +10,16 @@
     "downloads"
   ],
   "host_permissions": [
-    "*://*.parivahan.gov.in/*"
+    "*://*.parivahan.gov.in/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "*://*.parivahan.gov.in/*"
+        "*://*.parivahan.gov.in/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
       ],
       "js": [
         "content.js"

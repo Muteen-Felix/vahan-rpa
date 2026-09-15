@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to Data Analytics Portal</title>
+    <link rel="stylesheet" href="/analytics/vahanpublicreport/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="top-brand container">
+        <div class="government-brand" aria-label="Government of India">
+          <div class="government-emblem" aria-hidden="true">✦</div>
+          <div>
+            <strong>Government of India</strong>
+            <span>Ministry of Road Transport and Highways</span>
+          </div>
+        </div>
+        <div class="portal-brand">
+          <span class="truck-icon" aria-hidden="true">▰</span>
+          <strong>Parivahan Analytics &amp; Reporting Portal</strong>
+        </div>
+      </div>
+
+      <nav class="main-nav" aria-label="Main navigation">
+        <div class="container nav-inner">
+          <a href="#">Home</a>
+          <a href="#">Reports <span class="caret">⌄</span></a>
+          <a href="#">Public Dashboard <span class="caret">⌄</span></a>
+          <a href="#">Public Report <span class="caret">⌄</span></a>
+          <a href="#">Contact Us</a>
+          <a href="#">Virtual Tour</a>
+          <a class="nav-login" href="#">♙ Login <span class="caret">⌄</span></a>
+        </div>
+      </nav>
+    </header>
+
+    <section class="report-heading">
+      <div class="container report-heading-inner">
+        <div class="vahan-logo" aria-label="Vahan data">
+          <span>Vahan</span>
+          <small>data</small>
+        </div>
+        <h1>VAHAN REPORT</h1>
+      </div>
+    </section>
+
+    <main class="page-container">
+      <form id="vahanPublicForm" action="/analytics/vahanpublicreport?lang=en" method="POST">
+        <aside class="filters-card card">
+          <div class="filters-title">Report Filters</div>
+          <div class="filters-body">
+            <div class="form-group row archived-group">
+              <label for="archivedFlags" class="field-label"><span class="field-icon">⚑</span><span>Archived<br>Flag</span></label>
+              <div class="field-control">
+                <select id="archivedFlags" name="archivedFlags" multiple hidden>
+                  <option value="ACTIVE_COMPLIANT" selected>ACTIVE_COMPLIANT</option>
+                  <option value="ACTIVE_NON_COMPLIANT" selected>ACTIVE_NON_COMPLIANT</option>
+                  <option value="PERMANENT_ARCHIVE" selected>PERMANENT_ARCHIVE</option>
+                  <option value="TEMPORARY_ARCHIVE" selected>TEMPORARY_ARCHIVE</option>
+                </select>
+                <div class="mini-selected-list" aria-label="Archived flags">
+                  <span>ACTIVE_COMPLIANT ×</span>
+                  <span>ACTIVE_NON_COMPLIANT ×</span>
+                  <span>PERMANENT_ARCHIVE ×</span>
+                  <span>TEMPORARY_ARCHIVE ×</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <label for="yearType" class="field-label"><span class="field-icon">▦</span><span>Year<br>Type</span></label>
+              <div class="field-control"><select id="yearType" class="form-control"><option>CALENDAR YEAR</option><option>FINANCIAL YEAR</option></select></div>
+            </div>
+            <div class="year-range" aria-label="Year range"><input value="2026" aria-label="From year"><span>TO</span><input value="2026" aria-label="To year"></div>
+
+            <div class="form-group row">
+              <label for="stateName" class="field-label"><span class="field-icon">◉</span><span>State</span></label>
+              <div class="field-control"><select id="stateName" class="form-control"><option>--- Select State ---</option><option>Delhi</option><option>Maharashtra</option></select></div>
+            </div>
+            <div class="form-group row">
+              <label for="rtoCode" class="field-label"><span class="field-icon">▦</span><span>RTO</span></label>
+              <div class="field-control"><select id="rtoCode" class="form-control" disabled><option>--- Select RTO ---</option></select></div>
+            </div>
+            <div class="form-group row">
+              <label for="emission" class="field-label"><span class="field-icon">♨</span><span>Emission</span></label>
+              <div class="field-control"><select id="emission" class="form-control"><option>--- Select Emission ---</option><option>BS VI</option></select></div>
+            </div>
+            <div class="form-group row">
+              <label for="maker" class="field-label"><span class="field-icon">▣</span><span>Maker</span></label>
+              <div class="field-control"><select id="maker" class="form-control"><option>Search Maker</option><option>Maruti Suzuki</option></select></div>
+            </div>
+
+            <div class="form-group row">
+              <label for="vehicleCategoryGroup" class="field-label"><span class="field-icon">♟</span><span>Category<br>Group</span></label>
+              <div class="field-control">
+                <select id="vehicleCategoryGroup" name="vehicleCategoryGroup" multiple hidden>
+                  <option value="Ambulance/Hearses">Ambulance/Hearses</option>
+                  <option value="Bus">Bus</option>
+                  <option value="Construction Equipment Vehicle">Construction Equipment Vehicle</option>
+                  <option value="Goods Vehicle">Goods Vehicle</option>
+                  <option value="Tractor">Tractor</option>
+                  <option value="Public Service Vehicle">Public Service Vehicle</option>
+                  <option value="Special Category Vehicles">Special Category Vehicles</option>
+                  <option value="Trailer">Trailer</option>
+                  <option value="Four Wheeler">Four Wheeler</option>
+                  <option value="Two Wheeler">Two Wheeler</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <label for="subCategory" class="field-label"><span class="field-icon">▤</span><span>Sub-<br>category</span></label>
+              <div class="field-control"><select id="subCategory" class="form-control"><option>--- Select Sub Category ---</option></select></div>
+            </div>
+            <div class="form-group row">
+              <label for="vehicleClass" class="field-label"><span class="field-icon">⚯</span><span>Class</span></label>
+              <div class="field-control"><select id="vehicleClass" class="form-control"><option>--- Select Class ---</option></select></div>
+            </div>
+
+            <div class="form-group row">
+              <label for="vehicleFuel" class="field-label"><span class="field-icon">♜</span><span>Fuel</span></label>
+              <div class="field-control">
+                <select id="vehicleFuel" name="vehicleFuels" multiple hidden>
+                  <option value="BIO-CNG/BIO-GAS">BIO-CNG/BIO-GAS</option>
+                  <option value="CNG ONLY">CNG ONLY</option>
+                  <option value="DI-METHYL ETHER">DI-METHYL ETHER</option>
+                  <option value="DIESEL">DIESEL</option>
+                  <option value="DIESEL/HYBRID">DIESEL/HYBRID</option>
+                  <option value="DUAL DIESEL/BIO CNG">DUAL DIESEL/BIO CNG</option>
+                  <option value="DUAL DIESEL/CNG">DUAL DIESEL/CNG</option>
+                  <option value="DUAL DIESEL/LNG">DUAL DIESEL/LNG</option>
+                  <option value="ELECTRIC(BOV)">ELECTRIC(BOV)</option>
+                  <option value="ETHANOL">ETHANOL</option>
+                  <option value="HYDROGEN FUEL CELL">HYDROGEN FUEL CELL</option>
+                  <option value="LNG">LNG</option>
+                  <option value="LPG ONLY">LPG ONLY</option>
+                  <option value="METHANOL">METHANOL</option>
+                  <option value="PETROL">PETROL</option>
+                  <option value="PETROL/CNG">PETROL/CNG</option>
+                  <option value="PETROL/ETHANOL">PETROL/ETHANOL</option>
+                  <option value="PETROL/HYBRID">PETROL/HYBRID</option>
+                  <option value="PETROL/LPG">PETROL/LPG</option>
+                  <option value="PURE EV">PURE EV</option>
+                  <option value="SOLAR">SOLAR</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group row">
+              <label for="evType" class="field-label"><span class="field-icon">✣</span><span>EV<br>Type</span></label>
+              <div class="field-control"><select id="evType" class="form-control"><option>--- Select EV Type ---</option></select></div>
+            </div>
+            <div class="form-group row">
+              <label for="status" class="field-label"><span class="field-icon">⚑</span><span>Status</span></label>
+              <div class="field-control"><select id="status" class="form-control"><option>--- Select Status ---</option></select></div>
+            </div>
+            <div class="form-group row">
+              <label for="ownerType" class="field-label"><span class="field-icon">♣</span><span>Owner<br>Type</span></label>
+              <div class="field-control"><select id="ownerType" class="form-control"><option>--- Select Owner Type ---</option></select></div>
+            </div>
+            <div class="form-group row">
+              <label for="vehicleType" class="field-label"><span class="field-icon">▣</span><span>Type</span></label>
+              <div class="field-control"><select id="vehicleType" class="form-control"><option>--- Select Vehicle Type ---</option></select></div>
+            </div>
+            <div class="form-group row compact-row">
+              <label for="fitnessValid" class="field-label"><span class="field-icon">☑</span><span>Fitness Valid as On<br>Date?</span></label>
+              <div class="field-control"><select id="fitnessValid" class="form-control"><option>NO</option><option>YES</option></select></div>
+            </div>
+            <div class="form-group row compact-row">
+              <label for="delhiNcr" class="field-label"><span class="field-icon">⚑</span><span>Delhi NCR ?</span></label>
+              <div class="field-control"><select id="delhiNcr" class="form-control"><option>ALL STATES</option><option>YES</option></select></div>
+            </div>
+          </div>
+        </aside>
+
+        <section class="report-content">
+          <div class="axis-card card">
+            <div class="axis-field">
+              <label for="yAxis"><span class="axis-icon">◉</span> Y-Axis</label>
+              <select class="form-control" id="yAxis">
+                <option value="" label="--- Select Y-Axis ---"></option>
+                <option value="vehicleCategoryDescription" label="Vehicle Category"></option>
+                <option value="vehicleCategoryGroup" label="Vehicle Category Group"></option>
+                <option value="vehicleClass" label="Vehicle Class"></option>
+                <option value="vehicleType" label="Vehicle Type"></option>
+                <option value="vehiclePollutionNorm" label="Norms"></option>
+                <option value="vehicleFuel" label="Fuel"></option>
+                <option value="vehicleMakerName" label="Maker"></option>
+              </select>
+              <input type="hidden" id="yAxis_hidden" name="yAxis" value="">
+            </div>
+            <div class="axis-field">
+              <label for="xAxis"><span class="axis-icon">◉</span> X-Axis</label>
+              <select class="form-control" id="xAxis">
+                <option value="" label="--- Select X-Axis ---"></option>
+              </select>
+              <input type="hidden" id="xAxis_hidden" name="xAxis" value="">
+            </div>
+            <div class="captcha-field">
+              <label for="externalCaptcha">CAPTCHA:</label>
+              <div class="captcha-row">
+                <div class="captcha-image" aria-label="CAPTCHA image">RrKbe3</div>
+                <button type="button" class="captcha-refresh" aria-label="Refresh CAPTCHA">⟳</button>
+              </div>
+              <input type="text" id="externalCaptcha" class="form-control" placeholder="Enter CAPTCHA here" autocomplete="off" maxlength="6">
+            </div>
+            <div class="apply-field">
+              <span class="apply-spacer" aria-hidden="true"></span>
+              <button id="applyTrigger" type="submit" class="apply-button"><strong>Apply</strong><span aria-hidden="true">➜</span></button>
+            </div>
+          </div>
+
+          <section id="fixture-result" class="result-card card" hidden>
+            <div class="result-title">Fuel (ALL), Category Group (Two Wheeler) Wise Vehicle Category Group and Fuel Data for All State (2026)</div>
+            <div class="result-actions">
+              <button type="button" id="downloadBtn1">Download Excel Report</button>
+              <button type="button" id="downloadBtn2">Download CSV Report</button>
+            </div>
+            <table aria-label="Fixture report result">
+              <thead><tr><th>Vehicle Category Group</th><th>Total</th></tr></thead>
+              <tbody><tr><td>Two Wheeler</td><td>0</td></tr><tr><td>Total</td><td>0</td></tr></tbody>
+            </table>
+          </section>
+        </section>
+      </form>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-links container">
+        <div><a href="#">» TERMS OF USE</a><a href="#">» PRIVACY POLICY</a></div>
+        <div><a href="#">» SITEMAP</a><a href="#">» COPYRIGHT POLICY</a></div>
+        <div><a href="#">» HYPERLINK POLICY</a><a href="#">» FAQS</a></div>
+        <div class="nic-mark">NIC<br><small>NATIONAL INFORMATICS CENTRE</small></div>
+      </div>
+      <div class="footer-bottom container"><span>This Website belongs to Ministry of Road Transport &amp; Highways (MoRTH) Government of India</span><span>Designed and developed by NIC</span></div>
+    </footer>
+
+    <script src="/analytics/vahanpublicreport/fixture.js" defer></script>
+  </body>
+</html>
