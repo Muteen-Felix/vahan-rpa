@@ -3,8 +3,14 @@ Attended RPA: người chỉ tương tác TRONG BROWSER (đọc + gõ CAPTCHA), 
 quay lại terminal gõ Enter — Playwright tự poll DOM (wait_for_function) để biết
 khi nào người đã gõ xong, rồi tự tiếp quản Apply -> Export -> verify."""
 
+import sys
 import time
 import zipfile
+
+# [FACT] Fix: chạy qua pipe/redirect trên Windows, stdout mặc định là cp1252 và
+# crash khi print tiếng Việt có dấu (UnicodeEncodeError). Ép lại UTF-8 cho an toàn.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 from openpyxl import load_workbook
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout

@@ -187,15 +187,19 @@ Chốt lúc đầu buổi, không ai được tự đổi giữa chừng.
 ### 5.3 Kết quả chạy lặp
 > Chạy 1 lần được là may mắn. Chạy 3 lần được mới là kết luận.
 
+`[FACT]` **Cập nhật 15/09/2026** — chạy lại 3 lần trên đúng code hiện tại của branch `feat/full-selectors` (sau các commit `1224dee`/`ac59a3c`/`ae2b74c`; lượt đo trước đó ở commit `55d7c82` đã cũ so với code). Bảng dưới đây thay thế bảng đo cũ.
+
 | Lần | Kết quả | Thời gian (giây) | File tải về? | Lỗi gặp phải |
 |---|---|---|---|---|
-| 1 | `[FACT]` Thành công | `17,6` | Có — `downloads/1789378528_table_data.xlsx` | Không |
-| 2 | `[FACT]` Thành công | `19,5` | Có — `downloads/1789378546_table_data.xlsx` | Không |
-| 3 | `[FACT]` Thành công | `27,2` | Có — `downloads/1789378566_table_data.xlsx` | CAPTCHA gõ sai ở lần thử đầu — script tự phát hiện qua text "Invalid CAPTCHA." trên trang, tự chờ người đọc CAPTCHA mới và gõ lại (không sửa lại filter, filter vẫn giữ nguyên), lần thử 2 thành công. Không phải lỗi code/selector. |
+| 1 | `[FACT]` Thành công | `18,5` | Có — `downloads/1789439800_table_data.xlsx` | Không |
+| 2 | `[FACT]` Thành công | `17,4` | Có — `downloads/1789439819_table_data.xlsx` | Không |
+| 3 | `[FACT]` Thành công | `29,6` | Có — `downloads/1789439837_table_data.xlsx` | CAPTCHA gõ sai ở lần thử đầu — script tự phát hiện qua text "Invalid CAPTCHA." trên trang, tự chờ người đọc CAPTCHA mới và gõ lại (không sửa lại filter, filter vẫn giữ nguyên), lần thử 2 thành công. Không phải lỗi code/selector. |
 
 - Tỉ lệ thành công: `[FACT]` 3 / 3
 - Bước hay hỏng nhất: `[FACT]` CAPTCHA — 1/3 lần đo cần gõ lại (người đọc/gõ sai ký tự). Toàn bộ phần automation (chọn Category/Fuel/Axis, Apply, Export, verify file) không lỗi lần nào trong cả 3 lần chạy.
 - Nguyên nhân gốc (không phải triệu chứng): `[FACT]` CAPTCHA là bước DUY NHẤT trong luồng phụ thuộc con người — mọi sai sót phát sinh đều nằm ở đây (đọc nhầm/gõ nhầm ký tự captcha), không nằm ở logic hay selector automation.
+
+`[FACT]` **Chênh lệch số liệu cần Role 1 xác nhận:** cả 3 file lượt 15/09/2026 đều có tổng `15.722.526` (khác 1 đơn vị so với `15.722.527` đã ghi ở mục 1/6/9.1, đo ngày 14/09/2026). Bảng phân rã theo Fuel giống hệt nhau giữa 2 lượt đo, chỉ khác ở dòng `PETROL(E20)` hoặc dòng khác lệch 1 đơn vị (chưa soi từng dòng để xác định dòng nào lệch). `[ASSUMPTION]` Nhiều khả năng do dữ liệu nguồn VAHAN cập nhật giữa hai ngày, không phải lỗi automation — vì 3/3 file cùng lượt đo mới đều khớp nhau tuyệt đối. Role 1 cần đối chiếu lại mục 6 với con số mới này thay vì `15.722.527`.
 
 ### 5.4 Bước dừng
 `[FACT]` Không áp dụng — luồng đã chạy hết cả 9/9 bước (mục 5.2) và thành công cả 3/3 lần lặp (mục 5.3), không dừng giữa chừng.
