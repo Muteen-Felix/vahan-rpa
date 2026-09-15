@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VAHAN RPA Assistant</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header class="header">
+        <span class="robot" aria-hidden="true">🤖</span>
+        <h1>VAHAN RPA Tool</h1>
+        <span class="badge">Attended</span>
+      </header>
+
+      <p class="desc">
+        Cấu hình và tự động điền bộ lọc báo cáo VAHAN. Bạn chỉ cần nhập CAPTCHA và bấm Apply trên trang.
+      </p>
+
+      <section class="form-card" aria-label="Cấu hình báo cáo">
+        <details open>
+          <summary><span class="step-number">1</span> Thời gian &amp; khu vực</summary>
+          <div class="details-body">
+            <label>Trạng thái lưu trữ<input id="archivedFlags" value="ACTIVE_COMPLIANT,ACTIVE_NON_COMPLIANT,PERMANENT_ARCHIVE,TEMPORARY_ARCHIVE" /></label>
+            <label>Loại năm<input id="period" value="CALENDAR YEAR" /></label>
+            <label>Năm tài chính<input id="financialYears" placeholder="Ví dụ: 2025-2026" /></label>
+            <div class="grid">
+              <label>Năm báo cáo<input id="reportYear" /></label>
+              <label>Tháng báo cáo<input id="reportMonth" placeholder="January" /></label>
+              <label>Từ năm<input id="fromYear" value="2025" /></label>
+              <label>Đến năm<input id="toYear" value="2025" /></label>
+              <label>Từ ngày<input id="fromDate" placeholder="1 Jan 2025" /></label>
+              <label>Đến ngày<input id="toDate" placeholder="31 Jan 2025" /></label>
+            </div>
+            <label>Delhi NCR<input id="delhiNcr" value="ALL STATES" /></label>
+            <label>Bang<input id="states" value="Delhi" /></label>
+            <label>RTO<input id="rtos" value="DWARKA - DL9" /></label>
+          </div>
+        </details>
+
+        <details>
+          <summary><span class="step-number">2</span> Bộ lọc phương tiện</summary>
+          <div class="details-body">
+            <label>Tiêu chuẩn khí thải<input id="emissions" value="Not Applicable" /></label>
+            <label>Nhà sản xuất<input id="makers" value="3EV INDUSTRIES PVT LTD" /></label>
+            <label>Nhóm phương tiện<input id="categoryGroups" value="Two Wheeler" /></label>
+            <label>Nhóm phụ<input id="subCategories" value="TWO WHEELER(NT)" /></label>
+            <label>Loại phương tiện<input id="classes" value="M-Cycle/Scooter" /></label>
+            <label>Nhiên liệu<input id="fuels" value="ELECTRIC(BOV)" /></label>
+            <label>Loại EV<input id="evTypes" value="ELECTRIC(BOV)" /></label>
+            <label>Trạng thái<input id="statuses" value="ACTIVE" /></label>
+            <label>Loại chủ sở hữu<input id="ownerTypes" value="INDIVIDUAL" /></label>
+            <label>Loại vận tải<input id="vehicleType" value="Non-Transport" /></label>
+            <label>Fitness còn hiệu lực<input id="fitness" value="NO" /></label>
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="step-number">3</span> Trục báo cáo</summary>
+          <div class="details-body">
+            <label>Trục Y<input id="yAxis" value="Vehicle Class" /></label>
+            <label>Trục X<input id="xAxis" value="Month Wise" /></label>
+          </div>
+        </details>
+      </section>
+
+      <label class="check">
+        <input id="autoExport" type="checkbox" checked />
+        <span>Tự động tải Excel khi có kết quả</span>
+      </label>
+
+      <div class="sticky-actions">
+        <button id="fill" type="button"><span aria-hidden="true">▶</span> Điền Bộ Lọc Tự Động</button>
+        <p id="status" role="status"></p>
+        <p class="warning"><span aria-hidden="true">🔒</span> CAPTCHA luôn do bạn nhập thủ công trên trang VAHAN.</p>
+      </div>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
