@@ -182,6 +182,53 @@ async function fillVahan(config) {
     await waitForOptions("#xAxis", splitValues(config.xAxis));
     await selectLabels("#xAxis", config.xAxis);
   }
+  configureAutoApply(config.autoApply);
+}
+
+let autoApplyCleanup;
+
+function configureAutoApply(enabled) {
+  autoApplyCleanup?.();
+  autoApplyCleanup = undefined;
+
+  const applyLabel = floatingWidget?.shadowRoot?.querySelector('[data-role="apply-label"]');
+  if (applyLabel) {
+    applyLabel.textContent = enabled ? "5. Tự động bấm Apply" : "5. Bạn bấm Apply trên VAHAN";
+  }
+
+  const captcha = document.querySelector("#externalCaptcha");
+  const applyButton = document.querySelector("#applyTrigger");
+  if (!enabled || !captcha || !applyButton) return;
+
+  let timer;
+  let submitted = false;
+  const cleanup = () => {
+    clearTimeout(timer);
+    captcha.removeEventListener("input", onInput);
+  };
+  const submit = () => {
+    if (submitted || captcha.value.trim().length !== 6) return;
+    submitted = true;
+    cleanup();
+    updateFloatingStep("captcha", "done");
+    updateFloatingStep("apply", "running");
+    setFloatingStatus("running", "Đã nhập đủ CAPTCHA. Đang tự động bấm Apply...");
+    applyButton.scrollIntoView({ behavior: "smooth", block: "center" });
+    applyButton.click();
+  };
+  const onInput = () => {
+    clearTimeout(timer);
+    if (captcha.value.trim().length === 6) timer = setTimeout(submit, 800);
+  };
+
+  captcha.addEventListener("input", onInput);
+  autoApplyCleanup = cleanup;
+  onInput();
+}
+
+async function initializeAutoApplyPreference() {
+  const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
+  configureAutoApply(vahanConfig?.autoApply);
 }
 
 let exportClicked = false;
@@ -259,7 +306,9 @@ async function runFromFloatingWidget() {
     updateFloatingStep("captcha", "waiting");
     setFloatingStatus(
       "waiting",
-      "Đã điền bộ lọc. Hãy nhập CAPTCHA và bấm Apply trên trang VAHAN.",
+      vahanConfig.autoApply
+        ? "Đã điền bộ lọc. Apply sẽ tự chạy sau khi bạn nhập đủ CAPTCHA."
+        : "Đã điền bộ lọc. Hãy nhập CAPTCHA và bấm Apply trên trang VAHAN.",
     );
     button.textContent = "↻ Điền Lại Bộ Lọc";
   } catch (error) {
@@ -339,7 +388,7 @@ function injectFloatingWidget() {
           <div class="step" data-step="vehicle" data-state="idle"><span class="step-icon">○</span><span>2. Điền bộ lọc phương tiện</span></div>
           <div class="step" data-step="axes" data-state="idle"><span class="step-icon">○</span><span>3. Thiết lập trục báo cáo</span></div>
           <div class="step" data-step="captcha" data-state="idle"><span class="step-icon">○</span><span>4. Bạn nhập CAPTCHA thủ công</span></div>
-          <div class="step" data-step="apply" data-state="idle"><span class="step-icon">○</span><span>5. Bạn bấm Apply trên VAHAN</span></div>
+          <div class="step" data-step="apply" data-state="idle"><span class="step-icon">○</span><span data-role="apply-label">5. Bấm Apply trên VAHAN</span></div>
           <div class="step" data-step="export" data-state="idle"><span class="step-icon">○</span><span>6. Tự động tải file Excel</span></div>
         </div>
         <button class="start" type="button">▶ Điền Bộ Lọc Tự Động</button>
@@ -358,6 +407,11 @@ function injectFloatingWidget() {
     toggle.setAttribute("aria-label", expanded ? "Mở rộng widget" : "Thu gọn widget");
   });
   root.querySelector(".start").addEventListener("click", runFromFloatingWidget);
+  chrome.storage.local.get("vahanConfig").then(({ vahanConfig }) => {
+    if (vahanConfig?.autoApply) {
+      root.querySelector('[data-role="apply-label"]').textContent = "5. Tự động bấm Apply";
+    }
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -377,4 +431,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 injectFloatingWidget();
+initializeAutoApplyPreference();
 startAutoExportWatcher();

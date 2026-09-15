@@ -69,11 +69,15 @@
         <input id="autoExport" type="checkbox" checked />
         <span>Tự động tải Excel khi có kết quả</span>
       </label>
+      <label class="check">
+        <input id="autoApply" type="checkbox" />
+        <span>Tự động bấm Apply sau khi nhập CAPTCHA</span>
+      </label>
 
       <div class="sticky-actions">
         <button id="fill" type="button"><span aria-hidden="true">▶</span> Điền Bộ Lọc Tự Động</button>
         <p id="status" role="status"></p>
-        <p class="warning"><span aria-hidden="true">🔒</span> CAPTCHA luôn do bạn nhập thủ công trên trang VAHAN.</p>
+        <p class="warning"><span aria-hidden="true">🔒</span> CAPTCHA luôn do bạn tự đọc và nhập trên trang VAHAN.</p>
       </div>
     </main>
     <script src="popup.js"></script>

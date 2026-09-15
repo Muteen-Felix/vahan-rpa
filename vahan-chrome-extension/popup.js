@@ -3,7 +3,7 @@ const fieldIds = [
   "fromYear", "toYear", "fromDate", "toDate", "states", "rtos",
   "emissions", "makers", "categoryGroups", "subCategories", "classes",
   "fuels", "evTypes", "statuses", "ownerTypes", "vehicleType", "fitness",
-  "delhiNcr", "yAxis", "xAxis", "autoExport",
+  "delhiNcr", "yAxis", "xAxis", "autoExport", "autoApply",
 ];
 
 const dropdowns = {
@@ -199,6 +199,7 @@ async function initializeDynamicFields() {
     if (vahanConfig[id] !== undefined) document.getElementById(id).value = vahanConfig[id];
   }
   document.getElementById("autoExport").checked = vahanConfig.autoExport ?? true;
+  document.getElementById("autoApply").checked = vahanConfig.autoApply ?? false;
 
   document.getElementById("delhiNcr").addEventListener("change", async () => {
     await refreshStates();
@@ -300,7 +301,9 @@ fillButton.addEventListener("click", async () => {
     await chrome.storage.local.set({ vahanConfig: config });
     const response = await message({ type: "FILL_VAHAN", config });
     if (!response?.ok) throw new Error(response?.error || "Không nhận được phản hồi từ trang VAHAN.");
-    status.textContent = "Đã điền bộ lọc. Hãy nhập CAPTCHA và bấm Apply.";
+    status.textContent = config.autoApply
+      ? "Đã điền bộ lọc. Apply sẽ tự chạy sau khi bạn nhập đủ CAPTCHA."
+      : "Đã điền bộ lọc. Hãy nhập CAPTCHA và bấm Apply.";
   } catch (error) {
     status.className = "error";
     status.textContent = error.message;
