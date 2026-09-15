@@ -252,18 +252,13 @@
   }
 
   function downloadFixture(extension) {
-    const contents = extension === "csv"
-      ? "Fuel,Two Wheeler,Total\nALL,0,0\n"
-      : "Fixture report\nFuel\tTwo Wheeler\tTotal\nALL\t0\t0\n";
-    const blob = new Blob([contents], { type: extension === "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    const url = URL.createObjectURL(blob);
+    const url = "/analytics/vahanpublicreport/vahan-fixture-report.txt";
     const link = document.createElement("a");
     link.href = url;
     link.download = extension === "csv" ? "vahan-fixture-report.csv" : "vahan-fixture-report.xlsx";
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
     log(`Đã tạo download fixture: ${link.download}`);
   }
 

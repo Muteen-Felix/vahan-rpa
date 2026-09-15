@@ -49,8 +49,12 @@ và `127.0.0.1` chỉ để chạy fixture local.
 ## Chạy test tự động
 
 ```bash
+python3 test_ui_fixture_contract.py
 python3 test_ui_fixture_extension.py
+python3 test_ui_fixture_full_flow.py
 ```
 
 Test tự mở Chromium với Extension, kiểm tra baseline, sau đó xóa Fuel runtime
 để xác nhận cảnh báo developer + người dùng và trạng thái fail-closed.
+Test full-flow dùng CAPTCHA giả trong fixture để kiểm tra thêm Apply, reload,
+download và xác nhận hoàn tất của Extension.

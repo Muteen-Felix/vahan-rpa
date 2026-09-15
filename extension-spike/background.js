@@ -15,7 +15,7 @@ function armDownload(tabId) {
     pendingDownloads.delete(tabId);
   }, DOWNLOAD_ARM_TIMEOUT_MS);
 
-  pendingDownloads.set(tabId, { timer });
+  pendingDownloads.set(tabId, { tabId, timer });
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -26,13 +26,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 chrome.downloads.onCreated.addListener((downloadItem) => {
-  const pending = pendingDownloads.get(downloadItem.tabId);
+  const directMatch = pendingDownloads.get(downloadItem.tabId);
+  // Some browser download events (notably local/extension-triggered fixture
+  // downloads) omit tabId. Only fall back when exactly one tab is pending;
+  // multiple pending tabs remain fail-closed to avoid confirming the wrong file.
+  const missingTabId = downloadItem.tabId == null || downloadItem.tabId === -1;
+  const pending = directMatch || (
+    missingTabId && pendingDownloads.size === 1
+      ? pendingDownloads.values().next().value
+      : null
+  );
   if (!pending) return;
 
   clearTimeout(pending.timer);
-  pendingDownloads.delete(downloadItem.tabId);
+  pendingDownloads.delete(pending.tabId);
 
-  chrome.tabs.sendMessage(downloadItem.tabId, {
+  chrome.tabs.sendMessage(pending.tabId, {
     action: "DOWNLOAD_CONFIRMED",
     downloadId: downloadItem.id,
     filename: downloadItem.filename || downloadItem.url,
