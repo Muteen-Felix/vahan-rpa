@@ -5,6 +5,8 @@ gi (de trong = mac dinh All). KHONG doan, doc that tu DOM.
 """
 from playwright.sync_api import sync_playwright
 
+from ui_contract import assert_ui_contract, get_dropdown_container
+
 URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"
 
 
@@ -13,10 +15,9 @@ def run():
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(URL, wait_until="networkidle")
+        assert_ui_contract(page, step="inspect-preflight")
 
-        container = page.locator(
-            "xpath=//*[@id='vehicleFuel']/following::div[contains(@class,'multiselect-dropdown')][1]"
-        )
+        container = get_dropdown_container(page, "vehicleFuel", step="inspect-fuel")
         container.click()
         page.wait_for_timeout(500)
 

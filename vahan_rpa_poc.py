@@ -41,14 +41,13 @@ SELECTORS = {
     "year_from": None,             # ô "Year From" (input, không phải dropdown)
     "year_to": None,               # ô "Year To"
     # [FACT] verify bằng test_category_dropdown.py — chạy thật + xác nhận bằng mắt (Two Wheeler
-    # được tick đúng chỗ, không lẫn sang Fuel). Container = div.multiselect-dropdown ngay sau
-    # #vehicleCategoryGroup (hidden select) trong DOM order — dùng XPath following:: vì trang
-    # không có id/attribute riêng nào gắn thẳng vào div wrapper.
-    "category_container": "xpath=//*[@id='vehicleCategoryGroup']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    # được tick đúng chỗ, không lẫn sang Fuel). Scope widget trong cùng form-group với
+    # hidden select, không dùng following::div trên toàn document.
+    "category_container": "xpath=//*[@id='vehicleCategoryGroup']/ancestor::div[contains(concat(' ',normalize-space(@class),' '),' form-group ')][1]//div[contains(concat(' ',normalize-space(@class),' '),' multiselect-dropdown ')]",
     # [FACT] verify bằng test_category_and_fuel.py — hidden select thật là id=vehicleFuel
     # (name=vehicleFuels), tìm bằng inspect_dom.py, KHÔNG đoán từ Category Group. Checkbox
     # tick xong được assert is_checked()==True bằng code (không chỉ tin click không lỗi).
-    "fuel_container": "xpath=//*[@id='vehicleFuel']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "fuel_container": "xpath=//*[@id='vehicleFuel']/ancestor::div[contains(concat(' ',normalize-space(@class),' '),' form-group ')][1]//div[contains(concat(' ',normalize-space(@class),' '),' multiselect-dropdown ')]",
     "yaxis_container": None,       # dropdown Y-Axis (pivot)
     "xaxis_container": None,       # dropdown X-Axis (pivot)
     "apply_button": None,
