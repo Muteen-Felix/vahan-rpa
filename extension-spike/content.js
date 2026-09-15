@@ -763,6 +763,9 @@ function updateStepStatus(stepId, state, text) {
 function setUiBusy(isBusy) {
   const startBtn = document.getElementById("vahan-btn-start");
   if (!startBtn) return;
+  // UI drift is fail-closed: cleanup in a catch/finally block must not
+  // re-enable automation after the page contract has been invalidated.
+  if (!isBusy && startBtn.dataset.uiDrift === "true") return;
   startBtn.disabled = isBusy;
   startBtn.style.opacity = isBusy ? "0.6" : "1";
   startBtn.style.cursor = isBusy ? "not-allowed" : "pointer";
@@ -799,6 +802,7 @@ function showUiDriftError(err) {
   }
   const startBtn = document.getElementById("vahan-btn-start");
   if (startBtn) {
+    startBtn.dataset.uiDrift = "true";
     startBtn.disabled = true;
     startBtn.textContent = "⛔ Giao diện chưa được hỗ trợ";
     startBtn.style.opacity = "0.6";
