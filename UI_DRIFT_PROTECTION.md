@@ -31,7 +31,9 @@ gọi backend hoặc CAPTCHA của VAHAN.
 
 Chrome Extension sử dụng cùng nguyên tắc trong `content.js`. Service worker
 `background.js` xác nhận Browser thực sự tạo download trước khi hiển thị thành
-công.
+công. Bộ extension chính ở `vahan-chrome-extension/` dùng `ui-drift.js` làm
+adapter contract chung cho popup và widget; `extension-spike/` được giữ làm
+harness regression tương thích với các test cũ.
 
 ## Chạy kiểm tra
 
@@ -44,6 +46,7 @@ node --check extension-spike/content.js
 node --check extension-spike/background.js
 python3 test_ui_fixture_contract.py
 python3 test_ui_fixture_extension.py
+python3 test_vahan_chrome_extension.py
 python3 test_ui_fixture_full_flow.py
 python3 test_ui_fixture_surface.py
 ```

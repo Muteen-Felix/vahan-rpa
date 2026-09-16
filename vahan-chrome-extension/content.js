@@ -2,6 +2,62 @@ const splitValues = (value) => String(value || "").split(",").map((item) => item
 const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const {
+  UiDriftError,
+  assertUiContract,
+  formatUiDrift,
+  getDropdownContainer,
+  isUiDriftError,
+  requireOne,
+  waitForUiContract,
+} = globalThis.VahanUiDrift;
+
+const PAGE_CONTROLS = {
+  archivedFlags: "#archivedFlags",
+  reportType: "#reportType",
+  financialYearSelect: "#financialYearSelect",
+  reportYear: "#reportYear",
+  reportMonth: "#reportMonth",
+  fromYear: "#fromYear",
+  toYear: "#toYear",
+  fromDate: "#fromDate",
+  toDate: "#toDate",
+  delhiNcr: "#delhiNcr",
+  stateName: "#stateName",
+  rtoCode: "#rtoCode",
+  vehicleEmission: "#vehicleEmission",
+  vehicleMaker: "#vehicleMaker",
+  vehicleSubCategory: "#vehicleSubCategory",
+  vehicleClass: "#vehicleClass",
+  evType: "#evType",
+  vehicleStatus: "#vehicleStatus",
+  vehicleOwnerType: "#vehicleOwnerType",
+  vehicleType: "#vehicleType",
+  fitnessCheck: "#fitnessCheck",
+  yAxisHidden: "#yAxis_hidden",
+  xAxisHidden: "#xAxis_hidden",
+};
+
+const MULTISELECT_NAMES = [
+  "category",
+  "fuel",
+  "archivedFlags",
+  "financialYearSelect",
+  "stateName",
+  "rtoCode",
+  "vehicleEmission",
+  "vehicleMaker",
+  "vehicleSubCategory",
+  "vehicleClass",
+  "evType",
+  "vehicleStatus",
+  "vehicleOwnerType",
+];
+
+let pageUiContract = null;
+let lastUiDriftError = null;
+let uiDriftDetected = false;
+
 function getOptionMap(select) {
   return [...select.options].map((option) => ({
     label: normalize(option.label || option.textContent),
@@ -20,32 +76,74 @@ async function waitForOptions(selector, labels, timeout = 15000) {
     }
     await delay(200);
   }
-  throw new Error(`${selector}: dynamic options did not load within ${timeout} ms.`);
+  throw new UiDriftError(
+    "UI_DRIFT_DYNAMIC_CONTROL_TIMEOUT",
+    `${selector}: dynamic options did not load within ${timeout} ms.`,
+    "dynamic-options",
+    { selector, expectedOptions: labels }
+  );
 }
 
-async function selectLabels(selector, rawValue) {
+function controlNameFromSelector(selector) {
+  return String(selector).replace(/^#/, "");
+}
+
+function findWidgetRows(widget) {
+  return Array.from(
+    widget.querySelectorAll(
+      "[data-search-text], .multiselect-dropdown-list > div:not(.multiselect-dropdown-all-selector)"
+    )
+  ).filter((row, index, rows) => rows.indexOf(row) === index);
+}
+
+async function selectLabels(selector, rawValue, step = "filter") {
   const labels = splitValues(rawValue);
-  const select = document.querySelector(selector);
-  if (!select) throw new Error(`Could not find ${selector}.`);
+  const controlName = controlNameFromSelector(selector);
+  const select = requireOne(selector, controlName, step);
   const options = getOptionMap(select);
   if (!labels.length && !select.multiple) return;
   const values = labels.map((label) => options.find((option) => option.label === normalize(label))?.value);
-  if (values.some((value) => value === undefined)) throw new Error(`${selector}: could not find "${labels.join(", ")}".`);
+  const missingLabel = labels.find((label, index) => values[index] === undefined);
+  if (missingLabel !== undefined) {
+    throw new UiDriftError(
+      "UI_DRIFT_REQUIRED_OPTION",
+      `${selector}: could not find "${missingLabel}".`,
+      step,
+      {
+        control: controlName,
+        selector,
+        expectedOption: missingLabel,
+        optionCount: select.options.length,
+      }
+    );
+  }
 
-  const widget = select.nextElementSibling?.classList?.contains("multiselect-dropdown")
-    ? select.nextElementSibling
-    : null;
+  const widget = select.multiple ? getDropdownContainer(select.id, step) : null;
 
   if (select.multiple && widget) {
     const desired = new Set(labels.map(normalize));
-    const rows = [...widget.querySelectorAll(
-      ".multiselect-dropdown-list > div:not(.multiselect-dropdown-all-selector)",
-    )];
+    widget.click();
+    const rows = findWidgetRows(widget);
+    const rowLabels = new Set();
     for (const row of rows) {
-      const label = normalize(row.querySelector("label")?.textContent);
+      const label = normalize(
+        row.getAttribute("data-search-text") ||
+        row.querySelector("label")?.textContent ||
+        row.textContent
+      );
+      rowLabels.add(label);
       const isSelected = row.classList.contains("checked") || row.querySelector("input")?.checked;
       const shouldSelect = desired.has(label);
       if (Boolean(isSelected) !== shouldSelect) row.click();
+    }
+    const missingWidgetLabel = labels.find((label) => !rowLabels.has(normalize(label)));
+    if (missingWidgetLabel !== undefined) {
+      throw new UiDriftError(
+        "UI_DRIFT_OPTION_NOT_UNIQUE",
+        `Không tìm thấy option "${missingWidgetLabel}" trong ${selector}.`,
+        step,
+        { label: controlName, target: missingWidgetLabel, count: 0 }
+      );
     }
   } else {
     for (const option of select.options) option.selected = values.includes(option.value);
@@ -56,14 +154,19 @@ async function selectLabels(selector, rawValue) {
   const actual = [...select.selectedOptions].map((option) => normalize(option.label || option.textContent));
   const expected = labels.map(normalize);
   if (actual.length !== expected.length || expected.some((label) => !actual.includes(label))) {
-    throw new Error(`${selector}: VAHAN widget did not apply the requested selection.`);
+    throw new UiDriftError(
+      "UI_DRIFT_SELECTION_NOT_SYNCED",
+      `${selector}: VAHAN widget did not apply the requested selection.`,
+      step,
+      { label: controlName, option: labels.join(", "), selectedOptions: actual }
+    );
   }
 }
 
 async function loadMakerOptions(rawValue) {
   const makers = splitValues(rawValue);
-  const select = document.querySelector("#vehicleMaker");
-  if (!makers.length || !select) return;
+  if (!makers.length) return;
+  const select = requireOne("#vehicleMaker", "vehicleMaker", "vehicle-filters");
   for (const maker of makers) {
     if ([...select.options].some((option) => normalize(option.label || option.textContent) === normalize(maker))) continue;
     const url = new URL("/analytics/vahanpublicreport/lazy/vehicle-makers", location.origin);
@@ -93,7 +196,14 @@ async function fetchRtos(stateLabels) {
   if (labels.length !== 1) return [];
   const state = [...document.querySelectorAll("#stateName option")]
     .find((option) => normalize(option.label || option.textContent) === normalize(labels[0]));
-  if (!state) return [];
+  if (!state) {
+    throw new UiDriftError(
+      "UI_DRIFT_REQUIRED_OPTION",
+      `Không tìm thấy State "${labels[0]}" để tải RTO.`,
+      "state-rto",
+      { control: "stateName", selector: "#stateName", expectedOption: labels[0] }
+    );
+  }
   const url = new URL("/analytics/json_rtos", location.origin);
   url.searchParams.set("stateCode", state.value);
   const response = await fetch(url, { credentials: "same-origin" });
@@ -110,10 +220,17 @@ async function fetchMakers(search) {
 }
 
 async function getXAxisOptions(yAxisLabel) {
-  const yAxis = document.querySelector("#yAxis");
-  if (!yAxis || !yAxisLabel) return [];
+  const yAxis = requireOne("#yAxis", "yAxis", "axis");
+  if (!yAxisLabel) return [];
   const match = getOptionMap(yAxis).find((option) => option.label === normalize(yAxisLabel));
-  if (!match) return [];
+  if (!match) {
+    throw new UiDriftError(
+      "UI_DRIFT_REQUIRED_OPTION",
+      `Không tìm thấy Y-Axis "${yAxisLabel}".`,
+      "axis",
+      { control: "yAxis", selector: "#yAxis", expectedOption: yAxisLabel, optionCount: yAxis.options.length }
+    );
+  }
   yAxis.value = match.value;
   yAxis.dispatchEvent(new Event("change", { bubbles: true }));
   yAxis.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -124,64 +241,85 @@ async function getXAxisOptions(yAxisLabel) {
 }
 
 async function getStateOptions(delhiNcrLabel) {
-  await selectLabels("#delhiNcr", delhiNcrLabel);
+  await selectLabels("#delhiNcr", delhiNcrLabel, "state");
   await delay(150);
-  const state = document.querySelector("#stateName");
-  return state
-    ? [...state.options]
-        .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim())
-        .filter(Boolean)
-    : [];
+  const state = requireOne("#stateName", "stateName", "state");
+  return [...state.options]
+    .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
 }
 
 function fill(selector, value) {
   if (!value) return;
-  const input = document.querySelector(selector);
-  if (!input) throw new Error(`Could not find ${selector}.`);
+  const input = requireOne(selector, controlNameFromSelector(selector), "time");
   input.value = value;
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-async function fillVahan(config) {
-  await selectLabels("#archivedFlags", config.archivedFlags);
-  await selectLabels("#reportType", config.period);
+async function fillVahan(config, expectedSignature = null) {
+  if (lastUiDriftError) throw lastUiDriftError;
+  const checkContract = (step) =>
+    assertUiContract(step, expectedSignature, PAGE_CONTROLS, MULTISELECT_NAMES);
+
+  checkContract("before-fill");
+  await selectLabels("#archivedFlags", config.archivedFlags, "time");
+  await selectLabels("#reportType", config.period, "time");
   await delay(300);
-  await selectLabels("#financialYearSelect", config.financialYears);
-  await selectLabels("#reportYear", config.reportYear);
-  await selectLabels("#reportMonth", config.reportMonth);
+  await selectLabels("#financialYearSelect", config.financialYears, "time");
+  await selectLabels("#reportYear", config.reportYear, "time");
+  await selectLabels("#reportMonth", config.reportMonth, "time");
   fill("#fromYear", config.fromYear);
   fill("#toYear", config.toYear);
   fill("#fromDate", config.fromDate);
   fill("#toDate", config.toDate);
+  checkContract("after-time");
 
   // VAHAN rebuilds the State options whenever Delhi NCR changes. Apply this
   // first so the State selection below is not cleared by the page script.
-  await selectLabels("#delhiNcr", config.delhiNcr);
+  await selectLabels("#delhiNcr", config.delhiNcr, "state");
   await delay(100);
-  await selectLabels("#stateName", config.states);
+  await selectLabels("#stateName", config.states, "state");
   if (splitValues(config.rtos).length) {
     await waitForOptions("#rtoCode", splitValues(config.rtos));
-    await selectLabels("#rtoCode", config.rtos);
+    await selectLabels("#rtoCode", config.rtos, "state-rto");
   }
-  await selectLabels("#vehicleEmission", config.emissions);
+  checkContract("after-state");
+
+  await selectLabels("#vehicleEmission", config.emissions, "vehicle-filters");
   await loadMakerOptions(config.makers);
-  await selectLabels("#vehicleMaker", config.makers);
-  await selectLabels("#vehicleCategoryGroup", config.categoryGroups);
-  await selectLabels("#vehicleSubCategory", config.subCategories);
-  await selectLabels("#vehicleClass", config.classes);
-  await selectLabels("#vehicleFuel", config.fuels);
-  await selectLabels("#evType", config.evTypes);
-  await selectLabels("#vehicleStatus", config.statuses);
-  await selectLabels("#vehicleOwnerType", config.ownerTypes);
-  await selectLabels("#vehicleType", config.vehicleType);
-  await selectLabels("#fitnessCheck", config.fitness);
-  await selectLabels("#yAxis", config.yAxis);
-  document.querySelector("#yAxis")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await selectLabels("#vehicleMaker", config.makers, "vehicle-filters");
+  await selectLabels("#vehicleCategoryGroup", config.categoryGroups, "vehicle-filters");
+  await selectLabels("#vehicleSubCategory", config.subCategories, "vehicle-filters");
+  await selectLabels("#vehicleClass", config.classes, "vehicle-filters");
+  await selectLabels("#vehicleFuel", config.fuels, "vehicle-filters");
+  await selectLabels("#evType", config.evTypes, "vehicle-filters");
+  await selectLabels("#vehicleStatus", config.statuses, "vehicle-filters");
+  await selectLabels("#vehicleOwnerType", config.ownerTypes, "vehicle-filters");
+  await selectLabels("#vehicleType", config.vehicleType, "vehicle-filters");
+  await selectLabels("#fitnessCheck", config.fitness, "vehicle-filters");
+  checkContract("after-vehicle-filters");
+
+  await selectLabels("#yAxis", config.yAxis, "axis");
+  const yAxis = requireOne("#yAxis", "yAxis", "axis");
+  yAxis.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   if (splitValues(config.xAxis).length) {
     await waitForOptions("#xAxis", splitValues(config.xAxis));
-    await selectLabels("#xAxis", config.xAxis);
+    await selectLabels("#xAxis", config.xAxis, "axis");
   }
+  const yAxisHidden = requireOne("#yAxis_hidden", "yAxisHidden", "axis");
+  const xAxisHidden = requireOne("#xAxis_hidden", "xAxisHidden", "axis");
+  const expectedAxis = `${yAxis.value}/${document.querySelector("#xAxis")?.value || ""}`;
+  const actualAxis = `${yAxisHidden.value}/${xAxisHidden.value}`;
+  if (expectedAxis !== actualAxis) {
+    throw new UiDriftError(
+      "UI_DRIFT_AXIS_NOT_SYNCED",
+      "Y-Axis/X-Axis hiển thị đã chọn nhưng field gửi lên server không đồng bộ.",
+      "axis",
+      { expected: expectedAxis, actual: actualAxis }
+    );
+  }
+  checkContract("before-captcha");
   configureAutoApply(config.autoApply);
 }
 
@@ -279,10 +417,58 @@ function setFloatingStatus(state, message) {
     waiting: "Chờ nhập CAPTCHA",
     success: "Thành công",
     error: "Có lỗi xảy ra",
+    "ui-drift": "Cần cập nhật tool",
   };
   badge.dataset.state = state;
   badge.textContent = labels[state] || labels.ready;
   status.textContent = message;
+}
+
+function renderUiDriftDetail(report) {
+  const root = floatingWidget?.shadowRoot;
+  const detail = root?.querySelector(".drift-detail");
+  if (!detail) return;
+
+  for (const field of ["target", "expected", "actual", "step", "code", "action"]) {
+    const valueEl = detail.querySelector(`[data-ui-drift-field="${field}"]`);
+    if (valueEl) valueEl.textContent = report[field] || "không có dữ liệu";
+  }
+  detail.hidden = false;
+}
+
+function markUiDriftStep(step) {
+  const normalizedStep = String(step || "").toLocaleLowerCase();
+  const stepName = normalizedStep.includes("axis")
+    ? "axes"
+    : normalizedStep.includes("state") || normalizedStep.includes("rto")
+      ? "time"
+      : normalizedStep.includes("vehicle") || normalizedStep.includes("category") || normalizedStep.includes("fuel")
+        ? "vehicle"
+        : normalizedStep.includes("captcha")
+          ? "captcha"
+          : normalizedStep.includes("apply")
+            ? "apply"
+            : "time";
+  updateFloatingStep(stepName, "error");
+}
+
+function showUiDriftError(error) {
+  const report = formatUiDrift(error);
+  lastUiDriftError = error;
+  uiDriftDetected = true;
+  console.error("[VAHAN RPA UI DRIFT]", report, error);
+
+  markUiDriftStep(report.step);
+  setFloatingStatus("ui-drift", `⚠️ ${report.message} Mã: ${report.code}.`);
+  renderUiDriftDetail(report);
+
+  const root = floatingWidget?.shadowRoot;
+  const button = root?.querySelector(".start");
+  if (button) {
+    button.dataset.uiDrift = "true";
+    button.disabled = true;
+    button.textContent = "⛔ Giao diện chưa được hỗ trợ";
+  }
 }
 
 function resetFloatingSteps() {
@@ -294,6 +480,7 @@ function resetFloatingSteps() {
 async function runFromFloatingWidget() {
   const root = floatingWidget.shadowRoot;
   const button = root.querySelector(".start");
+  if (uiDriftDetected) return;
   button.disabled = true;
   resetFloatingSteps();
   setFloatingStatus("running", "Đang đọc cấu hình đã lưu...");
@@ -305,7 +492,13 @@ async function runFromFloatingWidget() {
       throw new Error("Chưa có cấu hình. Hãy mở popup extension và chọn bộ lọc trước.");
     }
 
-    await fillVahan(vahanConfig);
+    const contract = pageUiContract || await waitForUiContract(
+      "before-fill",
+      null,
+      PAGE_CONTROLS,
+      MULTISELECT_NAMES
+    );
+    await fillVahan(vahanConfig, contract.signature);
     updateFloatingStep("time", "done");
     updateFloatingStep("vehicle", "done");
     updateFloatingStep("axes", "done");
@@ -318,11 +511,15 @@ async function runFromFloatingWidget() {
     );
     button.textContent = "↻ Điền Lại Bộ Lọc";
   } catch (error) {
-    updateFloatingStep("time", "error");
-    setFloatingStatus("error", error.message);
-    button.textContent = "↻ Thử Lại";
+    if (isUiDriftError(error)) {
+      showUiDriftError(error);
+    } else {
+      updateFloatingStep("time", "error");
+      setFloatingStatus("error", error.message);
+      button.textContent = "↻ Thử Lại";
+    }
   } finally {
-    button.disabled = false;
+    button.disabled = uiDriftDetected;
   }
 }
 
@@ -366,6 +563,7 @@ function injectFloatingWidget() {
       }
       .badge[data-state="success"] { border-color: #bef5cb; background: #dcffe4; color: #22863a; }
       .badge[data-state="error"] { border-color: #ffdce0; background: #ffeef0; color: #cb2431; }
+      .badge[data-state="ui-drift"] { border-color: #fecdd3; background: #fff1f2; color: #9f1239; }
       .steps { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; font-size: 13px; }
       .step { display: flex; align-items: center; gap: 8px; color: #666; line-height: 1.35; }
       .step-icon { width: 16px; color: #8c959f; font-size: 16px; font-weight: 700; text-align: center; }
@@ -397,6 +595,14 @@ function injectFloatingWidget() {
       }
       .open-popup:hover { background: #f6f8fa; border-color: #8c959f; }
       .status { min-height: 22px; margin-top: 10px; color: #586069; font-size: 12px; line-height: 1.45; }
+      .drift-detail {
+        margin-top: 10px; padding: 10px; border: 1px solid #fecdd3;
+        border-radius: 8px; background: #fff7f8; color: #4c0519;
+        font-size: 10px; line-height: 1.45;
+      }
+      .drift-detail[hidden] { display: none; }
+      .drift-detail-title { margin-bottom: 6px; font-weight: 700; }
+      .drift-detail-action { margin-top: 6px; }
     </style>
     <section class="card" aria-label="VAHAN RPA Tool">
       <header class="header">
@@ -420,6 +626,15 @@ function injectFloatingWidget() {
         <button class="start" type="button">▶ Điền Bộ Lọc Tự Động</button>
         <button class="open-popup" type="button">⚙ Mở Cấu Hình</button>
         <div class="status" role="status">Nhấn nút trên để dùng cấu hình đã lưu từ popup.</div>
+        <div class="drift-detail" hidden aria-live="assertive">
+          <div class="drift-detail-title">Chi tiết thay đổi UI</div>
+          <div><strong>Vị trí:</strong> <span data-ui-drift-field="target"></span></div>
+          <div><strong>Mong đợi:</strong> <span data-ui-drift-field="expected"></span></div>
+          <div><strong>Thực tế:</strong> <span data-ui-drift-field="actual"></span></div>
+          <div><strong>Bước:</strong> <span data-ui-drift-field="step"></span></div>
+          <div><strong>Mã lỗi:</strong> <span data-ui-drift-field="code"></span></div>
+          <div class="drift-detail-action"><strong>Hướng xử lý:</strong> <span data-ui-drift-field="action"></span></div>
+        </div>
       </div>
     </section>`;
 
@@ -486,10 +701,36 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   operation
     .then(sendResponse)
-    .catch((error) => sendResponse({ ok: false, error: error.message }));
+    .catch((error) => {
+      const response = { ok: false, error: error.message };
+      if (isUiDriftError(error)) {
+        showUiDriftError(error);
+        response.error = formatUiDrift(error).message;
+        response.uiDrift = formatUiDrift(error);
+      }
+      sendResponse(response);
+    });
   return true;
 });
 
-injectFloatingWidget();
-initializeAutoApplyPreference();
-startAutoExportWatcher();
+async function initializeContent() {
+  injectFloatingWidget();
+  try {
+    pageUiContract = await waitForUiContract(
+      "preflight",
+      null,
+      PAGE_CONTROLS,
+      MULTISELECT_NAMES
+    );
+    await initializeAutoApplyPreference();
+    await startAutoExportWatcher();
+  } catch (error) {
+    if (isUiDriftError(error)) {
+      showUiDriftError(error);
+    } else {
+      setFloatingStatus("error", error.message);
+    }
+  }
+}
+
+initializeContent();

@@ -74,6 +74,7 @@ và `127.0.0.1` chỉ để chạy fixture local.
 python3 test_ui_diagnostics.py
 python3 test_ui_fixture_contract.py
 python3 test_ui_fixture_extension.py
+python3 test_vahan_chrome_extension.py
 python3 test_ui_fixture_full_flow.py
 python3 test_ui_fixture_surface.py
 ```
