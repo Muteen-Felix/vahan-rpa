@@ -16,7 +16,10 @@ class Settings:
     host: str = "127.0.0.1"
     port: int = 8000
     debug: bool = False
-    cors_origins: tuple[str, ...] = ("http://localhost:5173",)
+    cors_origins: tuple[str, ...] = (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    )
     runner_token: str = "change-me"
 
     @classmethod
@@ -25,7 +28,7 @@ class Settings:
             origin.strip()
             for origin in os.getenv(
                 "VAHAN_API_CORS_ORIGINS",
-                "http://localhost:5173",
+                "http://localhost:5173,http://127.0.0.1:5173",
             ).split(",")
             if origin.strip()
         )
