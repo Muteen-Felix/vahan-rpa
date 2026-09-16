@@ -57,6 +57,55 @@ const MULTISELECT_NAMES = [
 let pageUiContract = null;
 let lastUiDriftError = null;
 let uiDriftDetected = false;
+const FLOW_STATE_KEY = "vahanUiFlowState";
+let applyGuardCleanup;
+
+async function getFlowState() {
+  const data = await chrome.storage.local.get(FLOW_STATE_KEY);
+  return data[FLOW_STATE_KEY] || null;
+}
+
+async function setFlowState(state) {
+  if (state === null) {
+    await chrome.storage.local.remove(FLOW_STATE_KEY);
+  } else {
+    await chrome.storage.local.set({ [FLOW_STATE_KEY]: state });
+  }
+}
+
+function hasInvalidCaptchaMessage() {
+  const bodyText = document.body?.innerText || "";
+  return bodyText.includes("Invalid CAPTCHA") || bodyText.includes("invalid captcha");
+}
+
+function watchForInvalidCaptcha() {
+  let stopped = false;
+  let timeoutId;
+  const observer = new MutationObserver(() => {
+    if (stopped || !hasInvalidCaptchaMessage()) return;
+    stop();
+    void setFlowState(null).catch((error) => {
+      console.error("[VAHAN RPA] Không thể xoá flow state sau CAPTCHA không hợp lệ.", error);
+    });
+    updateFloatingStep("captcha", "error");
+    updateFloatingStep("apply", "error");
+    setFloatingStatus(
+      "error",
+      "CAPTCHA không hợp lệ. Hãy nhập CAPTCHA mới rồi bấm Apply lại."
+    );
+  });
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    observer.disconnect();
+    clearTimeout(timeoutId);
+  };
+
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  timeoutId = setTimeout(stop, 30000);
+  return stop;
+}
 
 function getOptionMap(select) {
   return [...select.options].map((option) => ({
@@ -260,7 +309,7 @@ function fill(selector, value) {
 async function fillVahan(config, expectedSignature = null) {
   if (lastUiDriftError) throw lastUiDriftError;
   const checkContract = (step) =>
-    assertUiContract(step, expectedSignature, PAGE_CONTROLS, MULTISELECT_NAMES);
+    assertUiContract(step, expectedSignature, PAGE_CONTROLS, MULTISELECT_NAMES, pageUiContract);
 
   checkContract("before-fill");
   await selectLabels("#archivedFlags", config.archivedFlags, "time");
@@ -364,6 +413,70 @@ function configureAutoApply(enabled) {
   onInput();
 }
 
+// Guard Apply for both manual and automatic submissions. The first click is
+// paused long enough to validate/persist the UI signature; only then is the
+// original click replayed so the page can navigate safely.
+function installApplyGuard() {
+  applyGuardCleanup?.();
+  const applyButton = requireOne("#applyTrigger", "apply", "before-apply");
+  let forwarding = false;
+  let preparing = false;
+  let invalidCaptchaCleanup;
+
+  const onClick = (event) => {
+    if (forwarding) {
+      forwarding = false;
+      return;
+    }
+
+    const captcha = document.querySelector("#externalCaptcha");
+    if (!uiDriftDetected && captcha && captcha.value.trim().length < 6) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (preparing || uiDriftDetected) return;
+    preparing = true;
+
+    void (async () => {
+      try {
+        const contract = assertUiContract(
+          "before-apply",
+          pageUiContract?.signature || null,
+          PAGE_CONTROLS,
+          MULTISELECT_NAMES,
+          pageUiContract
+        );
+        pageUiContract = contract;
+        await setFlowState({
+          status: "AWAITING_RESULT",
+          attempts: 1,
+          uiContract: contract,
+          startedAt: Date.now(),
+        });
+        invalidCaptchaCleanup = watchForInvalidCaptcha();
+        forwarding = true;
+        applyButton.click();
+      } catch (error) {
+        if (isUiDriftError(error)) {
+          showUiDriftError(error);
+        } else {
+          setFloatingStatus("error", error.message);
+        }
+      } finally {
+        preparing = false;
+      }
+    })();
+  };
+
+  applyButton.addEventListener("click", onClick, true);
+  applyGuardCleanup = () => {
+    applyButton.removeEventListener("click", onClick, true);
+    invalidCaptchaCleanup?.();
+    invalidCaptchaCleanup = undefined;
+    applyGuardCleanup = undefined;
+  };
+}
+
 async function initializeAutoApplyPreference() {
   const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
   configureAutoApply(vahanConfig?.autoApply);
@@ -412,6 +525,7 @@ function setFloatingStatus(state, message) {
   const badge = root.querySelector(".badge");
   const status = root.querySelector(".status");
   const labels = {
+    checking: "Đang kiểm tra UI...",
     ready: "Sẵn sàng",
     running: "Đang xử lý...",
     waiting: "Chờ nhập CAPTCHA",
@@ -558,7 +672,7 @@ function injectFloatingWidget() {
         border: 1px solid rgba(255,255,255,.45); border-radius: 12px;
         background: rgba(255,255,255,.16); color: #fff; font-size: 12px; font-weight: 600;
       }
-      .badge[data-state="running"], .badge[data-state="waiting"] {
+      .badge[data-state="checking"], .badge[data-state="running"], .badge[data-state="waiting"] {
         border-color: #fff5b1; background: #fffbdd; color: #9a6700;
       }
       .badge[data-state="success"] { border-color: #bef5cb; background: #dcffe4; color: #22863a; }
@@ -607,7 +721,7 @@ function injectFloatingWidget() {
     <section class="card" aria-label="VAHAN RPA Tool">
       <header class="header">
         <div class="title"><span aria-hidden="true">🤖</span> VAHAN RPA Tool</div>
-        <div class="badge" data-state="ready">Sẵn sàng</div>
+        <div class="badge" data-state="checking">Đang kiểm tra UI...</div>
         <button class="toggle" type="button" aria-label="Thu gọn widget" aria-expanded="true">−</button>
       </header>
       <div class="body">
@@ -625,7 +739,7 @@ function injectFloatingWidget() {
         </div>
         <button class="start" type="button">▶ Điền Bộ Lọc Tự Động</button>
         <button class="open-popup" type="button">⚙ Mở Cấu Hình</button>
-        <div class="status" role="status">Nhấn nút trên để dùng cấu hình đã lưu từ popup.</div>
+        <div class="status" role="status">Đang kiểm tra giao diện và cấu trúc control...</div>
         <div class="drift-detail" hidden aria-live="assertive">
           <div class="drift-detail-title">Chi tiết thay đổi UI</div>
           <div><strong>Vị trí:</strong> <span data-ui-drift-field="target"></span></div>
@@ -673,6 +787,57 @@ function injectFloatingWidget() {
   });
 }
 
+async function resumeAfterApply(state) {
+  if (!state.uiContract?.signature) {
+    await setFlowState(null);
+    showUiDriftError(
+      new UiDriftError(
+        "UI_DRIFT_STALE_FLOW_STATE",
+        "Flow cũ không có thông tin UI contract; không tiếp tục tự động.",
+        "resume"
+      )
+    );
+    return;
+  }
+
+  try {
+    pageUiContract = await waitForUiContract(
+      "post-apply",
+      state.uiContract.signature,
+      PAGE_CONTROLS,
+      MULTISELECT_NAMES,
+      10000,
+      state.uiContract
+    );
+  } catch (error) {
+    await setFlowState(null);
+    if (isUiDriftError(error)) {
+      showUiDriftError(error);
+    } else {
+      setFloatingStatus("error", error.message);
+    }
+    return;
+  }
+
+  installApplyGuard();
+  for (const name of ["time", "vehicle", "axes", "captcha", "apply"]) {
+    updateFloatingStep(name, "done");
+  }
+  const bodyText = document.body.innerText || "";
+  await setFlowState(null);
+
+  if (bodyText.includes("Invalid CAPTCHA") || bodyText.includes("invalid captcha")) {
+    updateFloatingStep("captcha", "error");
+    setFloatingStatus(
+      "error",
+      "CAPTCHA không hợp lệ. Hãy nhập CAPTCHA mới rồi bấm Apply lại."
+    );
+    return;
+  }
+
+  setFloatingStatus("running", "Apply đã gửi — đang kiểm tra bảng kết quả...");
+}
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local" || !changes.vahanConfig) return;
   const previous = changes.vahanConfig.oldValue || {};
@@ -705,8 +870,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const response = { ok: false, error: error.message };
       if (isUiDriftError(error)) {
         showUiDriftError(error);
-        response.error = formatUiDrift(error).message;
-        response.uiDrift = formatUiDrift(error);
+        const report = formatUiDrift(error);
+        response.error = report.message;
+        response.uiDrift = report;
       }
       sendResponse(response);
     });
@@ -715,6 +881,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 async function initializeContent() {
   injectFloatingWidget();
+  setFloatingStatus("checking", "Đang kiểm tra giao diện và cấu trúc control...");
   try {
     pageUiContract = await waitForUiContract(
       "preflight",
@@ -722,9 +889,18 @@ async function initializeContent() {
       PAGE_CONTROLS,
       MULTISELECT_NAMES
     );
+    const state = await getFlowState();
+    if (state?.status === "AWAITING_RESULT") {
+      await resumeAfterApply(state);
+    } else {
+      installApplyGuard();
+      setFloatingStatus("ready", "Giao diện đã được kiểm tra. Nhấn nút trên để dùng cấu hình đã lưu từ popup.");
+    }
+    if (uiDriftDetected) return;
     await initializeAutoApplyPreference();
     await startAutoExportWatcher();
   } catch (error) {
+    await setFlowState(null);
     if (isUiDriftError(error)) {
       showUiDriftError(error);
     } else {

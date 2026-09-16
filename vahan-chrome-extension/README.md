@@ -12,6 +12,11 @@ hiển thị panel `Chi tiết thay đổi UI` với đúng vị trí (ví dụ
 `Fuel (#vehicleFuel)`), mong đợi, thực tế, bước và mã `UI_DRIFT_*`. Cùng report
 được gửi về popup khi lỗi xảy ra trong lúc popup yêu cầu điền bộ lọc.
 
+Trước khi Apply, extension chặn click đầu tiên để kiểm tra và lưu signature của
+UI. Sau khi VAHAN reload trang kết quả, extension đối chiếu lại signature đó;
+nếu giao diện đã đổi giữa hai thời điểm, flow dừng fail-closed và báo đúng vùng
+thay đổi thay vì tiếp tục gửi hoặc đọc sai dữ liệu.
+
 ## Cài vào Chrome
 
 1. Mở `chrome://extensions`.
@@ -33,6 +38,6 @@ drift:
 python3 test_vahan_chrome_extension.py
 ```
 
-Kịch bản test xác nhận baseline, điền Category/Fuel/Y-Axis/X-Axis, thiếu Fuel
-runtime và mất option `Two Wheeler`. Khi test trên fixture, manifest đã cho phép
+Kịch bản test xác nhận baseline, điền Category/Fuel/Y-Axis/X-Axis, Apply/reload
+với đối chiếu signature, thiếu Fuel runtime và mất option `Two Wheeler`. Khi test trên fixture, manifest đã cho phép
 `localhost` và `127.0.0.1`; khi phát hành thật, chỉ giữ host VAHAN cần thiết.

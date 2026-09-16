@@ -89,6 +89,41 @@
     return step || "preflight";
   }
 
+  function normalizeControlFingerprint(control) {
+    if (!control) return null;
+    return {
+      tag: control.tag || null,
+      id: control.id || null,
+      nameAttr: control.nameAttr || null,
+      multiple: Boolean(control.multiple),
+    };
+  }
+
+  function describeControlFingerprint(control) {
+    if (!control) return "control không tồn tại";
+    const fingerprint = normalizeControlFingerprint(control);
+    return `tag=${fingerprint.tag}; id=${fingerprint.id}; name=${fingerprint.nameAttr}; multiple=${fingerprint.multiple}`;
+  }
+
+  function diffControlFingerprints(expectedContract, actualContract) {
+    if (!Array.isArray(expectedContract?.controls)) return [];
+    const expected = new Map(expectedContract.controls.map((control) => [control.name, control]));
+    const actual = new Map((actualContract?.controls || []).map((control) => [control.name, control]));
+    const names = new Set([...expected.keys(), ...actual.keys()]);
+    return [...names]
+      .filter((name) => {
+        const expectedControl = normalizeControlFingerprint(expected.get(name));
+        const actualControl = normalizeControlFingerprint(actual.get(name));
+        return JSON.stringify(expectedControl) !== JSON.stringify(actualControl);
+      })
+      .map((name) => ({
+        name,
+        selector: expected.get(name)?.selector || actual.get(name)?.selector || "",
+        expected: expected.get(name) || null,
+        actual: actual.get(name) || null,
+      }));
+  }
+
   function formatUiDrift(error) {
     const details = error?.details || {};
     const code = error?.code || "UI_DRIFT";
@@ -131,14 +166,24 @@
       expected = `URL phải chứa ${REPORT_PATH_FRAGMENT}`;
       actual = displayDiagnosticValue(details.url);
     } else if (code === "UI_DRIFT_CHANGED_DURING_RUN") {
-      target = "cấu trúc UI trong lúc flow đang chạy";
-      title = "UI thay đổi giữa hai bước kiểm tra";
-      expected = `signature=${displayDiagnosticValue(
-        details.expectedSignature || details.expected_signature
-      )}`;
-      actual = `signature=${displayDiagnosticValue(
-        details.actualSignature || details.actual_signature
-      )}`;
+      const change = details.changedControls?.[0] || details.changed_controls?.[0];
+      if (change) {
+        target = diagnosticTarget({ control: change.name, selector: change.selector }, error?.step);
+        title = "Control đã thay đổi giữa hai bước kiểm tra";
+        expected = describeControlFingerprint(change.expected);
+        actual = describeControlFingerprint(change.actual);
+        const totalChanges = (details.changedControls || details.changed_controls || []).length;
+        if (totalChanges > 1) actual += `; và ${totalChanges - 1} control khác cũng thay đổi`;
+      } else {
+        target = "cấu trúc UI trong lúc flow đang chạy";
+        title = "UI thay đổi giữa hai bước kiểm tra";
+        expected = `signature=${displayDiagnosticValue(
+          details.expectedSignature || details.expected_signature
+        )}`;
+        actual = `signature=${displayDiagnosticValue(
+          details.actualSignature || details.actual_signature
+        )}`;
+      }
     } else if (code === "UI_DRIFT_OPTION_NOT_UNIQUE") {
       target = `${displayDiagnosticValue(details.label)} > option '${displayDiagnosticValue(
         details.target || details.targetText
@@ -179,6 +224,11 @@
       actual = `Expected=${displayDiagnosticValue(details.expected)}; Actual=${displayDiagnosticValue(
         details.actual
       )}`;
+    } else if (code === "UI_DRIFT_STALE_FLOW_STATE") {
+      target = "trạng thái flow đã lưu";
+      title = "Flow cũ không còn đủ thông tin contract";
+      expected = "Có signature UI contract hợp lệ";
+      actual = "Không có signature";
     } else if (code === "UI_DRIFT_DYNAMIC_CONTROL_TIMEOUT") {
       title = "Control động không xuất hiện đúng hạn";
       expected = "Control và option cần thiết xuất hiện trong thời gian cho phép";
@@ -301,15 +351,17 @@
     step = "preflight",
     expectedSignature = null,
     additionalControls = {},
-    multiSelectNames = []
+    multiSelectNames = [],
+    expectedContract = null
   ) {
     const contract = getUiContract(step, additionalControls, multiSelectNames);
     if (expectedSignature && expectedSignature !== contract.signature) {
+      const changedControls = diffControlFingerprints(expectedContract, contract);
       throw new UiDriftError(
         "UI_DRIFT_CHANGED_DURING_RUN",
         "Cấu trúc UI đã thay đổi trong lúc flow đang chạy; dữ liệu chưa được xác nhận.",
         step,
-        { expectedSignature, actualSignature: contract.signature }
+        { expectedSignature, actualSignature: contract.signature, changedControls }
       );
     }
     return contract;
@@ -320,13 +372,20 @@
     expectedSignature = null,
     additionalControls = {},
     multiSelectNames = [],
-    timeoutMs = 10000
+    timeoutMs = 10000,
+    expectedContract = null
   ) {
     const startedAt = Date.now();
     let lastError = null;
     while (Date.now() - startedAt < timeoutMs) {
       try {
-        return assertUiContract(step, expectedSignature, additionalControls, multiSelectNames);
+        return assertUiContract(
+          step,
+          expectedSignature,
+          additionalControls,
+          multiSelectNames,
+          expectedContract
+        );
       } catch (error) {
         lastError = error;
         await new Promise((resolve) => setTimeout(resolve, 200));
