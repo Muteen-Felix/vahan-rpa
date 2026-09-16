@@ -1411,11 +1411,11 @@
      */
     _resetPingTimeout() {
       this.clearTimeoutFn(this._pingTimeoutTimer);
-      const delay = this._pingInterval + this._pingTimeout;
-      this._pingTimeoutTime = Date.now() + delay;
+      const delay2 = this._pingInterval + this._pingTimeout;
+      this._pingTimeoutTime = Date.now() + delay2;
       this._pingTimeoutTimer = this.setTimeoutFn(() => {
         this._onClose("ping timeout");
-      }, delay);
+      }, delay2);
       if (this.opts.autoUnref) {
         this._pingTimeoutTimer.unref();
       }
@@ -3333,7 +3333,7 @@
         this.emitReserved("reconnect_failed");
         this._reconnecting = false;
       } else {
-        const delay = this.backoff.duration();
+        const delay2 = this.backoff.duration();
         this._reconnecting = true;
         const timer = this.setTimeoutFn(() => {
           if (self2.skipReconnect)
@@ -3350,7 +3350,7 @@
               self2.onreconnect();
             }
           });
-        }, delay);
+        }, delay2);
         if (this.opts.autoUnref) {
           timer.unref();
         }
@@ -3407,6 +3407,31 @@
     connect: lookup2
   });
 
+  // src/job-config.mjs
+  var LIST_FIELDS = /* @__PURE__ */ new Set([
+    "states",
+    "rtos",
+    "categoryGroups",
+    "fuels",
+    "archivedFlags",
+    "financialYears",
+    "emissions",
+    "makers",
+    "subCategories",
+    "classes",
+    "evTypes",
+    "statuses",
+    "ownerTypes"
+  ]);
+  function normalizeJobFilters(filters = {}) {
+    return Object.fromEntries(Object.entries(filters).map(([key, value2]) => {
+      if (LIST_FIELDS.has(key) && Array.isArray(value2)) {
+        return [key, value2.map((item) => String(item).trim()).filter(Boolean).join(",")];
+      }
+      return [key, value2];
+    }));
+  }
+
   // src/background.js
   var DEFAULT_RUNNER_CONFIG = Object.freeze({
     serverUrl: "http://127.0.0.1:8000",
@@ -3414,10 +3439,102 @@
     token: "change-me"
   });
   var HEARTBEAT_INTERVAL_MS = 2e4;
+  var VAHAN_URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en";
   var socket;
   var heartbeatTimer;
   var reconnectTimer;
   var activeConfig;
+  var activeJobId;
+  var cancelledJobIds = /* @__PURE__ */ new Set();
+  var delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  async function reportJobStatus(jobId, status, error) {
+    if (!socket?.connected) throw new Error("Backend is disconnected.");
+    const response = await socket.timeout(5e3).emitWithAck("job:status", {
+      jobId,
+      status,
+      ...error ? { error } : {}
+    });
+    if (!response?.ok) throw new Error(response?.error || `Could not report ${status}.`);
+  }
+  function assertJobActive(jobId) {
+    if (cancelledJobIds.has(jobId)) throw new Error("Job was cancelled.");
+  }
+  async function waitForTabComplete(tabId, timeout = 3e4) {
+    const current = await chrome.tabs.get(tabId);
+    if (current.status === "complete") return;
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        reject(new Error("VAHAN page did not finish loading in time."));
+      }, timeout);
+      const listener = (updatedId, changeInfo) => {
+        if (updatedId !== tabId || changeInfo.status !== "complete") return;
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+  }
+  async function getVahanTab() {
+    const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*" });
+    const tab = tabs[0] || await chrome.tabs.create({ url: VAHAN_URL, active: false });
+    if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
+    await waitForTabComplete(tab.id);
+    return tab.id;
+  }
+  async function sendToVahan(tabId, message) {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      try {
+        return await chrome.tabs.sendMessage(tabId, message);
+      } catch (error) {
+        if (attempt === 0 && String(error?.message).includes("Receiving end")) {
+          await chrome.tabs.reload(tabId);
+          await waitForTabComplete(tabId);
+        }
+        if (attempt === 11) throw error;
+        await delay(500);
+      }
+    }
+  }
+  async function executeJob(job) {
+    const jobId = String(job?.jobId || "");
+    if (!jobId) return;
+    if (activeJobId === jobId) return;
+    if (activeJobId) {
+      await reportJobStatus(jobId, "FAILED", `Runner is already processing job ${activeJobId}.`).catch(() => {
+      });
+      return;
+    }
+    activeJobId = jobId;
+    cancelledJobIds.delete(jobId);
+    await chrome.storage.local.set({ pendingServerJob: job });
+    chrome.runtime.sendMessage({ type: "SERVER_JOB_ASSIGNED", job }).catch(() => {
+    });
+    try {
+      await reportJobStatus(jobId, "OPENING_VAHAN");
+      const tabId = await getVahanTab();
+      assertJobActive(jobId);
+      const config = normalizeJobFilters(job.filters);
+      const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
+      await chrome.storage.local.set({
+        vahanConfig: { ...vahanConfig, ...config },
+        activeServerJob: { ...job, tabId, config }
+      });
+      await reportJobStatus(jobId, "FILLING_FILTERS");
+      const response = await sendToVahan(tabId, { type: "FILL_VAHAN", config });
+      if (!response?.ok) throw new Error(response?.error || "VAHAN did not accept the filters.");
+      assertJobActive(jobId);
+      await reportJobStatus(jobId, "WAITING_CAPTCHA");
+    } catch (error) {
+      if (!cancelledJobIds.has(jobId)) {
+        await reportJobStatus(jobId, "FAILED", error.message).catch(() => {
+        });
+      }
+      activeJobId = void 0;
+      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    }
+  }
   async function loadRunnerConfig() {
     const { runnerConfig = {} } = await chrome.storage.local.get("runnerConfig");
     const normalized = {
@@ -3492,10 +3609,17 @@
     socket.io.on("reconnect_attempt", () => {
       publishConnection("connecting", "\u0110ang k\u1EBFt n\u1ED1i l\u1EA1i backend...");
     });
-    socket.on("job:assigned", async (job) => {
-      await chrome.storage.local.set({ pendingServerJob: job });
-      chrome.runtime.sendMessage({ type: "SERVER_JOB_ASSIGNED", job }).catch(() => {
+    socket.on("job:assigned", (job) => executeJob(job).catch(async (error) => {
+      const jobId = String(job?.jobId || "");
+      if (jobId) await reportJobStatus(jobId, "FAILED", error.message).catch(() => {
       });
+      if (activeJobId === jobId) activeJobId = void 0;
+    }));
+    socket.on("job:cancelled", async ({ jobId }) => {
+      const id = String(jobId);
+      cancelledJobIds.add(id);
+      if (activeJobId === id) activeJobId = void 0;
+      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
     });
   }
   chrome.runtime.onInstalled.addListener(() => connectRunner());

@@ -144,45 +144,52 @@ function fill(selector, value) {
 }
 
 async function fillVahan(config) {
-  await selectLabels("#archivedFlags", config.archivedFlags);
-  await selectLabels("#reportType", config.period);
+  const has = (key) => Object.prototype.hasOwnProperty.call(config, key);
+  if (has("archivedFlags")) await selectLabels("#archivedFlags", config.archivedFlags);
+  if (has("period")) await selectLabels("#reportType", config.period);
   await delay(300);
-  await selectLabels("#financialYearSelect", config.financialYears);
-  await selectLabels("#reportYear", config.reportYear);
-  await selectLabels("#reportMonth", config.reportMonth);
-  fill("#fromYear", config.fromYear);
-  fill("#toYear", config.toYear);
-  fill("#fromDate", config.fromDate);
-  fill("#toDate", config.toDate);
+  if (has("financialYears")) await selectLabels("#financialYearSelect", config.financialYears);
+  if (has("reportYear")) await selectLabels("#reportYear", config.reportYear);
+  if (has("reportMonth")) await selectLabels("#reportMonth", config.reportMonth);
+  if (has("fromYear")) fill("#fromYear", config.fromYear);
+  if (has("toYear")) fill("#toYear", config.toYear);
+  if (has("fromDate")) fill("#fromDate", config.fromDate);
+  if (has("toDate")) fill("#toDate", config.toDate);
 
   // VAHAN rebuilds the State options whenever Delhi NCR changes. Apply this
   // first so the State selection below is not cleared by the page script.
-  await selectLabels("#delhiNcr", config.delhiNcr);
-  await delay(100);
-  await selectLabels("#stateName", config.states);
-  if (splitValues(config.rtos).length) {
+  if (has("delhiNcr")) {
+    await selectLabels("#delhiNcr", config.delhiNcr);
+    await delay(100);
+  }
+  if (has("states")) await selectLabels("#stateName", config.states);
+  if (has("rtos") && splitValues(config.rtos).length) {
     await waitForOptions("#rtoCode", splitValues(config.rtos));
     await selectLabels("#rtoCode", config.rtos);
   }
-  await selectLabels("#vehicleEmission", config.emissions);
-  await loadMakerOptions(config.makers);
-  await selectLabels("#vehicleMaker", config.makers);
-  await selectLabels("#vehicleCategoryGroup", config.categoryGroups);
-  await selectLabels("#vehicleSubCategory", config.subCategories);
-  await selectLabels("#vehicleClass", config.classes);
-  await selectLabels("#vehicleFuel", config.fuels);
-  await selectLabels("#evType", config.evTypes);
-  await selectLabels("#vehicleStatus", config.statuses);
-  await selectLabels("#vehicleOwnerType", config.ownerTypes);
-  await selectLabels("#vehicleType", config.vehicleType);
-  await selectLabels("#fitnessCheck", config.fitness);
-  await selectLabels("#yAxis", config.yAxis);
-  document.querySelector("#yAxis")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  if (splitValues(config.xAxis).length) {
+  if (has("emissions")) await selectLabels("#vehicleEmission", config.emissions);
+  if (has("makers")) {
+    await loadMakerOptions(config.makers);
+    await selectLabels("#vehicleMaker", config.makers);
+  }
+  const optionalSelects = {
+    categoryGroups: "#vehicleCategoryGroup", subCategories: "#vehicleSubCategory",
+    classes: "#vehicleClass", fuels: "#vehicleFuel", evTypes: "#evType",
+    statuses: "#vehicleStatus", ownerTypes: "#vehicleOwnerType",
+    vehicleType: "#vehicleType", fitness: "#fitnessCheck",
+  };
+  for (const [key, selector] of Object.entries(optionalSelects)) {
+    if (has(key)) await selectLabels(selector, config[key]);
+  }
+  if (has("yAxis")) {
+    await selectLabels("#yAxis", config.yAxis);
+    document.querySelector("#yAxis")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }
+  if (has("xAxis") && splitValues(config.xAxis).length) {
     await waitForOptions("#xAxis", splitValues(config.xAxis));
     await selectLabels("#xAxis", config.xAxis);
   }
-  configureAutoApply(config.autoApply);
+  if (has("autoApply")) configureAutoApply(config.autoApply);
 }
 
 let autoApplyCleanup;
