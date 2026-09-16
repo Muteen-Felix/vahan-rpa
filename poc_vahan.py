@@ -22,6 +22,7 @@ from ui_contract import (
     assert_ui_contract,
     find_all_checkbox,
     find_dropdown_option,
+    format_ui_drift,
     get_dropdown_container,
 )
 
@@ -248,6 +249,7 @@ def write_ui_diagnostic(result: dict, error: UIDriftError) -> str:
     """Write metadata-only diagnostics; never persist CAPTCHA or page HTML."""
 
     path = DIAGNOSTIC_DIR / f"ui-drift-{int(time.time())}.json"
+    notification = format_ui_drift(error)
     payload = {
         "iteration": result.get("iteration"),
         "timestamp_epoch": int(time.time()),
@@ -255,6 +257,7 @@ def write_ui_diagnostic(result: dict, error: UIDriftError) -> str:
         "step": error.step,
         "message": str(error),
         "details": error.details,
+        "user_notification": notification,
         "ui_contract": result.get("ui_contract"),
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -353,7 +356,9 @@ def run_once(iteration_label="", max_captcha_attempts=3):
             result["success"] = False
             result["ui_drift"] = True
             result["error_code"] = e.code
-            result["error"] = str(e)
+            notification = format_ui_drift(e)
+            result["error"] = notification["message"]
+            result["ui_drift_notification"] = notification
             result["diagnostic_path"] = write_ui_diagnostic(result, e)
             return result
         except PWTimeout as e:

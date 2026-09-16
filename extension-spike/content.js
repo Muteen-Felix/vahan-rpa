@@ -87,6 +87,182 @@ function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 }
 
+const UI_CONTROL_LABELS = Object.freeze({
+  form: "form VAHAN Public Report (#vahanPublicForm)",
+  category: "Category Group (#vehicleCategoryGroup)",
+  vehicleCategoryGroup: "Category Group (#vehicleCategoryGroup)",
+  "#vehicleCategoryGroup": "Category Group (#vehicleCategoryGroup)",
+  fuel: "Fuel (#vehicleFuel)",
+  vehicleFuel: "Fuel (#vehicleFuel)",
+  "#vehicleFuel": "Fuel (#vehicleFuel)",
+  yaxis: "Y-Axis (#yAxis)",
+  yAxis: "Y-Axis (#yAxis)",
+  "#yAxis": "Y-Axis (#yAxis)",
+  xaxis: "X-Axis (#xAxis)",
+  xAxis: "X-Axis (#xAxis)",
+  "#xAxis": "X-Axis (#xAxis)",
+  captcha: "ô CAPTCHA (#externalCaptcha)",
+  externalCaptcha: "ô CAPTCHA (#externalCaptcha)",
+  "#externalCaptcha": "ô CAPTCHA (#externalCaptcha)",
+  apply: "nút Apply (#applyTrigger)",
+  applyTrigger: "nút Apply (#applyTrigger)",
+  "#applyTrigger": "nút Apply (#applyTrigger)",
+});
+
+function displayDiagnosticValue(value, maxLength = 180) {
+  if (value === null || value === undefined || value === "") {
+    return "không có dữ liệu";
+  }
+  const raw = Array.isArray(value) ? value.join(", ") : String(value);
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (!text) return "không có dữ liệu";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+function diagnosticTarget(details = {}, step = "preflight") {
+  const key = details.control || details.name;
+  if (UI_CONTROL_LABELS[key]) return UI_CONTROL_LABELS[key];
+
+  const hiddenSelectId = details.hiddenSelectId || details.hidden_select_id;
+  if (hiddenSelectId) {
+    const cleanId = String(hiddenSelectId).replace(/^#/, "");
+    return UI_CONTROL_LABELS[cleanId] || `control #${cleanId}`;
+  }
+
+  if (details.label) return displayDiagnosticValue(details.label);
+  if (details.selector) return `control ${displayDiagnosticValue(details.selector)}`;
+  return step || "preflight";
+}
+
+function formatUiDrift(err) {
+  const details = err?.details || {};
+  const code = err?.code || "UI_DRIFT";
+  const count = details.count;
+  let target = diagnosticTarget(details, err?.step);
+  let title;
+  let expected;
+  let actual;
+
+  if (code === "UI_DRIFT_REQUIRED_CONTROL") {
+    title = "Control bắt buộc bị thiếu hoặc bị trùng";
+    expected = "DOM phải có đúng 1 control";
+    actual = `DOM đang có ${count === undefined ? "không xác định" : count} control`;
+  } else if (code === "UI_DRIFT_CONTROL_TYPE") {
+    title = "Loại control đã thay đổi";
+    expected = displayDiagnosticValue(details.expected, 100);
+    actual = displayDiagnosticValue(
+      details.actual || "control không còn là multi-select (thiếu thuộc tính multiple)"
+    );
+  } else if (code === "UI_DRIFT_REQUIRED_OPTION") {
+    const option = displayDiagnosticValue(
+      details.expectedOption || details.expected_option || details.option
+    );
+    title = "Thiếu lựa chọn bắt buộc";
+    expected = `option '${option}' phải tồn tại`;
+    actual = displayDiagnosticValue(
+      details.actual || "option này đã bị xóa, đổi tên hoặc chưa được tải"
+    );
+  } else if (code === "UI_DRIFT_EMPTY_OPTIONS") {
+    title = "Danh sách lựa chọn đang rỗng";
+    expected = "Có ít nhất 1 option để tiếp tục";
+    actual = `DOM đang có ${details.optionCount ?? details.option_count ?? 0} option`;
+  } else if (code === "UI_DRIFT_MULTISELECT_WRAPPER") {
+    title = "Wrapper multiselect đã thay đổi vị trí hoặc số lượng";
+    expected = "Có đúng 1 wrapper trong cùng form-group với select gốc";
+    actual = `Tìm thấy ${details.wrapperCount ?? details.wrapper_count ?? "không xác định"} wrapper`;
+  } else if (code === "UI_DRIFT_WRONG_PAGE") {
+    target = "trang VAHAN Public Report";
+    title = "Đang ở sai trang";
+    expected = `URL phải chứa ${REPORT_PATH_FRAGMENT}`;
+    actual = displayDiagnosticValue(details.url);
+  } else if (code === "UI_DRIFT_CHANGED_DURING_RUN") {
+    target = "cấu trúc UI trong lúc flow đang chạy";
+    title = "UI thay đổi giữa hai bước kiểm tra";
+    expected = `signature=${displayDiagnosticValue(
+      details.expectedSignature || details.expected_signature
+    )}`;
+    actual = `signature=${displayDiagnosticValue(
+      details.actualSignature || details.actual_signature
+    )}`;
+  } else if (code === "UI_DRIFT_OPTION_NOT_UNIQUE") {
+    target = `${displayDiagnosticValue(details.label)} > option '${displayDiagnosticValue(
+      details.target || details.targetText
+    )}'`;
+    title = "Option không còn duy nhất";
+    expected = "Tìm thấy đúng 1 option khớp";
+    actual = `Tìm thấy ${count === undefined ? "không xác định" : count} kết quả`;
+  } else if (code === "UI_DRIFT_ALL_OPTION_NOT_FOUND") {
+    target = `${displayDiagnosticValue(details.label)} > checkbox All`;
+    title = "Checkbox All đã thay đổi hoặc bị mất";
+    expected = "Có đúng 1 checkbox All";
+    actual = `Tìm thấy ${count === undefined ? "không xác định" : count} checkbox`;
+  } else if (code === "UI_DRIFT_SEARCH_INPUT") {
+    target = `ô tìm kiếm của ${displayDiagnosticValue(details.label)}`;
+    title = "Ô tìm kiếm multiselect không đúng";
+    expected = "Có đúng 1 ô tìm kiếm";
+    actual = `Tìm thấy ${count === undefined ? "không xác định" : count} ô`;
+  } else if (code === "UI_DRIFT_OPTION_CONTROL") {
+    target = `option '${displayDiagnosticValue(details.option)}' trong ${displayDiagnosticValue(
+      details.label
+    )}`;
+    title = "Control của option đã thay đổi";
+    expected = "Có đúng 1 checkbox cho option";
+    actual = `Tìm thấy ${details.checkboxCount ?? details.checkbox_count ?? "không xác định"} checkbox`;
+  } else if (code === "UI_DRIFT_SELECTION_NOT_SYNCED") {
+    target = `${displayDiagnosticValue(details.label)} > option '${displayDiagnosticValue(
+      details.option
+    )}'`;
+    title = "Widget và select gốc không đồng bộ";
+    expected = "Checkbox và option gốc cùng được chọn";
+    actual = `Select gốc đang có: ${displayDiagnosticValue(
+      details.selectedOptions || details.selected
+    )}`;
+  } else if (code === "UI_DRIFT_SELECT_ALL_NOT_SYNCED") {
+    target = `${displayDiagnosticValue(details.label)} > checkbox All`;
+    title = "Lựa chọn All không đồng bộ";
+    expected = `Đã chọn đủ ${details.optionCount ?? details.option_count ?? "tất cả"} option`;
+    actual = `Đã chọn ${details.selectedCount ?? details.selected_count ?? "không xác định"} option`;
+  } else if (code === "UI_DRIFT_AXIS_NOT_SYNCED") {
+    target = "Y-Axis/X-Axis và hidden fields";
+    title = "Giá trị trục báo cáo không đồng bộ";
+    expected = "Hidden fields khớp giá trị đang hiển thị";
+    const expectedValue = details.expected;
+    const actualValue = details.actual;
+    actual = expectedValue || actualValue
+      ? `Expected=${displayDiagnosticValue(expectedValue)}; Actual=${displayDiagnosticValue(actualValue)}`
+      : `yAxis=${displayDiagnosticValue(details.yAxisHidden || details.yAxis_hidden)}; ` +
+        `xAxis=${displayDiagnosticValue(details.xAxisHidden || details.xAxis_hidden)}`;
+  } else if (code === "UI_DRIFT_CONTRACT_TIMEOUT" || code === "UI_DRIFT_DYNAMIC_CONTROL_TIMEOUT") {
+    title = "UI contract không sẵn sàng đúng hạn";
+    expected = "Các control cần thiết xuất hiện trong thời gian cho phép";
+    actual = `Timeout tại bước ${displayDiagnosticValue(err?.step)}`;
+  } else if (code === "UI_DRIFT_STALE_FLOW_STATE") {
+    target = "trạng thái flow đã lưu";
+    title = "Flow cũ không còn đủ thông tin contract";
+    expected = "Có signature UI contract hợp lệ";
+    actual = "Không có signature";
+  } else {
+    title = "Cấu trúc UI không khớp contract";
+    expected = "Trang khớp UI contract đã được kiểm thử";
+    actual = `Mã lỗi ${code}`;
+  }
+
+  const message = `Phát hiện thay đổi tại ${target}: ${title}. Tool đã dừng để tránh thao tác sai dữ liệu.`;
+  const action =
+    "Dev cần kiểm tra đúng vùng này, cập nhật selector/adapter và chạy lại fixture; " +
+    "người dùng không cần nhập lại dữ liệu cho đến khi tool được cập nhật.";
+  return {
+    code,
+    step: err?.step || "preflight",
+    title,
+    target,
+    expected,
+    actual,
+    action,
+    message,
+  };
+}
+
 function isSupportedReportPage() {
   return (
     window.location.pathname.includes(REPORT_PATH_FRAGMENT) &&
@@ -206,7 +382,11 @@ function getUiContract(step = "preflight") {
         "UI_DRIFT_CONTROL_TYPE",
         `Control ${name} không còn là multi-select như contract ${UI_CONTRACT_VERSION}.`,
         step,
-        { name, expected: "multiple select" }
+        {
+          name,
+          expected: "multiple select",
+          actual: `${document.querySelector(REQUIRED_CONTROLS[name])?.tagName?.toLowerCase() || "control"} không có thuộc tính multiple`,
+        }
       );
     }
   }
@@ -225,7 +405,7 @@ function getUiContract(step = "preflight") {
       "UI_DRIFT_EMPTY_OPTIONS",
       "Danh sách Fuel đang rỗng hoặc chưa được tải.",
       step,
-      { control: "fuel" }
+      { control: "fuel", optionCount: document.querySelectorAll("#vehicleFuel option").length }
     );
   }
 
@@ -406,7 +586,8 @@ async function selectAllCheckbox(hiddenSelectId, label) {
 // Set giá trị cho <select> GỐC (Y-Axis/X-Axis) bằng cách khớp label hoặc text hiển thị của <option>.
 // Hỗ trợ cả option.label, attribute 'label', text/textContent và value của thẻ option.
 function setNativeSelectByLabel(selectId, labelText) {
-  const select = requireOne(selectId, selectId, "axis");
+  const cleanId = selectId.replace(/^#/, "");
+  const select = requireOne(selectId, cleanId, "axis");
 
   const upperTarget = labelText.trim().toUpperCase();
   const option = Array.from(select.options).find((o) => {
@@ -415,7 +596,17 @@ function setNativeSelectByLabel(selectId, labelText) {
     return optLabel === upperTarget || optVal === upperTarget;
   });
   if (!option) {
-    throw new Error(`[${selectId}] Không tìm thấy option có nhãn "${labelText}"`);
+    throw new UiDriftError(
+      "UI_DRIFT_REQUIRED_OPTION",
+      `[${selectId}] Không tìm thấy option có nhãn "${labelText}"`,
+      "axis",
+      {
+        control: cleanId,
+        expectedOption: labelText,
+        optionCount: select.options.length,
+        actual: "option này đã bị xóa, đổi tên hoặc chưa được tải",
+      }
+    );
   }
 
   select.value = option.value;
@@ -500,8 +691,7 @@ function waitForCaptchaInput(expectedLength = 6, timeoutMs = 300000) {
 }
 
 function clickApply() {
-  const btn = document.querySelector("#applyTrigger");
-  if (!btn) throw new Error("Không tìm thấy nút Apply (#applyTrigger)");
+  const btn = requireOne("#applyTrigger", "apply", "apply");
   btn.scrollIntoView({ behavior: "smooth", block: "center" });
   btn.click();
 }
@@ -676,6 +866,26 @@ function injectFloatingWidget() {
           min-height: 20px;
           line-height: 1.4;
         ">Nhấn nút trên để bắt đầu quy trình tự động.</div>
+
+        <div id="vahan-ui-drift-detail" hidden aria-live="assertive" style="
+          display: none;
+          margin-top: 10px;
+          padding: 10px;
+          border: 1px solid #fecdd3;
+          border-radius: 8px;
+          background: #fff7f8;
+          color: #4c0519;
+          font-size: 10px;
+          line-height: 1.45;
+        ">
+          <div style="font-weight: 700; margin-bottom: 6px;">Chi tiết thay đổi UI</div>
+          <div><strong>Vị trí:</strong> <span data-ui-drift-field="target"></span></div>
+          <div><strong>Mong đợi:</strong> <span data-ui-drift-field="expected"></span></div>
+          <div><strong>Thực tế:</strong> <span data-ui-drift-field="actual"></span></div>
+          <div><strong>Bước:</strong> <span data-ui-drift-field="step"></span></div>
+          <div><strong>Mã lỗi:</strong> <span data-ui-drift-field="code"></span></div>
+          <div style="margin-top: 6px;"><strong>Hướng xử lý:</strong> <span data-ui-drift-field="action"></span></div>
+        </div>
       </div>
     </div>
   `;
@@ -785,17 +995,28 @@ function showFinalError(err) {
   if (startBtn) startBtn.textContent = "🔄 Chạy Lại Quy Trình";
 }
 
+function renderUiDriftDetail(report) {
+  const panel = document.getElementById("vahan-ui-drift-detail");
+  if (!panel) return;
+
+  for (const field of ["target", "expected", "actual", "step", "code", "action"]) {
+    const valueEl = panel.querySelector(`[data-ui-drift-field="${field}"]`);
+    if (valueEl) valueEl.textContent = report[field] || "không có dữ liệu";
+  }
+  panel.hidden = false;
+  panel.style.display = "block";
+}
+
 function showUiDriftError(err) {
-  console.error("[VAHAN RPA UI DRIFT]", err);
+  const report = formatUiDrift(err);
+  console.error("[VAHAN RPA UI DRIFT]", report, err);
   const msgEl = document.getElementById("vahan-status-msg");
   const badgeEl = document.getElementById("vahan-badge");
-  if (msgEl) {
-    msgEl.textContent =
-      `⚠️ Giao diện VAHAN đã thay đổi tại bước ${err.step || "preflight"}. ` +
-      `Tool đã dừng để tránh chọn sai dữ liệu. Mã: ${err.code || "UI_DRIFT"}.`;
-  }
+  if (msgEl) msgEl.textContent = `⚠️ ${report.message} Mã: ${report.code}.`;
+  renderUiDriftDetail(report);
   if (badgeEl) {
     badgeEl.textContent = "Cần cập nhật tool";
+    badgeEl.title = report.target;
     badgeEl.style.color = "#9f1239";
     badgeEl.style.background = "#fff1f2";
     badgeEl.style.borderColor = "#fecdd3";

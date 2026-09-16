@@ -82,8 +82,20 @@ def run() -> None:
                     timeout=20_000,
                 )
                 assert page.locator("#vahan-btn-start").is_disabled()
+                runtime_detail = page.locator("#vahan-ui-drift-detail")
+                assert runtime_detail.is_visible()
+                runtime_detail_text = runtime_detail.inner_text()
+                assert "Fuel (#vehicleFuel)" in runtime_detail_text
+                assert "DOM đang có 0 control" in runtime_detail_text
+                assert "Mong đợi" in runtime_detail_text
+                assert "Thực tế" in runtime_detail_text
+                assert "UI_DRIFT_REQUIRED_CONTROL" in runtime_detail_text
+                assert "Fuel (#vehicleFuel)" in page.locator("#vahan-status-msg").inner_text()
                 assert any("[VAHAN RPA UI DRIFT]" in error for error in console_errors)
-                print("FIXTURE RUNTIME DRIFT PASS user_banner=True developer_console=True fail_closed=True")
+                print(
+                    "FIXTURE RUNTIME DRIFT PASS target=Fuel user_detail=True "
+                    "developer_console=True fail_closed=True"
+                )
 
                 page.goto(f"{base_url}?lang=en&ui=wrong-label", wait_until="networkidle")
                 wait_for_ready_card(page)
@@ -92,7 +104,16 @@ def run() -> None:
                     timeout=20_000,
                 )
                 assert page.locator("#vahan-btn-start").is_disabled()
-                print("FIXTURE LOAD-TIME DRIFT PASS wrong-label=True fail_closed=True")
+                load_detail = page.locator("#vahan-ui-drift-detail")
+                assert load_detail.is_visible()
+                load_detail_text = load_detail.inner_text()
+                assert "Category Group (#vehicleCategoryGroup)" in load_detail_text
+                assert "option 'Two Wheeler' phải tồn tại" in load_detail_text
+                assert "UI_DRIFT_REQUIRED_OPTION" in load_detail_text
+                print(
+                    "FIXTURE LOAD-TIME DRIFT PASS target=Category Group "
+                    "user_detail=True fail_closed=True"
+                )
             finally:
                 context.close()
     finally:

@@ -17,6 +17,11 @@ contract đã được kiểm thử.
 5. File tải về phải là XLSX hợp lệ và có schema `Fuel`, `Two Wheeler`, `Total`.
 6. UI drift tạo mã lỗi `UI_DRIFT_*`, ghi metadata chẩn đoán không chứa CAPTCHA
    và không đánh dấu chạy thành công.
+7. Bộ định dạng chẩn đoán (`format_ui_drift`) chuyển lỗi thành thông báo có vị
+   trí cụ thể, nguyên nhân mong đợi/thực tế, bước phát hiện và hướng xử lý.
+   Extension hiển thị cùng nội dung trong panel `Chi tiết thay đổi UI`; Python
+   ghi nó vào `ui_drift_notification` và trường `user_notification` của file
+   diagnostic.
 
 Fixture local tại `ui-fixture/analytics/vahanpublicreport` mô phỏng đầy đủ
 surface hiện tại của trang: 20 nhóm control, 13 multiselect, State -> RTO với
@@ -33,6 +38,7 @@ công.
 ```bash
 python3 test_ui_contract.py
 python3 test_verify_file.py
+python3 test_ui_diagnostics.py
 python3 -m py_compile *.py
 node --check extension-spike/content.js
 node --check extension-spike/background.js
@@ -50,6 +56,11 @@ check định kỳ. Tuyệt đối không tự động giải hoặc bypass CAPT
 - UI chỉ đổi màu/bố cục nhưng contract còn đúng: flow tiếp tục.
 - Control, event, wrapper hoặc schema thay đổi: flow dừng, hiển thị bước lỗi và
   mã `UI_DRIFT_*`.
+- Thông báo không dừng ở mã lỗi chung. Ví dụ khi Fuel bị xóa, người dùng và
+  DevTools nhận đúng vị trí `Fuel (#vehicleFuel)`, trạng thái thực tế `DOM đang
+  có 0 control`, cùng mã `UI_DRIFT_REQUIRED_CONTROL`. Khi option bị đổi tên,
+  thông báo chỉ rõ `Category Group (#vehicleCategoryGroup)` và option
+  `Two Wheeler` bị thiếu.
 - Fixture `visual-only` cố ý chứng minh giới hạn hiện tại: detector cấu trúc
   không phát hiện thay đổi hình ảnh thuần túy. Nếu cần chặn cả thay đổi pixel,
   bổ sung visual-regression snapshot theo viewport trước khi bật trong CI.

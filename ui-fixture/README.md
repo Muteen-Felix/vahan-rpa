@@ -54,8 +54,15 @@ Thay `ui=baseline` bằng một trong các giá trị sau:
 
 Khi contract bị phá, Extension phải báo lỗi ở hai kênh:
 
-1. Người dùng: badge `Cần cập nhật tool`, thông báo dừng và nút chạy bị khóa.
-2. Developer: `console.error` với mã `UI_DRIFT_*` trong DevTools Console.
+1. Người dùng: badge `Cần cập nhật tool`, thông báo dừng, nút chạy bị khóa và
+   panel `Chi tiết thay đổi UI` chỉ rõ vị trí, mong đợi, thực tế, bước và mã lỗi.
+2. Developer: `console.error` với cùng report có cấu trúc (`target`, `expected`,
+   `actual`, `action`) và mã `UI_DRIFT_*` trong DevTools Console.
+
+Ví dụ khi xóa Fuel lúc runtime, người dùng thấy vị trí
+`Fuel (#vehicleFuel)` và `DOM đang có 0 control`; khi mất option, thông báo
+chuyển sang đúng vùng `Category Group (#vehicleCategoryGroup)` cùng tên option
+`Two Wheeler`.
 
 Sau khi sửa `manifest.json`, vào `chrome://extensions`, bật Developer mode và
 bấm Reload cho extension `VAHAN RPA Assistant`. Manifest đã cho phép `localhost`
@@ -64,6 +71,7 @@ và `127.0.0.1` chỉ để chạy fixture local.
 ## Chạy test tự động
 
 ```bash
+python3 test_ui_diagnostics.py
 python3 test_ui_fixture_contract.py
 python3 test_ui_fixture_extension.py
 python3 test_ui_fixture_full_flow.py

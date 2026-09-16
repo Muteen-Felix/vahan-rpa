@@ -52,6 +52,189 @@ def normalize_text(value: str | None) -> str:
     return " ".join((value or "").split()).strip().casefold()
 
 
+_UI_CONTROL_LABELS = {
+    "form": "form VAHAN Public Report (#vahanPublicForm)",
+    "category": "Category Group (#vehicleCategoryGroup)",
+    "vehicleCategoryGroup": "Category Group (#vehicleCategoryGroup)",
+    "fuel": "Fuel (#vehicleFuel)",
+    "vehicleFuel": "Fuel (#vehicleFuel)",
+    "yaxis": "Y-Axis (#yAxis)",
+    "yAxis": "Y-Axis (#yAxis)",
+    "xaxis": "X-Axis (#xAxis)",
+    "xAxis": "X-Axis (#xAxis)",
+    "captcha": "ô CAPTCHA (#externalCaptcha)",
+    "apply": "nút Apply (#applyTrigger)",
+    "externalCaptcha": "ô CAPTCHA (#externalCaptcha)",
+    "applyTrigger": "nút Apply (#applyTrigger)",
+}
+
+
+def _display_diagnostic_value(value: Any, *, max_length: int = 180) -> str:
+    """Convert diagnostic metadata to short, safe user-facing text."""
+
+    if value is None or value == "":
+        return "không có dữ liệu"
+    if isinstance(value, (list, tuple, set)):
+        value = ", ".join(str(item) for item in value)
+    text = str(value)
+    if not text:
+        return "không có dữ liệu"
+    if len(text) > max_length:
+        return f"{text[: max_length - 1]}…"
+    return text
+
+
+def _diagnostic_target(details: dict[str, Any], step: str) -> str:
+    """Resolve a stable, human-readable location from error metadata."""
+
+    key = details.get("control") or details.get("name")
+    if key in _UI_CONTROL_LABELS:
+        return _UI_CONTROL_LABELS[key]
+
+    hidden_select_id = details.get("hidden_select_id")
+    if hidden_select_id:
+        clean_id = str(hidden_select_id).removeprefix("#")
+        return _UI_CONTROL_LABELS.get(clean_id, f"control #{clean_id}")
+
+    label = details.get("label")
+    if label:
+        return _display_diagnostic_value(label)
+
+    selector = details.get("selector")
+    if selector:
+        return f"control {selector}"
+
+    return step or "preflight"
+
+
+def format_ui_drift(error: UIDriftError) -> dict[str, str]:
+    """Create a precise user/developer notification for a UI drift error.
+
+    The returned metadata deliberately contains only structural diagnostics. It
+    never includes page HTML, CAPTCHA values, or credentials.
+    """
+
+    code = error.code
+    details = error.details or {}
+    target = _diagnostic_target(details, error.step)
+    count = details.get("count")
+
+    if code == "UI_DRIFT_REQUIRED_CONTROL":
+        title = "Control bắt buộc bị thiếu hoặc bị trùng"
+        expected = "DOM phải có đúng 1 control"
+        actual = f"DOM đang có {count if count is not None else 'không xác định'} control"
+    elif code == "UI_DRIFT_CONTROL_TYPE":
+        title = "Loại control đã thay đổi"
+        expected = _display_diagnostic_value(details.get("expected"), max_length=100)
+        actual = _display_diagnostic_value(
+            details.get("actual") or "control không còn là multi-select (thiếu thuộc tính multiple)"
+        )
+    elif code == "UI_DRIFT_REQUIRED_OPTION":
+        option = _display_diagnostic_value(
+            details.get("expected_option") or details.get("option")
+        )
+        title = "Thiếu lựa chọn bắt buộc"
+        expected = f"option '{option}' phải tồn tại"
+        actual = details.get(
+            "actual",
+            "option này đã bị xóa, đổi tên hoặc chưa được tải",
+        )
+    elif code == "UI_DRIFT_EMPTY_OPTIONS":
+        title = "Danh sách lựa chọn đang rỗng"
+        expected = "Có ít nhất 1 option để tiếp tục"
+        actual = f"DOM đang có {details.get('option_count', 0)} option"
+    elif code == "UI_DRIFT_MULTISELECT_WRAPPER":
+        title = "Wrapper multiselect đã thay đổi vị trí hoặc số lượng"
+        expected = "Có đúng 1 wrapper trong cùng form-group với select gốc"
+        actual = f"Tìm thấy {details.get('wrapper_count', 'không xác định')} wrapper"
+    elif code == "UI_DRIFT_WRONG_PAGE":
+        target = "trang VAHAN Public Report"
+        title = "Đang ở sai trang"
+        expected = f"URL phải chứa {REPORT_PATH_FRAGMENT}"
+        actual = _display_diagnostic_value(details.get("url"))
+    elif code == "UI_DRIFT_CHANGED_DURING_RUN":
+        target = "cấu trúc UI trong lúc flow đang chạy"
+        title = "UI thay đổi giữa hai bước kiểm tra"
+        expected = f"signature={_display_diagnostic_value(details.get('expected_signature'))}"
+        actual = f"signature={_display_diagnostic_value(details.get('actual_signature'))}"
+    elif code == "UI_DRIFT_OPTION_NOT_UNIQUE":
+        target = f"{_display_diagnostic_value(details.get('label'))} > option '{_display_diagnostic_value(details.get('target'))}'"
+        title = "Option không còn duy nhất"
+        expected = "Tìm thấy đúng 1 option khớp"
+        actual = f"Tìm thấy {count if count is not None else 'không xác định'} kết quả"
+    elif code == "UI_DRIFT_ALL_OPTION_NOT_FOUND":
+        target = f"{_display_diagnostic_value(details.get('label'))} > checkbox All"
+        title = "Checkbox All đã thay đổi hoặc bị mất"
+        expected = "Có đúng 1 checkbox All"
+        actual = f"Tìm thấy {count if count is not None else 'không xác định'} checkbox"
+    elif code == "UI_DRIFT_SEARCH_INPUT":
+        target = f"ô tìm kiếm của {_display_diagnostic_value(details.get('label'))}"
+        title = "Ô tìm kiếm multiselect không đúng"
+        expected = "Có đúng 1 ô tìm kiếm"
+        actual = f"Tìm thấy {count if count is not None else 'không xác định'} ô"
+    elif code == "UI_DRIFT_OPTION_CONTROL":
+        target = f"option '{_display_diagnostic_value(details.get('option'))}' trong {_display_diagnostic_value(details.get('label'))}"
+        title = "Control của option đã thay đổi"
+        expected = "Có đúng 1 checkbox cho option"
+        actual = f"Tìm thấy {details.get('checkbox_count', 'không xác định')} checkbox"
+    elif code == "UI_DRIFT_SELECTION_NOT_SYNCED":
+        target = f"{_display_diagnostic_value(details.get('label'))} > option '{_display_diagnostic_value(details.get('option'))}'"
+        title = "Widget và select gốc không đồng bộ"
+        expected = "Checkbox và option gốc cùng được chọn"
+        actual = f"Select gốc đang có: {_display_diagnostic_value(details.get('selected'))}"
+    elif code == "UI_DRIFT_SELECT_ALL_NOT_SYNCED":
+        target = f"{_display_diagnostic_value(details.get('label'))} > checkbox All"
+        title = "Lựa chọn All không đồng bộ"
+        expected = f"Đã chọn đủ {details.get('option_count', 'tất cả')} option"
+        actual = f"Đã chọn {details.get('selected_count', 'không xác định')} option"
+    elif code == "UI_DRIFT_AXIS_NOT_SYNCED":
+        target = "Y-Axis/X-Axis và hidden fields"
+        title = "Giá trị trục báo cáo không đồng bộ"
+        expected = "Hidden fields khớp giá trị đang hiển thị"
+        if details.get("expected") is not None or details.get("actual") is not None:
+            actual = (
+                f"Expected={_display_diagnostic_value(details.get('expected'))}; "
+                f"Actual={_display_diagnostic_value(details.get('actual'))}"
+            )
+        else:
+            actual = (
+                f"yAxis={_display_diagnostic_value(details.get('yAxis_hidden'))}; "
+                f"xAxis={_display_diagnostic_value(details.get('xAxis_hidden'))}"
+            )
+    elif code in {"UI_DRIFT_CONTRACT_TIMEOUT", "UI_DRIFT_DYNAMIC_CONTROL_TIMEOUT"}:
+        title = "UI contract không sẵn sàng đúng hạn"
+        expected = "Các control cần thiết xuất hiện trong thời gian cho phép"
+        actual = f"Timeout tại bước {_display_diagnostic_value(error.step)}"
+    elif code == "UI_DRIFT_STALE_FLOW_STATE":
+        target = "trạng thái flow đã lưu"
+        title = "Flow cũ không còn đủ thông tin contract"
+        expected = "Có signature UI contract hợp lệ"
+        actual = "Không có signature"
+    else:
+        title = "Cấu trúc UI không khớp contract"
+        expected = "Trang khớp UI contract đã được kiểm thử"
+        actual = f"Mã lỗi {code}"
+
+    message = (
+        f"Phát hiện thay đổi tại {target}: {title}. "
+        "Tool đã dừng để tránh thao tác sai dữ liệu."
+    )
+    action = (
+        "Dev cần kiểm tra đúng vùng này, cập nhật selector/adapter và chạy lại fixture; "
+        "người dùng không cần nhập lại dữ liệu cho đến khi tool được cập nhật."
+    )
+    return {
+        "code": code,
+        "step": error.step,
+        "title": title,
+        "target": target,
+        "expected": expected,
+        "actual": actual,
+        "action": action,
+        "message": message,
+    }
+
+
 def _count(locator: Locator) -> int:
     return locator.count()
 
@@ -164,7 +347,11 @@ def assert_ui_contract(
                 "UI_DRIFT_CONTROL_TYPE",
                 f"Control {name} không còn là multi-select như contract {UI_CONTRACT_VERSION}.",
                 step=step,
-                details={"control": name, "expected": "multiple select"},
+                details={
+                    "control": name,
+                    "expected": "multiple select",
+                    "actual": "control không còn thuộc tính multiple",
+                },
             )
 
     category_options = _option_labels(page.locator("#vehicleCategoryGroup"))
@@ -181,7 +368,7 @@ def assert_ui_contract(
             "UI_DRIFT_EMPTY_OPTIONS",
             "Danh sách Fuel đang rỗng hoặc chưa được tải.",
             step=step,
-            details={"control": "fuel"},
+            details={"control": "fuel", "option_count": 0},
         )
 
     yaxis_options = _option_labels(page.locator("#yAxis"))
