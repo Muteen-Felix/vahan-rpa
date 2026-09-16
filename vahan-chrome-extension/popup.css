@@ -54,6 +54,57 @@ h1 {
   line-height: 1.45;
 }
 
+.runner-connection {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 7px 9px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+  color: #586069;
+  font-size: 11px;
+}
+
+.connection-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #bf8700;
+  box-shadow: 0 0 0 3px rgba(191, 135, 0, .12);
+}
+
+.runner-connection[data-state="connected"] .connection-dot {
+  background: #2ea44f;
+  box-shadow: 0 0 0 3px rgba(46, 164, 79, .14);
+}
+
+.runner-connection[data-state="disconnected"] .connection-dot,
+.runner-connection[data-state="error"] .connection-dot {
+  background: #cb2431;
+  box-shadow: 0 0 0 3px rgba(203, 36, 49, .12);
+}
+
+.backend-settings {
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.backend-settings .btn-secondary {
+  margin-top: 12px;
+  border: 1px solid #1e3c72;
+  background: #fff;
+  box-shadow: none;
+  color: #1e3c72;
+}
+
+.backend-settings .btn-secondary:hover { background: #f1f5fb; }
+
 .form-card {
   overflow: hidden;
   border: 1px solid #e1e4e8;

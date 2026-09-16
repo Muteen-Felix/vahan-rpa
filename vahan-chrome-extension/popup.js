@@ -31,7 +31,56 @@ const dropdowns = {
 
 const status = document.querySelector("#status");
 const fillButton = document.querySelector("#fill");
+const runnerConnection = document.querySelector("#runnerConnection");
+const runnerServerUrl = document.querySelector("#runnerServerUrl");
+const runnerName = document.querySelector("#runnerName");
+const runnerToken = document.querySelector("#runnerToken");
+const saveRunnerConfigButton = document.querySelector("#saveRunnerConfig");
 let activeTabId;
+
+function renderRunnerConnection(connection = {}) {
+  const labels = {
+    connected: "Backend đã kết nối",
+    connecting: "Đang kết nối backend...",
+    disconnected: "Backend đã ngắt kết nối",
+    error: "Không thể kết nối backend",
+  };
+  runnerConnection.dataset.state = connection.status || "disconnected";
+  runnerConnection.querySelector(".connection-text").textContent =
+    labels[connection.status] || labels.disconnected;
+  runnerConnection.title = connection.detail || "";
+}
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === "RUNNER_CONNECTION_CHANGED") {
+    renderRunnerConnection(message.connection);
+  }
+});
+
+async function initializeRunnerConfig() {
+  const { runnerConfig = {} } = await chrome.storage.local.get("runnerConfig");
+  runnerServerUrl.value = runnerConfig.serverUrl || "http://127.0.0.1:8000";
+  runnerName.value = runnerConfig.runnerName || "VAHAN Chrome";
+  runnerToken.value = runnerConfig.token || "change-me";
+}
+
+saveRunnerConfigButton.addEventListener("click", async () => {
+  const serverUrl = runnerServerUrl.value.trim().replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(serverUrl)) {
+    renderRunnerConnection({ status: "error", detail: "Server URL phải bắt đầu bằng http:// hoặc https://" });
+    return;
+  }
+  const { runnerConfig = {} } = await chrome.storage.local.get("runnerConfig");
+  await chrome.storage.local.set({
+    runnerConfig: {
+      ...runnerConfig,
+      serverUrl,
+      runnerName: runnerName.value.trim() || "VAHAN Chrome",
+      token: runnerToken.value,
+    },
+  });
+  renderRunnerConnection({ status: "connecting", detail: "Đang kết nối lại backend..." });
+});
 
 function selectedLabels(element) {
   if (element.tagName === "SELECT") {
@@ -281,6 +330,10 @@ function setupMakerAutocomplete(initialValue) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  await initializeRunnerConfig();
+  chrome.runtime.sendMessage({ type: "GET_RUNNER_CONNECTION" }, (response) => {
+    renderRunnerConnection(response?.connection);
+  });
   try {
     await initializeDynamicFields();
     status.textContent = "Đã tải các lựa chọn từ VAHAN.";

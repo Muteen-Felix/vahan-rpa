@@ -291,6 +291,21 @@ function resetFloatingSteps() {
   }
 }
 
+function renderFloatingRunnerConnection(connection = {}) {
+  const element = floatingWidget?.shadowRoot?.querySelector(".backend-connection");
+  if (!element) return;
+  const labels = {
+    connected: "Backend đã kết nối",
+    connecting: "Đang kết nối backend...",
+    disconnected: "Backend đã ngắt kết nối",
+    error: "Không thể kết nối backend",
+  };
+  element.dataset.state = connection.status || "disconnected";
+  element.querySelector("span:last-child").textContent =
+    labels[connection.status] || labels.disconnected;
+  element.title = connection.detail || "";
+}
+
 async function runFromFloatingWidget() {
   const root = floatingWidget.shadowRoot;
   const button = root.querySelector(".start");
@@ -356,6 +371,21 @@ function injectFloatingWidget() {
       .toggle:hover { background: rgba(255,255,255,.3); }
       .body { padding: 14px 16px; }
       .body[hidden] { display: none; }
+      .backend-connection {
+        display: flex; align-items: center; gap: 7px; margin: 0 0 12px;
+        color: #586069; font-size: 12px;
+      }
+      .backend-dot {
+        width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%;
+        background: #bf8700; box-shadow: 0 0 0 3px rgba(191,135,0,.12);
+      }
+      .backend-connection[data-state="connected"] .backend-dot {
+        background: #2ea44f; box-shadow: 0 0 0 3px rgba(46,164,79,.14);
+      }
+      .backend-connection[data-state="disconnected"] .backend-dot,
+      .backend-connection[data-state="error"] .backend-dot {
+        background: #cb2431; box-shadow: 0 0 0 3px rgba(203,36,49,.12);
+      }
       .badge {
         display: inline-block; margin-left: auto; padding: 3px 8px;
         border: 1px solid rgba(255,255,255,.45); border-radius: 12px;
@@ -405,6 +435,7 @@ function injectFloatingWidget() {
         <button class="toggle" type="button" aria-label="Thu gọn widget" aria-expanded="true">−</button>
       </header>
       <div class="body">
+        <div class="backend-connection" data-state="connecting"><span class="backend-dot"></span><span>Đang kết nối backend...</span></div>
         <div class="steps">
           <div class="step" data-step="time" data-state="idle"><span class="step-icon">○</span><span>1. Điền thời gian và khu vực</span></div>
           <div class="step" data-step="vehicle" data-state="idle"><span class="step-icon">○</span><span>2. Điền bộ lọc phương tiện</span></div>
@@ -449,7 +480,8 @@ function injectFloatingWidget() {
       setFloatingStatus("error", `Không thể mở cấu hình: ${error.message}`);
     }
   });
-  chrome.storage.local.get("vahanConfig").then(({ vahanConfig }) => {
+  chrome.storage.local.get(["vahanConfig", "runnerConnection"]).then(({ vahanConfig, runnerConnection }) => {
+    renderFloatingRunnerConnection(runnerConnection);
     root.querySelector('[data-setting="autoApply"]').checked = vahanConfig?.autoApply ?? false;
     root.querySelector('[data-setting="autoExport"]').checked = vahanConfig?.autoExport ?? true;
     if (vahanConfig?.autoApply) {
@@ -459,7 +491,11 @@ function injectFloatingWidget() {
 }
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes.vahanConfig) return;
+  if (areaName !== "local") return;
+  if (changes.runnerConnection) {
+    renderFloatingRunnerConnection(changes.runnerConnection.newValue);
+  }
+  if (!changes.vahanConfig) return;
   const previous = changes.vahanConfig.oldValue || {};
   const current = changes.vahanConfig.newValue || {};
   const autoApply = current.autoApply ?? false;

@@ -15,3 +15,18 @@ Các dropdown trong popup được đọc trực tiếp từ option hiện có t
 7. Nhập CAPTCHA và bấm **Apply** trên VAHAN.
 
 Không tự động đọc, giải hoặc vượt CAPTCHA. Đây là attended RPA.
+
+## Kết nối backend MVP
+
+Extension bundle `socket.io-client` vào service worker. Sau khi sửa
+`src/background.js`, cần build lại:
+
+```powershell
+npm.cmd install
+npm.cmd run build
+```
+
+Mặc định extension kết nối `http://127.0.0.1:8000/runner` với token
+`change-me`. Có thể đổi Server URL, tên runner và token trong phần **Kết nối
+backend** của popup. Chrome 116 trở lên được yêu cầu để WebSocket activity giữ
+Manifest V3 service worker hoạt động.
