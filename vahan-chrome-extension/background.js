@@ -3456,6 +3456,15 @@
     });
     if (!response?.ok) throw new Error(response?.error || `Could not report ${status}.`);
   }
+  async function publishCaptcha(jobId, captcha) {
+    if (!socket?.connected) throw new Error("Backend is disconnected.");
+    const response = await socket.timeout(5e3).emitWithAck("captcha:required", {
+      jobId,
+      captchaId: captcha.captchaId,
+      imageDataUrl: captcha.imageDataUrl
+    });
+    if (!response?.ok) throw new Error(response?.error || "Could not publish CAPTCHA.");
+  }
   function assertJobActive(jobId) {
     if (cancelledJobIds.has(jobId)) throw new Error("Job was cancelled.");
   }
@@ -3525,7 +3534,13 @@
       const response = await sendToVahan(tabId, { type: "FILL_VAHAN", config });
       if (!response?.ok) throw new Error(response?.error || "VAHAN did not accept the filters.");
       assertJobActive(jobId);
-      await reportJobStatus(jobId, "WAITING_CAPTCHA");
+      const captcha = await sendToVahan(tabId, { type: "CAPTURE_CAPTCHA" });
+      if (!captcha?.ok) throw new Error(captcha?.error || "Could not capture the CAPTCHA.");
+      assertJobActive(jobId);
+      await chrome.storage.local.set({
+        activeServerJob: { ...job, tabId, config, captchaId: captcha.captchaId }
+      });
+      await publishCaptcha(jobId, captcha);
     } catch (error) {
       if (!cancelledJobIds.has(jobId)) {
         await reportJobStatus(jobId, "FAILED", error.message).catch(() => {
@@ -3620,6 +3635,31 @@
       cancelledJobIds.add(id);
       if (activeJobId === id) activeJobId = void 0;
       await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    });
+    socket.on("captcha:submitted", async (payload) => {
+      const jobId = String(payload?.jobId || "");
+      try {
+        const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+        if (!activeServerJob || activeServerJob.jobId !== jobId || activeJobId !== jobId) {
+          throw new Error("The active VAHAN job no longer matches this CAPTCHA.");
+        }
+        if (activeServerJob.captchaId !== payload.captchaId) {
+          throw new Error("The CAPTCHA has changed or expired.");
+        }
+        assertJobActive(jobId);
+        const response = await sendToVahan(activeServerJob.tabId, {
+          type: "SUBMIT_REMOTE_CAPTCHA",
+          value: String(payload.value || ""),
+          autoApply: activeServerJob.config.autoApply ?? false
+        });
+        if (!response?.ok) throw new Error(response?.error || "Could not fill the CAPTCHA on VAHAN.");
+        await reportJobStatus(jobId, "WAITING_RESULT");
+      } catch (error) {
+        await reportJobStatus(jobId, "FAILED", error.message).catch(() => {
+        });
+        if (activeJobId === jobId) activeJobId = void 0;
+        await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      }
     });
   }
   chrome.runtime.onInstalled.addListener(() => connectRunner());

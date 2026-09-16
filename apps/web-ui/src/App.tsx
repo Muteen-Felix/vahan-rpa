@@ -121,7 +121,12 @@ export default function App() {
         <FilterForm runners={runners} busy={creating || Boolean(job && !["COMPLETED", "FAILED", "CANCELLED"].includes(job.status))} onSubmit={createJob} />
         <div className="right-column">
           <JobStatus job={job} onCancel={cancelJob} />
-          <CaptchaPanel challenge={captcha} submitting={submittingCaptcha} onSubmit={submitCaptcha} />
+          <CaptchaPanel
+            challenge={captcha}
+            submitting={submittingCaptcha}
+            autoApply={job?.filters.autoApply ?? false}
+            onSubmit={submitCaptcha}
+          />
           {!job && <section className="empty-state"><span>📋</span><h2>Chưa có job</h2><p>Chọn extension và cấu hình filter để bắt đầu.</p></section>}
         </div>
       </div>

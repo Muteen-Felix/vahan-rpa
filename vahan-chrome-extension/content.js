@@ -192,6 +192,53 @@ async function fillVahan(config) {
   if (has("autoApply")) configureAutoApply(config.autoApply);
 }
 
+async function captureCaptcha(timeout = 15000) {
+  const deadline = Date.now() + timeout;
+  let image;
+  while (Date.now() < deadline) {
+    image = document.querySelector("#captchaImage");
+    if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) break;
+    await delay(200);
+  }
+  if (!image?.complete || !image.naturalWidth || !image.naturalHeight) {
+    throw new Error("CAPTCHA image did not load within the allowed time.");
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not create a canvas for the CAPTCHA image.");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const captchaId = image.currentSrc || image.src || image.getAttribute("src");
+  if (!captchaId) throw new Error("The CAPTCHA image has no identifier.");
+  return {
+    captchaId,
+    imageDataUrl: canvas.toDataURL("image/png"),
+  };
+}
+
+function submitRemoteCaptcha(value, autoApply) {
+  const input = document.querySelector("#externalCaptcha");
+  if (!input) throw new Error("Could not find the CAPTCHA input on VAHAN.");
+  input.focus();
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  updateFloatingStep("captcha", "done");
+
+  if (!autoApply) {
+    setFloatingStatus("waiting", "CAPTCHA đã được điền. Hãy kiểm tra và bấm Apply trên VAHAN.");
+    return { applied: false };
+  }
+
+  // configureAutoApply owns the delayed click and prevents duplicate submits.
+  configureAutoApply(true);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  return { applied: true };
+}
+
 let autoApplyCleanup;
 
 function configureAutoApply(enabled) {
@@ -520,6 +567,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   let operation;
   if (message?.type === "FILL_VAHAN") operation = fillVahan(message.config).then(() => ({ ok: true }));
+  else if (message?.type === "CAPTURE_CAPTCHA") operation = captureCaptcha().then((captcha) => ({ ok: true, ...captcha }));
+  else if (message?.type === "SUBMIT_REMOTE_CAPTCHA") {
+    operation = Promise.resolve({ ok: true, ...submitRemoteCaptcha(message.value, message.autoApply) });
+  }
   else if (message?.type === "GET_VAHAN_OPTIONS") operation = Promise.resolve({ ok: true, options: readOptions(message.selectors) });
   else if (message?.type === "GET_STATE_OPTIONS") operation = getStateOptions(message.delhiNcr).then((options) => ({ ok: true, options }));
   else if (message?.type === "GET_RTO_OPTIONS") operation = fetchRtos(message.stateLabels).then((options) => ({ ok: true, options }));

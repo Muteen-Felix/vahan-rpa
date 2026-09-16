@@ -5,10 +5,11 @@ import type { CaptchaChallenge } from "../contracts";
 interface Props {
   challenge: CaptchaChallenge | null;
   submitting: boolean;
+  autoApply: boolean;
   onSubmit: (value: string) => Promise<void>;
 }
 
-export function CaptchaPanel({ challenge, submitting, onSubmit }: Props) {
+export function CaptchaPanel({ challenge, submitting, autoApply, onSubmit }: Props) {
   const [value, setValue] = useState("");
   useEffect(() => setValue(""), [challenge?.captchaId]);
   if (!challenge) return null;
@@ -38,8 +39,9 @@ export function CaptchaPanel({ challenge, submitting, onSubmit }: Props) {
           setValue("");
         }}
       >
-        {submitting ? "Đang gửi..." : "Gửi và Apply"}
+        {submitting ? "Đang gửi..." : autoApply ? "Gửi và Apply" : "Gửi và điền CAPTCHA"}
       </button>
+      {!autoApply && <p className="security-note">Sau khi gửi, hãy kiểm tra và bấm Apply trên tab VAHAN.</p>}
       <p className="security-note">🔒 Hệ thống không đọc hoặc giải CAPTCHA tự động.</p>
     </section>
   );
