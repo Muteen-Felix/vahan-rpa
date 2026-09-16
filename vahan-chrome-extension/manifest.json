@@ -19,6 +19,9 @@
       "32": "icons/icon-32.png"
     }
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://analytics.parivahan.gov.in/analytics/vahanpublicreport*"],

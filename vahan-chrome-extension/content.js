@@ -232,14 +232,20 @@ async function initializeAutoApplyPreference() {
 }
 
 let exportClicked = false;
+let exportWatcherTimer;
+let exportWatcherTimeout;
 async function startAutoExportWatcher() {
   const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
-  if (!vahanConfig?.autoExport) return;
-  const timer = setInterval(() => {
+  clearInterval(exportWatcherTimer);
+  clearTimeout(exportWatcherTimeout);
+  exportWatcherTimer = undefined;
+  exportWatcherTimeout = undefined;
+  if (!(vahanConfig?.autoExport ?? true) || exportClicked) return;
+  exportWatcherTimer = setInterval(() => {
     const button = document.querySelector("#downloadBtn1");
     if (!exportClicked && button && button.getClientRects().length) {
       exportClicked = true;
-      clearInterval(timer);
+      clearInterval(exportWatcherTimer);
       updateFloatingStep("captcha", "done");
       updateFloatingStep("apply", "done");
       updateFloatingStep("export", "done");
@@ -247,7 +253,7 @@ async function startAutoExportWatcher() {
       button.click();
     }
   }, 500);
-  setTimeout(() => clearInterval(timer), 120000);
+  exportWatcherTimeout = setTimeout(() => clearInterval(exportWatcherTimer), 120000);
 }
 
 // Floating controller shown directly on the VAHAN page. A shadow root keeps
@@ -331,17 +337,17 @@ function injectFloatingWidget() {
       :host { all: initial; }
       .card {
         position: fixed; right: 24px; bottom: 24px; z-index: 2147483647;
-        width: 320px; overflow: hidden; border: 1px solid #e1e4e8;
+        width: 360px; overflow: hidden; border: 1px solid #e1e4e8;
         border-radius: 12px; background: #fff; color: #24292e;
         box-shadow: 0 10px 30px rgba(0,0,0,.22);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
       .header {
-        display: flex; align-items: center; justify-content: space-between;
+        display: flex; align-items: center; gap: 8px;
         padding: 12px 16px; color: #fff;
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
       }
-      .title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; }
+      .title { display: flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 700; }
       .toggle {
         width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
         background: rgba(255,255,255,.2); color: #fff; font-size: 16px;
@@ -351,38 +357,54 @@ function injectFloatingWidget() {
       .body { padding: 14px 16px; }
       .body[hidden] { display: none; }
       .badge {
-        display: inline-block; margin-bottom: 12px; padding: 3px 8px;
-        border: 1px solid #c8e1ff; border-radius: 12px;
-        background: #f1f8ff; color: #0366d6; font-size: 11px; font-weight: 600;
+        display: inline-block; margin-left: auto; padding: 3px 8px;
+        border: 1px solid rgba(255,255,255,.45); border-radius: 12px;
+        background: rgba(255,255,255,.16); color: #fff; font-size: 12px; font-weight: 600;
       }
       .badge[data-state="running"], .badge[data-state="waiting"] {
         border-color: #fff5b1; background: #fffbdd; color: #9a6700;
       }
       .badge[data-state="success"] { border-color: #bef5cb; background: #dcffe4; color: #22863a; }
       .badge[data-state="error"] { border-color: #ffdce0; background: #ffeef0; color: #cb2431; }
-      .steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; font-size: 12px; }
+      .steps { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; font-size: 13px; }
       .step { display: flex; align-items: center; gap: 8px; color: #666; line-height: 1.35; }
-      .step-icon { width: 14px; color: #8c959f; font-size: 15px; font-weight: 700; text-align: center; }
+      .step-icon { width: 16px; color: #8c959f; font-size: 16px; font-weight: 700; text-align: center; }
       .step[data-state="running"] { color: #005cc5; font-weight: 600; }
       .step[data-state="waiting"] { color: #d93f0b; font-weight: 700; }
       .step[data-state="done"] { color: #22863a; }
       .step[data-state="error"] { color: #cb2431; font-weight: 700; }
       .start {
         width: 100%; padding: 10px; border: 0; border-radius: 6px;
-        background: #2ea44f; color: #fff; font-size: 13px; font-weight: 600;
+        background: #2ea44f; color: #fff; font-size: 14px; font-weight: 600;
         cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.1);
       }
       .start:hover { background: #2c974b; }
       .start:disabled { opacity: .6; cursor: wait; }
-      .status { min-height: 20px; margin-top: 10px; color: #586069; font-size: 11px; line-height: 1.4; }
+      .preferences {
+        display: flex; flex-direction: column; gap: 7px; margin: 0 0 12px;
+        padding: 10px; border: 1px solid #e1e4e8; border-radius: 7px;
+        background: #f8f9fa;
+      }
+      .preference {
+        display: flex; align-items: center; gap: 7px; color: #444;
+        font-size: 12px; line-height: 1.4; cursor: pointer;
+      }
+      .preference input { width: 14px; height: 14px; margin: 0; accent-color: #2ea44f; }
+      .open-popup {
+        width: 100%; margin-top: 8px; padding: 8px; border: 1px solid #d0d7de;
+        border-radius: 6px; background: #fff; color: #1e3c72; font-size: 13px;
+        font-weight: 600; cursor: pointer;
+      }
+      .open-popup:hover { background: #f6f8fa; border-color: #8c959f; }
+      .status { min-height: 22px; margin-top: 10px; color: #586069; font-size: 12px; line-height: 1.45; }
     </style>
     <section class="card" aria-label="VAHAN RPA Tool">
       <header class="header">
         <div class="title"><span aria-hidden="true">🤖</span> VAHAN RPA Tool</div>
+        <div class="badge" data-state="ready">Sẵn sàng</div>
         <button class="toggle" type="button" aria-label="Thu gọn widget" aria-expanded="true">−</button>
       </header>
       <div class="body">
-        <div class="badge" data-state="ready">Sẵn sàng</div>
         <div class="steps">
           <div class="step" data-step="time" data-state="idle"><span class="step-icon">○</span><span>1. Điền thời gian và khu vực</span></div>
           <div class="step" data-step="vehicle" data-state="idle"><span class="step-icon">○</span><span>2. Điền bộ lọc phương tiện</span></div>
@@ -391,7 +413,12 @@ function injectFloatingWidget() {
           <div class="step" data-step="apply" data-state="idle"><span class="step-icon">○</span><span data-role="apply-label">5. Bấm Apply trên VAHAN</span></div>
           <div class="step" data-step="export" data-state="idle"><span class="step-icon">○</span><span>6. Tự động tải file Excel</span></div>
         </div>
+        <div class="preferences" aria-label="Tùy chọn tự động">
+          <label class="preference"><input data-setting="autoApply" type="checkbox"><span>Tự động bấm Apply sau khi nhập CAPTCHA</span></label>
+          <label class="preference"><input data-setting="autoExport" type="checkbox"><span>Tự động tải Excel khi có kết quả</span></label>
+        </div>
         <button class="start" type="button">▶ Điền Bộ Lọc Tự Động</button>
+        <button class="open-popup" type="button">⚙ Mở Cấu Hình</button>
         <div class="status" role="status">Nhấn nút trên để dùng cấu hình đã lưu từ popup.</div>
       </div>
     </section>`;
@@ -407,12 +434,45 @@ function injectFloatingWidget() {
     toggle.setAttribute("aria-label", expanded ? "Mở rộng widget" : "Thu gọn widget");
   });
   root.querySelector(".start").addEventListener("click", runFromFloatingWidget);
+  for (const checkbox of root.querySelectorAll("[data-setting]")) {
+    checkbox.addEventListener("change", async () => {
+      const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
+      vahanConfig[checkbox.dataset.setting] = checkbox.checked;
+      await chrome.storage.local.set({ vahanConfig });
+    });
+  }
+  root.querySelector(".open-popup").addEventListener("click", async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "OPEN_ACTION_POPUP" });
+      if (!response?.ok) throw new Error(response?.error || "Chrome không thể mở popup.");
+    } catch (error) {
+      setFloatingStatus("error", `Không thể mở cấu hình: ${error.message}`);
+    }
+  });
   chrome.storage.local.get("vahanConfig").then(({ vahanConfig }) => {
+    root.querySelector('[data-setting="autoApply"]').checked = vahanConfig?.autoApply ?? false;
+    root.querySelector('[data-setting="autoExport"]').checked = vahanConfig?.autoExport ?? true;
     if (vahanConfig?.autoApply) {
       root.querySelector('[data-role="apply-label"]').textContent = "5. Tự động bấm Apply";
     }
   });
 }
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes.vahanConfig) return;
+  const previous = changes.vahanConfig.oldValue || {};
+  const current = changes.vahanConfig.newValue || {};
+  const autoApply = current.autoApply ?? false;
+  const autoExport = current.autoExport ?? true;
+  const root = floatingWidget?.shadowRoot;
+
+  if (root) {
+    root.querySelector('[data-setting="autoApply"]').checked = autoApply;
+    root.querySelector('[data-setting="autoExport"]').checked = autoExport;
+  }
+  if ((previous.autoApply ?? false) !== autoApply) configureAutoApply(autoApply);
+  if ((previous.autoExport ?? true) !== autoExport) startAutoExportWatcher();
+});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   let operation;
