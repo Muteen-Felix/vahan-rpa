@@ -3,4 +3,4 @@ __pycache__/
 *.class
 .claude/
 *.log
-
+diagnostics/

@@ -1,0 +1,341 @@
+:root {
+  --nav-blue: #006fa8;
+  --nav-dark: #005d8e;
+  --heading-blue: #006da4;
+  --light-panel: #f4f4f4;
+  --border: #d8dce0;
+  --text: #2f2f2f;
+  --footer: #173b5e;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  background: #f4f4f4;
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.container {
+  width: min(100% - 32px, 1440px);
+  margin: 0 auto;
+}
+
+.site-header { background: #fff; }
+
+.top-brand {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 108px;
+  color: #191919;
+}
+
+.government-brand, .portal-brand { display: flex; align-items: center; gap: 10px; }
+
+.government-brand strong, .government-brand span { display: block; }
+
+.government-brand strong { font-family: Georgia, serif; font-size: 17px; font-weight: 600; }
+
+.government-brand span { font-family: Georgia, serif; font-size: 13px; margin-top: 3px; }
+
+.government-emblem {
+  width: 35px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  color: #202020;
+  font-size: 37px;
+  line-height: 1;
+  transform: scaleX(.72);
+}
+
+.portal-brand { font-size: 17px; }
+
+.truck-icon { color: #f26722; font-size: 28px; line-height: 1; transform: scaleX(1.15); }
+
+.main-nav {
+  color: #fff;
+  background: linear-gradient(180deg, #047bb5, #005a88);
+  border-bottom: 1px solid #d6d6d6;
+}
+
+.nav-inner {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  padding: 0 120px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.nav-inner a { white-space: nowrap; }
+.nav-inner a:hover { opacity: .8; }
+.caret { margin-left: 3px; font-size: 12px; }
+.nav-login { margin-left: auto; }
+
+.nav-dropdown { position: relative; height: 48px; display: flex; align-items: center; }
+.nav-dropdown-menu { position: absolute; z-index: 30; top: 100%; left: -10px; display: none; min-width: 190px; padding: 6px 0; border: 1px solid #d3d8dc; background: #fff; color: #2f2f2f; box-shadow: 0 5px 14px rgba(0,0,0,.18); }
+.nav-dropdown-menu a { display: block; padding: 8px 12px; font-size: 12px; font-weight: 600; }
+.nav-dropdown-menu a:hover { background: #edf6fc; opacity: 1; }
+.nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown:focus-within .nav-dropdown-menu { display: block; }
+
+.report-heading {
+  color: #fff;
+  background: linear-gradient(180deg, #0e81bd, #005d8c);
+  box-shadow: 0 3px 7px rgba(0,0,0,.25);
+}
+
+.report-heading-inner {
+  height: 82px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.report-heading h1 { margin: 0; font-size: 28px; letter-spacing: .2px; }
+
+.vahan-logo {
+  position: absolute;
+  left: 74px;
+  top: 11px;
+  width: 86px;
+  color: #fff;
+  font-family: Georgia, serif;
+  font-size: 28px;
+  line-height: .78;
+  transform: skew(-7deg);
+  text-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+.vahan-logo span, .vahan-logo small { display: block; }
+.vahan-logo small { margin-left: 22px; font-size: 23px; }
+
+.page-container { width: min(100% - 20px, 1440px); margin: 10px auto 44px; }
+
+#vahanPublicForm {
+  display: grid;
+  grid-template-columns: 322px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 11px rgba(0,0,0,.14);
+}
+
+.filters-card { padding: 20px; }
+
+.filters-title {
+  height: 68px;
+  border-radius: 10px;
+  background: #359dde;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.filters-body {
+  background: var(--light-panel);
+  border-radius: 10px;
+  padding: 8px 16px 26px;
+}
+
+.form-group.row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  min-height: 58px;
+  gap: 9px;
+}
+
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.field-icon { display: inline-block; width: 21px; font-size: 20px; color: #111; text-align: center; }
+
+.field-control { min-width: 0; position: relative; }
+
+.form-control, .year-range input, .year-range span, .date-range input, .date-range span {
+  min-height: 36px;
+  width: 100%;
+  border: 1px solid #d3d8dc;
+  border-radius: 10px;
+  background: #fff;
+  color: #555;
+  padding: 8px 11px;
+  font: inherit;
+}
+
+select.form-control { appearance: auto; }
+select:disabled { color: #c1c5c8; background: #f7f7f7; }
+select[multiple] { display: none; visibility: hidden; }
+
+.archived-group { align-items: start !important; padding-top: 5px; }
+.mini-selected-list { display: flex; flex-direction: column; gap: 2px; }
+.mini-selected-list span { background: #cfcfcf; border-radius: 3px; padding: 5px 6px; color: #5b5b5b; font-size: 11px; }
+
+.year-range {
+  display: grid;
+  grid-template-columns: 1fr 40px 1fr;
+  margin: 0 0 3px;
+}
+
+.year-range input { min-width: 0; border-radius: 9px 0 0 9px; }
+.year-range input:last-child { border-radius: 0 9px 9px 0; }
+.year-range span { display: grid; place-items: center; border-radius: 0; background: #efefef; padding: 0; font-weight: 700; }
+
+.date-range {
+  display: grid;
+  grid-template-columns: 1fr 40px 1fr;
+  margin: 0 0 3px;
+}
+
+.date-range input { min-width: 0; border-radius: 9px 0 0 9px; }
+.date-range input:last-child { border-radius: 0 9px 9px 0; }
+.date-range span { display: grid; place-items: center; border-radius: 0; background: #efefef; padding: 0; font-weight: 700; }
+
+.month-year-control { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.field-error { min-height: 15px; color: #c62828; font-size: 10px; line-height: 1.25; }
+.field-info { min-height: 15px; color: #0b75b5; font-size: 10px; line-height: 1.25; }
+.maker-actions { min-height: 15px; text-align: right; }
+.clear-maker { border: 0; background: transparent; color: #c62828; cursor: pointer; font: inherit; font-size: 10px; font-weight: 700; padding: 0; }
+
+.compact-row { min-height: 66px !important; }
+
+.multiselect-dropdown {
+  display: block;
+  position: relative;
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #d3d8dc;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.multiselect-dropdown.is-disabled { color: #c1c5c8; background: #f7f7f7; cursor: not-allowed; opacity: .65; }
+.disabled-dependent.is-disabled { opacity: .5; pointer-events: none; }
+
+.multiselect-display {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  color: #666;
+}
+
+.multiselect-display .summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multiselect-display .arrow { color: #777; font-size: 11px; }
+
+.multiselect-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: -1px;
+  right: -1px;
+  display: none;
+  max-height: 260px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid #cdd3d8;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(0,0,0,.18);
+}
+
+.multiselect-dropdown.open .multiselect-panel { display: block; }
+.multiselect-dropdown-search { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 6px; }
+.multiselect-option, .multiselect-dropdown-all-selector { display: flex; align-items: center; gap: 7px; padding: 6px 5px; border-radius: 4px; font-size: 12px; }
+.multiselect-option:hover, .multiselect-dropdown-all-selector:hover { background: #edf6fc; }
+.multiselect-option input, .multiselect-dropdown-all-selector input { accent-color: #2589c5; }
+
+.report-content { min-width: 0; }
+
+.axis-card { min-height: 204px; padding: 23px 40px; display: grid; grid-template-columns: 1fr 1fr 1fr 140px; gap: 28px; align-items: center; background: #f4f4f4; box-shadow: none; }
+.axis-field, .captcha-field, .apply-field { min-width: 0; }
+.axis-field label, .captcha-field label { display: block; margin-bottom: 11px; font-weight: 700; font-size: 15px; }
+.axis-icon { font-size: 19px; margin-right: 4px; }
+.axis-field .form-control { height: 38px; }
+.captcha-row { display: flex; align-items: center; gap: 7px; }
+.captcha-image { height: 65px; width: 210px; min-width: 210px; display: grid; place-items: center; overflow: hidden; border: 1px solid #cfd3d7; background: #fff; }
+.captcha-image img { display: block; width: 210px; height: 65px; }
+.captcha-refresh { border: 0; background: transparent; color: #555; cursor: pointer; font-size: 18px; }
+.captcha-field > .form-control { margin-top: 8px; }
+.apply-field { align-self: center; }
+.apply-spacer { display: block; height: 28px; }
+.apply-button { width: 100%; min-height: 44px; border: 0; border-radius: 9px; background: #ee4b3f; color: #fff; font-size: 16px; cursor: pointer; }
+.apply-button:hover { background: #db3e33; }
+
+.result-card { margin-top: 18px; padding: 13px 18px 20px; }
+.result-title { background: #288dd0; color: #fff; padding: 9px; text-align: center; font-weight: 700; }
+.result-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 10px 0 4px; }
+.result-actions button { border: 0; border-radius: 4px; background: #267dbd; color: #fff; padding: 8px 12px; font-weight: 700; cursor: pointer; }
+.result-card table { width: 100%; border-collapse: collapse; }
+.result-card th { background: #288dd0; color: #fff; text-align: left; padding: 7px; }
+.result-card td { border: 1px solid #e1e1e1; padding: 7px; }
+
+.fixture-toast { position: fixed; top: 14px; left: 50%; z-index: 9999997; transform: translateX(-50%); border: 1px solid #f5c2c7; border-radius: 5px; background: #fff1f2; color: #9f1239; padding: 10px 16px; box-shadow: 0 4px 14px rgba(0,0,0,.18); font-weight: 700; }
+
+.site-footer { color: #fff; background: var(--footer); }
+.footer-links { min-height: 100px; display: grid; grid-template-columns: 1fr 1fr 1fr 1.2fr; gap: 20px; padding: 18px 120px 10px; }
+.footer-links div { display: flex; flex-direction: column; gap: 16px; color: #fff; font-size: 11px; font-weight: 700; }
+.nic-mark { align-items: flex-end; justify-content: center; color: #fff !important; font-size: 24px !important; line-height: .9; }
+.nic-mark small { font-size: 9px; }
+.footer-bottom { min-height: 46px; border-top: 1px solid rgba(255,255,255,.06); display: flex; align-items: center; justify-content: space-between; padding: 0 120px; font-size: 10px; }
+
+/* Developer-only fixture panel; it is hidden in the default visual clone. */
+#fixture-dev-console { position: fixed; left: 18px; bottom: 18px; z-index: 9999998; width: 280px; padding: 12px; border: 1px solid #2c5282; border-radius: 8px; background: rgba(255,255,255,.97); box-shadow: 0 5px 20px rgba(0,0,0,.2); font: 12px/1.35 Arial, sans-serif; }
+#fixture-dev-console h2 { margin: 0 0 8px; color: #1e3c72; font-size: 13px; }
+#fixture-dev-console .dev-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#fixture-dev-console button { border: 1px solid #b8c6d6; border-radius: 4px; background: #f5f9fd; color: #1e3c72; padding: 6px; cursor: pointer; font-size: 11px; }
+#fixture-dev-console button:hover { background: #e4f0fb; }
+#fixture-dev-log { margin-top: 8px; max-height: 95px; overflow: auto; color: #586069; white-space: pre-wrap; }
+
+/* This scenario changes appearance only. It intentionally keeps the v1 DOM
+   contract intact so the fixture can demonstrate the current detector's
+   structural boundary. */
+body.fixture-visual-only-change .report-heading { background: linear-gradient(180deg, #7048a8, #4c2f78); }
+body.fixture-visual-only-change .filters-title { background: #8b5cc7; }
+
+@media (max-width: 1050px) {
+  .top-brand, .nav-inner, .footer-links, .footer-bottom { padding-left: 24px; padding-right: 24px; }
+  .nav-inner { gap: 17px; font-size: 12px; }
+  .vahan-logo { left: 32px; }
+  .axis-card { grid-template-columns: 1fr 1fr; }
+  .apply-field { align-self: end; }
+}
+
+@media (max-width: 760px) {
+  .top-brand { height: auto; min-height: 72px; flex-direction: column; align-items: flex-start; gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+  .portal-brand { font-size: 13px; }
+  .nav-inner { height: auto; flex-wrap: wrap; padding-top: 11px; padding-bottom: 11px; gap: 10px 17px; }
+  .nav-login { margin-left: 0; }
+  .report-heading-inner { height: 70px; }
+  .report-heading h1 { font-size: 20px; }
+  .vahan-logo { left: 10px; transform: scale(.75) skew(-7deg); transform-origin: left center; }
+  #vahanPublicForm { grid-template-columns: 1fr; }
+  .axis-card { grid-template-columns: 1fr; padding: 20px; }
+  .footer-links { grid-template-columns: 1fr 1fr; padding: 18px 24px; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; gap: 7px; padding: 13px 24px; }
+}
