@@ -138,28 +138,52 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand"><span>🤖</span><div><h1>VAHAN Report Tool</h1><p>Attended RPA Control Center</p></div></div>
-        <span className="attended-badge">Attended</span>
+    <div className="app-shell">
+      <header className="site-header">
+        <a className="brand" href="#top" aria-label="VAHAN Automation home">
+          <span className="brand-mark">V</span>
+          <span className="brand-copy"><strong>VAHAN</strong><small>REPORT AUTOMATION</small></span>
+        </a>
+        <nav className="main-nav" aria-label="Điều hướng chính">
+          <a href="#configure">Cấu hình</a>
+          <a href="#activity">Tiến trình</a>
+          <span className="attended-badge">ATTENDED RPA</span>
+        </nav>
       </header>
 
-      <ConnectionBanner backend={connection} runners={runners.length} />
-      {error && <div className="global-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
-
-      <div className="workspace">
-        <FilterForm runners={runners} busy={creating || Boolean(job && !["COMPLETED", "FAILED", "CANCELLED"].includes(job.status))} onSubmit={createJob} />
-        <div className="right-column">
-          <JobStatus job={job} onCancel={cancelJob} />
-          <CaptchaPanel
-            challenge={captcha}
-            submitting={submittingCaptcha}
-            autoApply={job?.filters.autoApply ?? false}
-            onSubmit={submitCaptcha}
-          />
-          {!job && <section className="empty-state"><span>📋</span><h2>Chưa có job</h2><p>Chọn extension và cấu hình filter để bắt đầu.</p></section>}
+      <section className="hero" id="top">
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="hero-content">
+          <p className="eyebrow">VAHAN DATA OPERATIONS</p>
+          <h1>Report automation.<br /><span>Human verified.</span></h1>
+          <p className="hero-description">Điều phối bộ lọc, CAPTCHA và báo cáo VAHAN trong một không gian vận hành tập trung.</p>
+          <div className="hero-meta">
+            <ConnectionBanner backend={connection} runners={runners.length} />
+            <span className="secure-note">Manual CAPTCHA · Secure by design</span>
+          </div>
         </div>
-      </div>
-    </main>
+        <div className="hero-visual" aria-hidden="true"><span>V</span><i /></div>
+      </section>
+
+      <main className="page-content">
+        <div className="section-intro" id="configure">
+          <div><p className="eyebrow dark">CONTROL CENTER</p><h2>Tạo báo cáo mới</h2></div>
+          <p>Chọn dữ liệu trực tiếp từ phiên VAHAN đang kết nối, sau đó theo dõi toàn bộ tiến trình theo thời gian thực.</p>
+        </div>
+
+        {error && <div className="global-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
+
+        <div className="workspace">
+          <FilterForm runners={runners} busy={creating || Boolean(job && !["COMPLETED", "FAILED", "CANCELLED"].includes(job.status))} onSubmit={createJob} />
+          <div className="right-column" id="activity">
+            <JobStatus job={job} onCancel={cancelJob} />
+            <CaptchaPanel challenge={captcha} submitting={submittingCaptcha} autoApply={job?.filters.autoApply ?? false} onSubmit={submitCaptcha} />
+            {!job && <section className="empty-state"><span>01</span><h2>Sẵn sàng khởi tạo</h2><p>Chọn extension và cấu hình bộ lọc để bắt đầu quy trình báo cáo.</p></section>}
+          </div>
+        </div>
+      </main>
+
+      <footer><span>VAHAN REPORT AUTOMATION</span><span>Attended workflow · 2026</span></footer>
+    </div>
   );
 }

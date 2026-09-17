@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import type { Acknowledgement, Runner, VahanFilters } from "../contracts";
 import { uiSocket } from "../services/socket-client";
@@ -34,25 +34,44 @@ function DynamicSelect({ label, name, options, value, multiple = false, disabled
   disabled?: boolean; onChange: (name: string, value: string | string[]) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const fieldRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = (event: MouseEvent) => {
+      if (!fieldRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
   if (multiple) {
     const selected = value as string[];
     const visible = options.filter((option) => option.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
     const toggle = (option: string, checked: boolean) => onChange(name, checked
       ? [...new Set([...selected, option])]
       : selected.filter((item) => item !== option));
-    return <div className="dynamic-multi-field">
+    return <div className="dynamic-multi-field" ref={fieldRef}>
       <span className="dynamic-field-label">{label}</span>
-      <div className="dynamic-multi">
-        <input type="search" placeholder="Tìm kiếm..." value={search} disabled={disabled} onChange={(event) => setSearch(event.target.value)} />
-        <label className="multi-select-all"><input type="checkbox" disabled={disabled || !visible.length}
-          checked={Boolean(visible.length) && visible.every((item) => selected.includes(item))}
-          onChange={(event) => onChange(name, event.target.checked
-            ? [...new Set([...selected, ...visible])]
-            : selected.filter((item) => !visible.includes(item)))} /> Chọn tất cả</label>
-        <div className="dynamic-option-list">{visible.map((option) =>
-          <label key={option}><input type="checkbox" disabled={disabled} checked={selected.includes(option)}
-            onChange={(event) => toggle(option, event.target.checked)} /> <span>{option}</span></label>)}</div>
-      </div>
+      <button className="multi-trigger" type="button" disabled={disabled} aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        <span>{selected.length ? `${selected.length} đã chọn` : "--- Chọn ---"}</span><i>⌄</i>
+      </button>
+      {open && <div className="dynamic-multi-popover"><div className="dynamic-multi">
+          <input type="search" autoFocus placeholder="Tìm kiếm..." value={search} disabled={disabled} onChange={(event) => setSearch(event.target.value)} />
+          <label className="multi-select-all"><input type="checkbox" disabled={disabled || !visible.length}
+            checked={Boolean(visible.length) && visible.every((item) => selected.includes(item))}
+            onChange={(event) => onChange(name, event.target.checked
+              ? [...new Set([...selected, ...visible])]
+              : selected.filter((item) => !visible.includes(item)))} /> Chọn tất cả</label>
+          <div className="dynamic-option-list">{visible.map((option) =>
+            <label key={option}><input type="checkbox" disabled={disabled} checked={selected.includes(option)}
+              onChange={(event) => toggle(option, event.target.checked)} /> <span>{option}</span></label>)}</div>
+        </div></div>}
     </div>;
   }
   return <label>{label}
