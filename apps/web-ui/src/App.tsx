@@ -8,6 +8,8 @@ import type { Acknowledgement, CaptchaChallenge, ConnectionState, Job, Runner, V
 import { api } from "./services/api-client";
 import { uiSocket } from "./services/socket-client";
 
+const ACTIVE_JOB_STORAGE_KEY = "vahanActiveJobId";
+
 export default function App() {
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [runners, setRunners] = useState<Runner[]>([]);
@@ -25,14 +27,37 @@ export default function App() {
     }
   }
 
+  async function subscribeJob(jobId: string) {
+    const acknowledgement = await uiSocket.timeout(5_000).emitWithAck(
+      "ui:subscribe-job", { jobId },
+    ) as Acknowledgement;
+    if (!acknowledgement.ok) throw new Error(acknowledgement.error || "Không subscribe được job.");
+    if (acknowledgement.job) {
+      setJob(acknowledgement.job);
+      if (["COMPLETED", "FAILED", "CANCELLED"].includes(acknowledgement.job.status)) {
+        localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+      }
+    }
+    if (acknowledgement.captcha) setCaptcha({ ...acknowledgement.captcha, invalid: false });
+  }
+
   useEffect(() => {
-    const onConnect = () => { setConnection("connected"); refreshRunners(); };
+    const onConnect = () => {
+      setConnection("connected");
+      refreshRunners();
+      const activeJobId = localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
+      if (activeJobId) subscribeJob(activeJobId).catch((reason) => {
+        setError(reason instanceof Error ? reason.message : "Không thể khôi phục job.");
+      });
+    };
     const onDisconnect = () => setConnection("disconnected");
     const onConnectError = () => setConnection("error");
     const onRunnerChange = () => refreshRunners();
     const onJobStatus = (updated: Job) => {
       setJob(updated);
       if (["COMPLETED", "FAILED", "CANCELLED"].includes(updated.status)) {
+        localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+        setCaptcha(null);
         refreshRunners();
       }
     };
@@ -72,12 +97,8 @@ export default function App() {
     try {
       const created = await api.createJob(runnerId, filters);
       setJob(created);
-      const acknowledgement = await uiSocket.timeout(5_000).emitWithAck(
-        "ui:subscribe-job",
-        { jobId: created.id },
-      ) as Acknowledgement;
-      if (!acknowledgement.ok) throw new Error(acknowledgement.error || "Không subscribe được job.");
-      if (acknowledgement.job) setJob(acknowledgement.job);
+      localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, created.id);
+      await subscribeJob(created.id);
       await refreshRunners();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không tạo được job.");
@@ -108,6 +129,7 @@ export default function App() {
     if (!job) return;
     try {
       setJob(await api.cancelJob(job.id));
+      localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
       setCaptcha(null);
       await refreshRunners();
     } catch (reason) {

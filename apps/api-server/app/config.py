@@ -22,6 +22,7 @@ class Settings:
     )
     socketio_cors_origins: str | tuple[str, ...] = "*"
     runner_token: str = "change-me"
+    runner_disconnect_grace_seconds: float = 30.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -50,6 +51,7 @@ class Settings:
             cors_origins=origins,
             socketio_cors_origins=socketio_origins,
             runner_token=os.getenv("VAHAN_API_RUNNER_TOKEN", "change-me"),
+            runner_disconnect_grace_seconds=float(os.getenv("VAHAN_API_RUNNER_DISCONNECT_GRACE_SECONDS", "30")),
         )
 
 

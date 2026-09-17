@@ -409,13 +409,13 @@ async function resumeServerJobAfterApply() {
     const downloadButton = document.querySelector("#downloadBtn1");
     if (isVisible(downloadButton)) {
       if (activeServerJob.config?.autoExport ?? true) {
-        downloadButton.click();
-        setFloatingStatus("success", "Báo cáo đã sẵn sàng và lệnh tải Excel đã được gửi.");
+        setFloatingStatus("running", "Báo cáo đã sẵn sàng. Đang tải và xác minh file Excel...");
+        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "DOWNLOAD_READY" });
       } else {
         setFloatingStatus("success", "Báo cáo đã sẵn sàng. Bạn có thể tải Excel thủ công.");
+        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "COMPLETED" });
       }
       updateFloatingStep("export", "done");
-      await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "COMPLETED" });
       return;
     }
     await delay(500);
@@ -661,6 +661,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   else if (message?.type === "CAPTURE_CAPTCHA") operation = captureCaptcha().then((captcha) => ({ ok: true, ...captcha }));
   else if (message?.type === "SUBMIT_REMOTE_CAPTCHA") {
     operation = Promise.resolve({ ok: true, ...submitRemoteCaptcha(message.value, message.autoApply) });
+  }
+  else if (message?.type === "CLICK_EXCEL_DOWNLOAD") {
+    const button = document.querySelector("#downloadBtn1");
+    if (!isVisible(button)) operation = Promise.resolve({ ok: false, error: "Excel download button is not visible." });
+    else { button.click(); operation = Promise.resolve({ ok: true }); }
   }
   else if (message?.type === "GET_VAHAN_OPTIONS") operation = Promise.resolve({ ok: true, options: readOptions(message.selectors) });
   else if (message?.type === "GET_STATE_OPTIONS") operation = getStateOptions(message.delhiNcr).then((options) => ({ ok: true, options }));

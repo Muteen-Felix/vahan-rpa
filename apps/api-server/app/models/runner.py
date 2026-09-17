@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class RunnerStatus(StrEnum):
     ONLINE = "ONLINE"
     BUSY = "BUSY"
+    RECONNECTING = "RECONNECTING"
 
 
 class Runner(BaseModel):

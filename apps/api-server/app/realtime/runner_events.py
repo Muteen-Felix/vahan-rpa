@@ -1,11 +1,31 @@
 from __future__ import annotations
 
+import asyncio
 from uuid import UUID
 
 from app.config import settings
-from app.models.job import JobStatus
+from app.models.job import JobStatus, can_transition
 from app.realtime.server import sio
 from app.services import services
+
+
+_disconnect_tasks: dict[str, asyncio.Task] = {}
+
+
+async def _expire_disconnected_runner(runner_id: str, socket_id: str) -> None:
+    try:
+        await asyncio.sleep(settings.runner_disconnect_grace_seconds)
+        runner = await services.runners.remove_by_socket(socket_id)
+        if not runner:
+            return
+        if runner.current_job_id:
+            job = await services.jobs.get(UUID(runner.current_job_id))
+            if job and can_transition(job.status, JobStatus.FAILED):
+                job = await services.jobs.update_status(job.id, JobStatus.FAILED, error="Runner disconnected.")
+                await sio.emit("job:status", job.model_dump(mode="json", by_alias=True), room=f"job:{job.id}", namespace="/ui")
+        await sio.emit("runner:offline", {"runnerId": runner.id}, namespace="/ui")
+    finally:
+        _disconnect_tasks.pop(runner_id, None)
 
 
 def _registration(auth: dict | None) -> tuple[str, str, str | None] | None:
@@ -25,6 +45,9 @@ async def connect(sid: str, _environ: dict, auth: dict | None) -> bool:
     if not registration:
         return False
     runner_id, name, version = registration
+    pending_disconnect = _disconnect_tasks.pop(runner_id, None)
+    if pending_disconnect:
+        pending_disconnect.cancel()
     runner = await services.runners.register(
         runner_id=runner_id,
         name=name,
@@ -42,23 +65,10 @@ async def connect(sid: str, _environ: dict, auth: dict | None) -> bool:
 
 @sio.event(namespace="/runner")
 async def disconnect(sid: str) -> None:
-    runner = await services.runners.remove_by_socket(sid)
+    runner = await services.runners.mark_reconnecting(sid)
     if not runner:
         return
-    if runner.current_job_id:
-        job = await services.jobs.update_status(
-            UUID(runner.current_job_id),
-            JobStatus.FAILED,
-            error="Runner disconnected.",
-        )
-        if job:
-            await sio.emit(
-                "job:status",
-                job.model_dump(mode="json", by_alias=True),
-                room=f"job:{job.id}",
-                namespace="/ui",
-            )
-    await sio.emit("runner:offline", {"runnerId": runner.id}, namespace="/ui")
+    _disconnect_tasks[runner.id] = asyncio.create_task(_expire_disconnected_runner(runner.id, sid))
 
 
 @sio.on("runner:heartbeat", namespace="/runner")
@@ -84,6 +94,8 @@ async def job_status(sid: str, payload: dict) -> dict:
     job = await services.jobs.get(job_id)
     if not job or job.runner_id != runner.id:
         return {"ok": False, "error": "Job does not belong to this runner."}
+    if not can_transition(job.status, status):
+        return {"ok": False, "error": f"Invalid job transition: {job.status} -> {status}."}
     updated = await services.jobs.update_status(
         job_id,
         status,
@@ -119,10 +131,13 @@ async def captcha_required(sid: str, payload: dict) -> dict:
     job = await services.jobs.get(job_id)
     if not job or job.runner_id != runner.id:
         return {"ok": False, "error": "Job does not belong to this runner."}
+    if not can_transition(job.status, JobStatus.WAITING_CAPTCHA):
+        return {"ok": False, "error": "Job cannot request CAPTCHA in its current state."}
     await services.jobs.update_status(
         job_id,
         JobStatus.WAITING_CAPTCHA,
         captcha_id=captcha_id,
+        captcha_image_data_url=image_data_url,
     )
     await sio.emit(
         "captcha:required",
@@ -162,6 +177,7 @@ async def captcha_invalid(sid: str, payload: dict) -> dict:
         job_id,
         JobStatus.WAITING_CAPTCHA,
         captcha_id=captcha_id,
+        captcha_image_data_url=image_data_url,
     )
     await sio.emit(
         "captcha:invalid",
@@ -203,7 +219,10 @@ async def captcha_refreshed(sid: str, payload: dict) -> dict:
         return {"ok": False, "error": "Job does not belong to this runner."}
     if job.status != JobStatus.WAITING_CAPTCHA:
         return {"ok": False, "error": "Job is not waiting for CAPTCHA."}
-    updated = await services.jobs.update_status(job_id, JobStatus.WAITING_CAPTCHA, captcha_id=captcha_id)
+    updated = await services.jobs.update_status(
+        job_id, JobStatus.WAITING_CAPTCHA,
+        captcha_id=captcha_id, captcha_image_data_url=image_data_url,
+    )
     await sio.emit(
         "captcha:refreshed",
         {"jobId": str(job_id), "captchaId": captcha_id, "imageDataUrl": image_data_url},

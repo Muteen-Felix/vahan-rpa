@@ -60,6 +60,22 @@ async function publishCaptcha(jobId, captcha) {
   if (!response?.ok) throw new Error(response?.error || "Could not publish CAPTCHA.");
 }
 
+async function emitWithRetry(event, payload, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      if (!socket?.connected) throw new Error("Backend is disconnected.");
+      const response = await socket.timeout(5_000).emitWithAck(event, payload);
+      if (!response?.ok) throw new Error(response?.error || `${event} was rejected.`);
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await delay(500 * attempt);
+    }
+  }
+  throw lastError;
+}
+
 function assertJobActive(jobId) {
   if (cancelledJobIds.has(jobId)) throw new Error("Job was cancelled.");
 }
@@ -103,6 +119,42 @@ async function sendToVahan(tabId, message) {
       await delay(500);
     }
   }
+}
+
+async function triggerAndWaitForExcelDownload(tabId) {
+  return new Promise((resolve, reject) => {
+    let downloadId;
+    const cleanup = () => {
+      clearTimeout(timer);
+      chrome.downloads.onCreated.removeListener(onCreated);
+      chrome.downloads.onChanged.removeListener(onChanged);
+    };
+    const onCreated = (item) => {
+      if (downloadId !== undefined) return;
+      downloadId = item.id;
+      if (item.state === "complete") { cleanup(); resolve(item); }
+    };
+    const onChanged = (delta) => {
+      if (delta.id !== downloadId || !delta.state) return;
+      if (delta.state.current === "complete") { cleanup(); resolve(delta); }
+      if (delta.state.current === "interrupted") {
+        cleanup();
+        reject(new Error("Excel download was interrupted."));
+      }
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Excel download did not complete within 60 seconds."));
+    }, 60_000);
+    chrome.downloads.onCreated.addListener(onCreated);
+    chrome.downloads.onChanged.addListener(onChanged);
+    sendToVahan(tabId, { type: "CLICK_EXCEL_DOWNLOAD" }).then((response) => {
+      if (!response?.ok) {
+        cleanup();
+        reject(new Error(response?.error || "Could not click the Excel download button."));
+      }
+    }).catch((error) => { cleanup(); reject(error); });
+  });
 }
 
 async function executeJob(job) {
@@ -216,9 +268,18 @@ async function connectRunner() {
     timeout: 10_000,
   });
 
-  socket.on("connect", () => {
+  socket.on("connect", async () => {
     publishConnection("connected", "Đã kết nối backend.");
     startHeartbeat();
+    const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+    if (activeServerJob?.jobId) {
+      activeJobId = activeServerJob.jobId;
+      if (!activeServerJob.stage) {
+        await reportJobStatus(activeJobId, "FAILED", "Extension restarted while preparing the VAHAN job.").catch(() => {});
+        activeJobId = undefined;
+        await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      }
+    }
   });
 
   socket.on("disconnect", (reason) => {
@@ -246,7 +307,7 @@ async function connectRunner() {
     if (activeJobId === id) activeJobId = undefined;
     await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
   });
-  socket.on("captcha:submitted", async (payload) => {
+  socket.on("captcha:submit", async (payload, acknowledge) => {
     const jobId = String(payload?.jobId || "");
     try {
       const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
@@ -272,10 +333,11 @@ async function connectRunner() {
       });
       if (!response?.ok) throw new Error(response?.error || "Could not fill the CAPTCHA on VAHAN.");
       await reportJobStatus(jobId, "WAITING_RESULT");
+      acknowledge({ ok: true });
     } catch (error) {
-      await reportJobStatus(jobId, "FAILED", error.message).catch(() => {});
       if (activeJobId === jobId) activeJobId = undefined;
       await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      acknowledge({ ok: false, error: error.message });
     }
   });
   socket.on("runner:options", async (request, acknowledge) => {
@@ -316,15 +378,26 @@ async function handlePageResult(message, sender) {
     }
     const captcha = message.captcha;
     if (!captcha?.captchaId || !captcha?.imageDataUrl) return;
-    await chrome.storage.local.set({
-      activeServerJob: { ...activeServerJob, captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA" },
-    });
-    const response = await socket.timeout(5_000).emitWithAck("captcha:invalid", {
+    await emitWithRetry("captcha:invalid", {
       jobId,
       captchaId: captcha.captchaId,
       imageDataUrl: captcha.imageDataUrl,
     });
-    if (!response?.ok) throw new Error(response?.error || "Could not publish the refreshed CAPTCHA.");
+    await chrome.storage.local.set({
+      activeServerJob: { ...activeServerJob, captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA" },
+    });
+    return;
+  }
+
+  if (message.result === "DOWNLOAD_READY") {
+    try {
+      await triggerAndWaitForExcelDownload(activeServerJob.tabId);
+      await reportJobStatus(jobId, "COMPLETED");
+    } catch (error) {
+      await reportJobStatus(jobId, "FAILED", error.message).catch(() => {});
+    }
+    activeJobId = undefined;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
     return;
   }
 
@@ -348,12 +421,11 @@ async function handleCaptchaChanged(message, sender) {
   if (sender.tab?.id !== activeServerJob.tabId) return;
   const captcha = message.captcha;
   if (!captcha?.captchaId || !captcha?.imageDataUrl || captcha.captchaId === activeServerJob.captchaId) return;
-  const response = await socket.timeout(5_000).emitWithAck("captcha:refreshed", {
+  await emitWithRetry("captcha:refreshed", {
     jobId: activeServerJob.jobId,
     captchaId: captcha.captchaId,
     imageDataUrl: captcha.imageDataUrl,
   });
-  if (!response?.ok) throw new Error(response?.error || "Could not publish refreshed CAPTCHA.");
   await chrome.storage.local.set({
     activeServerJob: { ...activeServerJob, captchaId: captcha.captchaId },
   });

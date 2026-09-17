@@ -60,9 +60,10 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
     async def on_captcha(_payload: dict) -> None:
         captcha_visible.set()
 
-    @runner.on("captcha:submitted", namespace="/runner")
+    @runner.on("captcha:submit", namespace="/runner")
     async def on_captcha_submitted(_payload: dict) -> None:
         captcha_forwarded.set()
+        return {"ok": True}
 
     @runner.on("runner:options", namespace="/runner")
     async def on_runner_options(payload: dict) -> dict:
@@ -124,6 +125,13 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         )
         assert subscription["ok"] is True
 
+        for status in ("OPENING_VAHAN", "FILLING_FILTERS"):
+            acknowledgement = await runner.call(
+                "job:status", {"jobId": job_id, "status": status},
+                namespace="/runner", timeout=2,
+            )
+            assert acknowledgement["ok"] is True
+
         captcha_id = "captcha-sequence-1"
         acknowledgement = await runner.call(
             "captcha:required",
@@ -152,6 +160,12 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         assert acknowledgement["ok"] is True
         await asyncio.wait_for(captcha_refreshed_visible.wait(), timeout=2)
 
+        recovered = await ui.call(
+            "ui:subscribe-job", {"jobId": job_id}, namespace="/ui", timeout=2,
+        )
+        assert recovered["captcha"]["captchaId"] == captcha_id
+        assert recovered["captcha"]["imageDataUrl"].startswith("data:image/")
+
         acknowledgement = await ui.call(
             "captcha:submitted",
             {
@@ -177,6 +191,17 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         )
         assert acknowledgement["ok"] is True
         await asyncio.wait_for(captcha_invalid_visible.wait(), timeout=2)
+
+        async def reject_captcha(_payload: dict) -> dict:
+            return {"ok": False, "error": "VAHAN tab was closed."}
+
+        runner.on("captcha:submit", handler=reject_captcha, namespace="/runner")
+        rejected = await ui.call(
+            "captcha:submitted",
+            {"jobId": job_id, "captchaId": "captcha-sequence-2", "value": "Z9Y8X7"},
+            namespace="/ui", timeout=2,
+        )
+        assert rejected == {"ok": False, "error": "VAHAN tab was closed."}
     finally:
         if ui.connected:
             await ui.disconnect()

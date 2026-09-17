@@ -28,8 +28,19 @@ class InMemoryRunnerRegistry:
             previous = self._runners.get(runner_id)
             if previous:
                 self._socket_to_runner.pop(previous.socket_id, None)
+                runner.current_job_id = previous.current_job_id
+                runner.status = RunnerStatus.BUSY if previous.current_job_id else RunnerStatus.ONLINE
             self._runners[runner_id] = runner
             self._socket_to_runner[socket_id] = runner_id
+            return runner.model_copy(deep=True)
+
+    async def mark_reconnecting(self, socket_id: str) -> Runner | None:
+        async with self._lock:
+            runner_id = self._socket_to_runner.get(socket_id)
+            runner = self._runners.get(runner_id) if runner_id else None
+            if not runner or runner.socket_id != socket_id:
+                return None
+            runner.status = RunnerStatus.RECONNECTING
             return runner.model_copy(deep=True)
 
     async def heartbeat(self, runner_id: str) -> Runner | None:

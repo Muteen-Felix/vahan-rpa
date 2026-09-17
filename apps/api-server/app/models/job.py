@@ -26,6 +26,24 @@ class JobStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+ALLOWED_JOB_TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
+    JobStatus.QUEUED: {JobStatus.ASSIGNED, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.ASSIGNED: {JobStatus.OPENING_VAHAN, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.OPENING_VAHAN: {JobStatus.FILLING_FILTERS, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.FILLING_FILTERS: {JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.WAITING_CAPTCHA: {JobStatus.SUBMITTING, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.SUBMITTING: {JobStatus.WAITING_RESULT, JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.WAITING_RESULT: {JobStatus.WAITING_CAPTCHA, JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.COMPLETED: set(),
+    JobStatus.FAILED: set(),
+    JobStatus.CANCELLED: set(),
+}
+
+
+def can_transition(current: JobStatus, target: JobStatus) -> bool:
+    return current == target or target in ALLOWED_JOB_TRANSITIONS[current]
+
+
 class CreateJobRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -41,6 +59,7 @@ class Job(BaseModel):
     status: JobStatus = JobStatus.QUEUED
     filters: VahanFilters
     captcha_id: str | None = Field(default=None, alias="captchaId")
+    captcha_image_data_url: str | None = Field(default=None, alias="captchaImageDataUrl", exclude=True)
     error: str | None = None
     created_at: datetime = Field(default_factory=utc_now, alias="createdAt")
     updated_at: datetime = Field(default_factory=utc_now, alias="updatedAt")

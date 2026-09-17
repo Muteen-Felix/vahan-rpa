@@ -26,6 +26,7 @@ class InMemoryJobRepository:
         *,
         error: str | None = None,
         captcha_id: str | None = None,
+        captcha_image_data_url: str | None = None,
     ) -> Job | None:
         async with self._lock:
             job = self._jobs.get(job_id)
@@ -35,6 +36,8 @@ class InMemoryJobRepository:
             job.error = error
             if captcha_id is not None:
                 job.captcha_id = captcha_id
+            if captcha_image_data_url is not None:
+                job.captcha_image_data_url = captcha_image_data_url
             job.touch()
             return job.model_copy(deep=True)
 

@@ -1,6 +1,6 @@
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 
-export type RunnerStatus = "ONLINE" | "BUSY";
+export type RunnerStatus = "ONLINE" | "BUSY" | "RECONNECTING";
 
 export interface Runner {
   id: string;
@@ -76,4 +76,5 @@ export interface Acknowledgement {
   ok: boolean;
   error?: string;
   job?: Job;
+  captcha?: CaptchaChallenge;
 }

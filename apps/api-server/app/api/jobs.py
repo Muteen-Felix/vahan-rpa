@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
 from app.models.job import CreateJobRequest, Job, JobStatus
+from app.models.runner import RunnerStatus
 from app.realtime.server import sio
 from app.services import services
 
@@ -19,6 +20,8 @@ async def create_job(command: CreateJobRequest) -> Job:
     runner = await services.runners.get(command.runner_id)
     if not runner:
         raise HTTPException(status_code=404, detail="Runner is offline or does not exist.")
+    if runner.status == RunnerStatus.RECONNECTING:
+        raise HTTPException(status_code=409, detail="Runner is reconnecting.")
     if runner.current_job_id:
         raise HTTPException(status_code=409, detail="Runner is already processing another job.")
 

@@ -1,6 +1,8 @@
 from uuid import UUID
 
-from app.models.job import JobStatus
+from socketio.exceptions import TimeoutError as SocketIOTimeoutError
+
+from app.models.job import JobStatus, can_transition
 from app.realtime.server import sio
 from app.services import services
 
@@ -21,10 +23,17 @@ async def subscribe_job(sid: str, payload: dict) -> dict:
     if not job:
         return {"ok": False, "error": "Job not found."}
     await sio.enter_room(sid, f"job:{job_id}", namespace="/ui")
-    return {
+    response = {
         "ok": True,
         "job": job.model_dump(mode="json", by_alias=True),
     }
+    if job.status == JobStatus.WAITING_CAPTCHA and job.captcha_id and job.captcha_image_data_url:
+        response["captcha"] = {
+            "jobId": str(job.id),
+            "captchaId": job.captcha_id,
+            "imageDataUrl": job.captcha_image_data_url,
+        }
+    return response
 
 
 @sio.on("ui:runner-options", namespace="/ui")
@@ -49,7 +58,7 @@ async def runner_options(_sid: str, payload: dict) -> dict:
             namespace="/runner",
             timeout=20,
         )
-    except TimeoutError:
+    except SocketIOTimeoutError:
         return {"ok": False, "error": "Runner did not return VAHAN options in time."}
 
 
@@ -71,22 +80,33 @@ async def submit_captcha(_sid: str, payload: dict) -> dict:
         return {"ok": False, "error": "Job is not waiting for CAPTCHA."}
     if job.captcha_id != captcha_id:
         return {"ok": False, "error": "CAPTCHA has changed or expired."}
+    if not can_transition(job.status, JobStatus.SUBMITTING):
+        return {"ok": False, "error": "Job cannot submit CAPTCHA in its current state."}
+
+    runner = await services.runners.get(job.runner_id)
+    if not runner:
+        return {"ok": False, "error": "Runner is offline."}
 
     updated = await services.jobs.update_status(job_id, JobStatus.SUBMITTING)
-    await sio.emit(
-        "captcha:submitted",
-        {
+    await sio.emit("job:status", updated.model_dump(mode="json", by_alias=True), room=f"job:{job_id}", namespace="/ui")
+    try:
+        acknowledgement = await sio.call(
+            "captcha:submit",
+            {
             "jobId": str(job_id),
             "captchaId": captcha_id,
             "value": value,
-        },
-        room=f"runner:{job.runner_id}",
-        namespace="/runner",
-    )
-    await sio.emit(
-        "job:status",
-        updated.model_dump(mode="json", by_alias=True),
-        room=f"job:{job_id}",
-        namespace="/ui",
-    )
+            },
+            to=runner.socket_id,
+            namespace="/runner",
+            timeout=15,
+        )
+    except SocketIOTimeoutError:
+        acknowledgement = {"ok": False, "error": "Runner did not acknowledge CAPTCHA submission."}
+    if not acknowledgement or not acknowledgement.get("ok"):
+        error = (acknowledgement or {}).get("error", "Runner rejected CAPTCHA submission.")
+        failed = await services.jobs.update_status(job_id, JobStatus.FAILED, error=error)
+        await services.runners.set_job(job.runner_id, None)
+        await sio.emit("job:status", failed.model_dump(mode="json", by_alias=True), room=f"job:{job_id}", namespace="/ui")
+        return {"ok": False, "error": error}
     return {"ok": True}
