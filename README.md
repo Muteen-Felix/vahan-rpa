@@ -167,8 +167,9 @@ lần kiểm tra. Khi bấm **Lưu lịch kiểm tra**, backend lưu cấu hình
 extension đang kết nối để đặt lại `chrome.alarm`. Health-check định kỳ và nút
 **Kiểm tra ngay** chỉ kiểm tra tab VAHAN chính thức đang mở đúng URL
 `https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`.
-Extension không tự mở tab; nếu chưa mở đúng trang hoặc URL thay đổi sau khi tải,
-lượt kiểm tra ghi `CHECK_ERROR` kèm URL thực tế để Dev biết nguyên nhân.
+Extension không tự mở tab và không bị ảnh hưởng khi Web UI đang là tab active; nếu
+chưa mở đúng trang hoặc URL thay đổi sau khi tải, lượt kiểm tra ghi `CHECK_ERROR`
+kèm URL thực tế để Dev biết nguyên nhân.
 
 Extension gửi kết quả PASS, DATA_CHANGED hoặc lỗi giao diện về backend; backend
 ghi CSV để xem theo ngày và tải lại từ Web UI.

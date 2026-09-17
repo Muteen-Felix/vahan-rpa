@@ -13,10 +13,11 @@ thức.
 
 - Trang chính thức mà health-check production phải xác minh là
   `https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`.
-- Lịch `alarm` tìm tab chính thức đã mở sẵn. Riêng nút **Kiểm tra ngay** chỉ
-  kiểm tra tab chính thức đang hiển thị ở cửa sổ hiện tại.
-- Manual check không fallback sang tab nền, không tự mở tab và không lấy clone
-  local làm tab production.
+- Lịch `alarm` và nút **Kiểm tra ngay** đều tìm một tab chính thức đã mở sẵn,
+  đúng URL. Web UI có thể là tab active; extension vẫn không kiểm tra nhầm tab
+  Web UI.
+- Health-check production không tự mở tab và không lấy clone local làm tab
+  production.
 - `runOnTab(tabId)` là API debug chỉ gọi thủ công trong DevTools. API này cho
   phép kiểm tra clone local tại cổng `8765` hoặc `5500` và ghi log với
   `trigger=devtools`.
@@ -385,6 +386,87 @@ Kết quả mong đợi là `PASS`. Ca này xác nhận health-check hiện tạ
 contract và dữ liệu option, không phải visual regression pixel. Nếu cần test
 pixel/ảnh, phải bổ sung công cụ visual diff riêng.
 
+### 6.8. Case runner có log cấu trúc trong DevTools
+
+Fixture local có một registry case để không phải tự nhớ từng mutation. Chỉ dùng
+trên clone với `dev=1`, không chạy trên tab VAHAN chính thức:
+
+```text
+http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline&dev=1
+```
+
+Trong Console của tab clone:
+
+```js
+console.table(vahanFixture.listDevCases());
+const mutationLog = vahanFixture.runDevCase("duplicate-fuel-search");
+console.table([mutationLog]);
+```
+
+Mỗi lần chạy tạo một log dạng:
+
+```text
+[FIXTURE DEV][CASE duplicate-fuel-search] duplicate Fuel multiselect search input -> expected UI_DRIFT/UI_DRIFT_SEARCH_INPUT
+```
+
+Object trả về cũng có `caseId`, `expectedStatus`, `expectedCode`, `mutation`,
+`selector`, `countAfter`, `applied` và `timestamp`. Bảng **Dev UI Drift Fixture**
+trên trang `dev=1` gọi cùng registry này; nút **Khôi phục** reload baseline.
+
+Sau mutation, chạy health-check thật từ Service Worker Console để ghi log về hệ
+thống chính:
+
+```js
+async function runFixtureDevCase(caseId) {
+  const tabs = await chrome.tabs.query({});
+  const tab = tabs.find((item) =>
+    Number.isInteger(item.id) &&
+    /^http:\/\/(127\.0\.0\.1|localhost):(8765|5500)\/analytics\/vahanpublicreport/.test(item.url || ""),
+  );
+  if (!tab?.id) throw new Error("Chưa mở fixture clone tại cổng 8765 hoặc 5500.");
+  const result = await vahanUiHealthDebug.runOnTab(tab.id);
+  console.group(`[VAHAN UI HEALTH][${caseId}]`);
+  console.table({
+    caseId,
+    status: result.status,
+    code: result.report?.code || "",
+    target: result.report?.target || "",
+    expected: result.report?.expected || "",
+    actual: result.report?.actual || "",
+    backendOk: result.backendLog?.ok,
+    queued: result.backendLog?.queued,
+  });
+  console.log(result);
+  console.groupEnd();
+  return result;
+}
+
+await runFixtureDevCase("duplicate-fuel-search");
+```
+
+Các case bổ sung đã có sẵn trong fixture:
+
+| Case | Mutation mô phỏng | Kết quả cần thấy trong log chính |
+| --- | --- | --- |
+| `missing-category` | Xóa `#vehicleCategoryGroup` | `UI_DRIFT_REQUIRED_CONTROL`, selector `#vehicleCategoryGroup` |
+| `duplicate-category` | Nhân đôi Category cùng `id` | `UI_DRIFT_REQUIRED_CONTROL`, `count=2` |
+| `duplicate-fuel` | Nhân đôi Fuel cùng `id` | `UI_DRIFT_REQUIRED_CONTROL`, `count=2` |
+| `empty-fuel` | Xóa toàn bộ option Fuel | `UI_DRIFT_EMPTY_OPTIONS` |
+| `wrong-fuel-type` | Xóa thuộc tính `multiple` của Fuel | `UI_DRIFT_CONTROL_TYPE` |
+| `missing-yaxis` / `missing-xaxis` | Xóa một trục báo cáo | `UI_DRIFT_REQUIRED_CONTROL` |
+| `missing-captcha` / `missing-apply` / `missing-form` | Xóa control flow bắt buộc | `UI_DRIFT_REQUIRED_CONTROL` |
+| `missing-fuel-wrapper` | Xóa wrapper multiselect Fuel | `UI_DRIFT_MULTISELECT_WRAPPER`, `wrapperCount=0` |
+| `missing-fuel-search` / `duplicate-fuel-search` | Xóa hoặc nhân đôi ô search | `UI_DRIFT_SEARCH_INPUT`, `count=0/2` |
+| `missing-fuel-all` / `duplicate-fuel-all` | Xóa hoặc nhân đôi checkbox All | `UI_DRIFT_ALL_OPTION_NOT_FOUND`, `count=0/2` |
+| `data-changed-fuel` | Thay bằng dataset option test | `DATA_CHANGED`, `UI_DRIFT_OPTION_DATA_CHANGED` |
+| `visual-only` | Chỉ đổi CSS class | `PASS` |
+
+Với `data-changed-fuel`, phải chạy một lần baseline trước, sau đó reload
+baseline, chạy mutation và gọi `runFixtureDevCase`. Row backend/CSV phải giữ
+`status`, `error_code`, `selector`, `expected`, `actual` và
+`diagnostic_details`; nếu backend tắt thì `backendOk=false`, `queued=true` và
+log sẽ được gửi bù khi backend hoạt động lại.
+
 ## 7. Test URL, tab và content script
 
 ### 7.1. Sai trang ở content layer
@@ -456,8 +538,8 @@ Mở một tab chính thức rồi điều hướng sang path khác, ví dụ
 `CHECK_ERROR`; extension không được dùng tab sai path làm kết quả hợp lệ.
 
 Nếu có một tab official hợp lệ ở nền nhưng tab đang hiển thị là Web UI hoặc một
-trang khác, manual check vẫn phải trả `CHECK_ERROR` và `page_url` phải là URL
-tab đang hiển thị. Điều này xác nhận nút không kiểm tra nhầm một tab ẩn.
+trang khác, manual check vẫn phải kiểm tra tab official đó và trả `PASS` (hoặc
+diagnostic DOM tương ứng). `page_url` phải là URL official, không phải URL Web UI.
 
 ### 7.3. URL clone không hợp lệ
 

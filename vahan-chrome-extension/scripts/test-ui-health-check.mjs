@@ -42,6 +42,7 @@ function createHarness(
     removedTabs: [],
     downloads: [],
     healthLogs: [],
+    healthMessages: [],
   };
   let nextResponse = 0;
   const tabsOnUpdated = createEvent();
@@ -106,7 +107,8 @@ function createHarness(
         async get(tabId) {
           return { id: tabId, status: "complete", url: tabUrl };
         },
-        async sendMessage() {
+        async sendMessage(tabId, message) {
+          calls.healthMessages.push({ tabId, message });
           return responses[nextResponse++];
         },
         async remove(tabId) {
@@ -345,24 +347,27 @@ async function run() {
   assert.match(scheduledWithoutOfficial.error, /Không có tab VAHAN chính thức/);
   assert.equal(noOfficialHarness.calls.healthLogs.length, 2);
 
-  const backgroundOfficialHarness = createHarness([], {
+  const backgroundOfficialHarness = createHarness([
+    { ok: true, contract: contract("background-official") },
+  ], {
     officialTabs: [{ id: 1, status: "complete", url: UI_HEALTH_OFFICIAL_URL, active: false }],
     activeTabs: [{ id: 9, status: "complete", url: "http://127.0.0.1:5173/#configure", active: true }],
-    tabUrl: "http://127.0.0.1:5173/#configure",
+    tabUrl: UI_HEALTH_OFFICIAL_URL,
   });
   backgroundOfficialHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
-  const activeOnlyController = createUiHealthCheckController(backgroundOfficialHarness.chrome, {
+  const officialTabController = createUiHealthCheckController(backgroundOfficialHarness.chrome, {
     retryDelayMs: 1,
     fetch: backgroundOfficialHarness.chrome.fetch,
   });
-  const backgroundManual = await activeOnlyController.run("manual-web");
-  assert.equal(backgroundManual.status, "CHECK_ERROR");
-  assert.match(backgroundManual.error, /Tab đang hiển thị hiện tại/);
-  assert.equal(backgroundManual.pageUrl, "http://127.0.0.1:5173/#configure");
+  const backgroundManual = await officialTabController.run("manual-web");
+  assert.equal(backgroundManual.status, "PASS");
+  assert.equal(backgroundManual.pageUrl, UI_HEALTH_OFFICIAL_URL);
+  assert.equal(backgroundOfficialHarness.calls.healthMessages[0].tabId, 1);
+  assert.equal(backgroundOfficialHarness.calls.healthMessages[0].message.requireOfficial, true);
   assert.deepEqual(backgroundOfficialHarness.calls.createdTabs, []);
   assert.equal(backgroundOfficialHarness.calls.healthLogs.length, 1);
 
-  console.log("SCHEDULED HEALTH PASS official_tab_verified=True exact_url_guard=True no_official_tab_logged=True data_change_detected=True backend_csv=True offline_queue=True");
+  console.log("SCHEDULED HEALTH PASS official_tab_verified=True manual_web_prefers_official_tab=True exact_url_guard=True no_official_tab_logged=True data_change_detected=True backend_csv=True offline_queue=True");
 }
 
 run().catch((error) => {

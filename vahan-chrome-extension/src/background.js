@@ -320,7 +320,7 @@ async function connectRunner() {
   socket.on("ui-health:run-now", (request = {}) => {
     uiHealthCheckController?.run("manual-web").then((healthCheck) => {
       console.info(
-        "[VAHAN UI HEALTH] Kiểm tra tab VAHAN đang hiển thị tức thời hoàn tất:",
+        "[VAHAN UI HEALTH] Kiểm tra tab VAHAN chính thức tức thời hoàn tất:",
         request.requestId || "unknown-request",
         healthCheck.status,
       );

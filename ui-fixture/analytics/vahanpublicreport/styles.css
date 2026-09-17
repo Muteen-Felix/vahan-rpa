@@ -307,7 +307,9 @@ select[multiple] { display: none; visibility: hidden; }
 /* Developer-only fixture panel; it is hidden in the default visual clone. */
 #fixture-dev-console { position: fixed; left: 18px; bottom: 18px; z-index: 9999998; width: 280px; padding: 12px; border: 1px solid #2c5282; border-radius: 8px; background: rgba(255,255,255,.97); box-shadow: 0 5px 20px rgba(0,0,0,.2); font: 12px/1.35 Arial, sans-serif; }
 #fixture-dev-console h2 { margin: 0 0 8px; color: #1e3c72; font-size: 13px; }
-#fixture-dev-console .dev-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#fixture-dev-console .dev-help { margin: 6px 0 8px; color: #586069; font-size: 10px; }
+#fixture-dev-console .dev-help code { color: #1e3c72; }
+#fixture-dev-console .dev-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 230px; overflow-y: auto; }
 #fixture-dev-console button { border: 1px solid #b8c6d6; border-radius: 4px; background: #f5f9fd; color: #1e3c72; padding: 6px; cursor: pointer; font-size: 11px; }
 #fixture-dev-console button:hover { background: #e4f0fb; }
 #fixture-dev-log { margin-top: 8px; max-height: 95px; overflow: auto; color: #586069; white-space: pre-wrap; }

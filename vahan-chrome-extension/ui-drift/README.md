@@ -44,12 +44,11 @@ MVP và phát sự kiện `ui-health:schedule-updated` qua namespace `/runner`; 
 alarm hiện tại hoặc dùng mặc định 3 ngày cho lần cài mới.
 
 Nút **Kiểm tra ngay** trên Web UI gọi `POST /api/ui-health/run-now`. Backend chọn
-một runner đang kết nối và phát `ui-health:run-now`; extension chỉ chạy trên tab
-VAHAN chính thức đang hiển thị ở cửa sổ hiện tại, đúng URL và có content script
-phản hồi. Manual check không fallback sang tab nền và không tự mở tab. Nếu tab
-đang hiển thị không phải trang official hoặc tab đổi URL, lần chạy được ghi là
-`CHECK_ERROR`. Lịch alarm không có thao tác người dùng nên vẫn có thể chọn một
-tab official khác đã mở.
+một runner đang kết nối và phát `ui-health:run-now`; extension tìm một tab VAHAN
+chính thức đã mở đúng URL và có content script phản hồi. Việc Web UI đang là tab
+active không làm health-check kiểm tra nhầm Web UI; extension không tự mở tab và
+không dùng clone local cho production. Nếu chưa có tab official, hoặc tab đổi URL
+trước khi kiểm tra, lần chạy được ghi là `CHECK_ERROR` kèm URL thực tế nếu có.
 
 Web UI gọi `GET /api/ui-health/reports?date=YYYY-MM-DD` để xem các bản ghi của
 một ngày và dùng `GET /api/ui-health/reports/{fileName}/download` để tải đúng

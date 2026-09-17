@@ -32,11 +32,24 @@ Mở trang baseline:
 
 `http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline`
 
-Để bật bảng điều khiển dành cho developer, thêm `&dev=1`. Bảng này cho phép
-xóa hoặc đổi ID `#vehicleFuel`, xóa option `Two Wheeler` hoặc tạo duplicate
-dropdown ngay trong lúc trang đang mở. Có thể đổi `reportType`, chọn Delhi trong State để
+Để bật bảng điều khiển dành cho developer, thêm `&dev=1`. Bảng này có các nút
+mutation và ghi log có cấu trúc vào DevTools Console. Mỗi log có `caseId`,
+`expectedStatus`, `expectedCode`, `mutation`, selector, số lượng control sau
+mutation và `timestamp`. Có thể đổi `reportType`, chọn Delhi trong State để
 kiểm tra 23 RTO Delhi, chọn Financial Year/1 Month Flexible và thử từng Y/X-Axis
 branch trực tiếp trên fixture.
+
+Trong Console của tab clone, có thể xem và chạy toàn bộ case:
+
+```js
+console.table(vahanFixture.listDevCases());
+vahanFixture.runDevCase("duplicate-fuel-search");
+```
+
+Sau đó mở Service Worker Console và gọi
+`vahanUiHealthDebug.runOnTab(tabId)`. Extension sẽ đọc DOM sau mutation, tạo
+`UI_DRIFT`/`DATA_CHANGED` hoặc `PASS`, rồi gửi row cùng diagnostic về Web UI và
+CSV backend. Dùng nút **Khôi phục** hoặc reload baseline trước mỗi case.
 
 ## Các kịch bản UI drift
 
@@ -51,6 +64,15 @@ Thay `ui=baseline` bằng một trong các giá trị sau:
 - `wrong-wrapper`: có hai wrapper Fuel.
 - `moved-wrapper`: wrapper Fuel ra ngoài field group.
 - `missing-apply`: mất nút Apply.
+- `missing-category`, `duplicate-category`: thiếu hoặc trùng Category.
+- `duplicate-fuel`, `empty-fuel`, `wrong-fuel-type`: trùng, rỗng hoặc sai kiểu Fuel.
+- `missing-yaxis`, `missing-xaxis`, `missing-captcha`, `missing-form`: thiếu
+  control bắt buộc khác.
+- `missing-fuel-wrapper`, `missing-fuel-search`, `duplicate-fuel-search`:
+  phá wrapper hoặc ô search của multiselect.
+- `missing-fuel-all`, `duplicate-fuel-all`: phá checkbox All của multiselect.
+- `data-changed-fuel`: thay dataset Fuel; cần chạy baseline trước để nhận
+  `DATA_CHANGED`.
 - `visual-only`: chỉ đổi màu giao diện; contract vẫn hợp lệ.
 
 Khi contract bị phá, Extension phải báo lỗi ở hai kênh:

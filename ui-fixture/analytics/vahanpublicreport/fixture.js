@@ -44,6 +44,7 @@
     ["vehicleOwnerType", "Owner Type"],
   ];
   const widgetRegistry = new Map();
+  const caseLogBuffer = [];
 
   const log = (message) => {
     const line = `[FIXTURE DEV] ${message}`;
@@ -56,6 +57,305 @@
     String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
 
   const get = (id) => document.getElementById(id);
+
+  function emitCaseLog(caseId, expectedStatus, expectedCode, mutation, details = {}) {
+    const entry = {
+      source: "vahan-fixture-devtools",
+      caseId,
+      expectedStatus,
+      expectedCode: expectedCode || null,
+      mutation,
+      ...details,
+      timestamp: new Date().toISOString(),
+    };
+    caseLogBuffer.unshift(entry);
+    const expected = expectedCode
+      ? `${expectedStatus}/${expectedCode}`
+      : expectedStatus;
+    const line = `[FIXTURE DEV][CASE ${caseId}] ${mutation} -> expected ${expected}`;
+    console.warn(line, entry);
+    const target = document.getElementById("fixture-dev-log");
+    if (target) target.textContent = `${line}\n${target.textContent}`.trim();
+    return entry;
+  }
+
+  function removeElement(selector) {
+    const element = document.querySelector(selector);
+    if (!element) return { applied: false, selector, countAfter: 0 };
+    element.remove();
+    return { applied: true, selector, countAfter: document.querySelectorAll(selector).length };
+  }
+
+  function duplicateElement(selector) {
+    const element = document.querySelector(selector);
+    if (!element?.parentElement) return { applied: false, selector, countAfter: 0 };
+    element.parentElement.appendChild(element.cloneNode(true));
+    return {
+      applied: true,
+      selector,
+      countAfter: document.querySelectorAll(selector).length,
+    };
+  }
+
+  function removeAttribute(selector, attribute) {
+    const element = document.querySelector(selector);
+    if (!element) return { applied: false, selector, attribute };
+    element.removeAttribute(attribute);
+    return { applied: true, selector, attribute };
+  }
+
+  function replaceWithTestOptions(selector, options) {
+    const select = document.querySelector(selector);
+    if (!select) return { applied: false, selector, optionCount: 0 };
+    select.replaceChildren(...options.map(({ label, value }) => new Option(label, value)));
+    return { applied: true, selector, optionCount: select.options.length };
+  }
+
+  function removeOptionCase(selector, expectedLabel) {
+    const select = document.querySelector(selector);
+    const option = Array.from(select?.options || []).find((candidate) =>
+      normalize(candidate.getAttribute("label") || candidate.textContent) === normalize(expectedLabel)
+    );
+    if (!option) return { applied: false, selector, expectedLabel, optionCount: select?.options.length || 0 };
+    option.remove();
+    return {
+      applied: true,
+      selector,
+      expectedLabel,
+      optionCount: select.options.length,
+    };
+  }
+
+  const DEV_RUNTIME_CASES = Object.freeze({
+    "missing-fuel": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "remove #vehicleFuel",
+      apply: () => removeElement("#vehicleFuel"),
+    },
+    "renamed-fuel": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "change id #vehicleFuel -> #vehicleFuelRenamed",
+      apply: () => {
+        const fuel = document.querySelector("#vehicleFuel");
+        if (!fuel) return { applied: false, selector: "#vehicleFuel", countAfter: 0 };
+        fuel.id = "vehicleFuelRenamed";
+        document.querySelector('label[for="vehicleFuel"]')?.setAttribute(
+          "for",
+          "vehicleFuelRenamed",
+        );
+        return {
+          applied: true,
+          selector: "#vehicleFuel",
+          countAfter: 0,
+          renamedTo: "#vehicleFuelRenamed",
+        };
+      },
+    },
+    "missing-category": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "remove #vehicleCategoryGroup",
+      apply: () => removeElement("#vehicleCategoryGroup"),
+    },
+    "duplicate-category": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "clone #vehicleCategoryGroup with the same id",
+      apply: () => duplicateElement("#vehicleCategoryGroup"),
+    },
+    "duplicate-fuel": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "clone #vehicleFuel with the same id",
+      apply: () => duplicateElement("#vehicleFuel"),
+    },
+    "empty-fuel": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_EMPTY_OPTIONS",
+      mutation: "remove every option from #vehicleFuel",
+      apply: () => replaceWithTestOptions("#vehicleFuel", []),
+    },
+    "wrong-type": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_CONTROL_TYPE",
+      mutation: "remove multiple from #vehicleCategoryGroup",
+      apply: () => removeAttribute("#vehicleCategoryGroup", "multiple"),
+    },
+    "wrong-fuel-type": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_CONTROL_TYPE",
+      mutation: "remove multiple from #vehicleFuel",
+      apply: () => removeAttribute("#vehicleFuel", "multiple"),
+    },
+    "wrong-label": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_OPTION",
+      mutation: "remove option Two Wheeler from #vehicleCategoryGroup",
+      apply: () => removeOptionCase("#vehicleCategoryGroup", "Two Wheeler"),
+    },
+    "missing-yaxis-option": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_OPTION",
+      mutation: "remove option Fuel from #yAxis",
+      apply: () => removeOptionCase("#yAxis", "Fuel"),
+    },
+    "missing-yaxis": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "remove #yAxis",
+      apply: () => removeElement("#yAxis"),
+    },
+    "missing-xaxis": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "remove #xAxis",
+      apply: () => removeElement("#xAxis"),
+    },
+    "missing-captcha": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "remove #externalCaptcha",
+      apply: () => removeElement("#externalCaptcha"),
+    },
+    "missing-apply": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "remove #applyTrigger",
+      apply: () => removeElement("#applyTrigger"),
+    },
+    "missing-form": {
+      phase: "structural",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_REQUIRED_CONTROL",
+      mutation: "remove #vahanPublicForm",
+      apply: () => removeElement("#vahanPublicForm"),
+    },
+    "data-changed-fuel": {
+      phase: "structural",
+      expectedStatus: "DATA_CHANGED",
+      expectedCode: "UI_DRIFT_OPTION_DATA_CHANGED",
+      mutation: "replace #vehicleFuel options with a test dataset",
+      apply: () => replaceWithTestOptions("#vehicleFuel", [
+        { label: "DevTools Fuel", value: "devtools-fuel" },
+        { label: "DevTools Hybrid", value: "devtools-hybrid" },
+      ]),
+    },
+    "visual-only": {
+      phase: "structural",
+      expectedStatus: "PASS",
+      expectedCode: "",
+      mutation: "change CSS class only; keep DOM contract unchanged",
+      apply: () => {
+        document.body.classList.add("fixture-visual-only-change");
+        return { applied: true };
+      },
+    },
+    "missing-fuel-wrapper": {
+      phase: "post-widget",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_MULTISELECT_WRAPPER",
+      mutation: "remove Fuel multiselect wrapper",
+      apply: () => removeElement('[data-for-select="vehicleFuel"]'),
+    },
+    "wrong-wrapper": {
+      phase: "post-widget",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_MULTISELECT_WRAPPER",
+      mutation: "duplicate Fuel multiselect wrapper",
+      apply: () => duplicateElement('[data-for-select="vehicleFuel"]'),
+    },
+    "moved-wrapper": {
+      phase: "post-widget",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_MULTISELECT_WRAPPER",
+      mutation: "move Fuel multiselect wrapper outside its form-group",
+      apply: () => {
+        const wrapper = document.querySelector('[data-for-select="vehicleFuel"]');
+        const destination = document.querySelector(".filters-body");
+        if (!wrapper || !destination) return { applied: false };
+        destination.appendChild(wrapper);
+        return { applied: true, selector: '[data-for-select="vehicleFuel"]' };
+      },
+    },
+    "missing-fuel-search": {
+      phase: "post-widget",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_SEARCH_INPUT",
+      mutation: "remove Fuel multiselect search input",
+      apply: () => removeElement(
+        '[data-for-select="vehicleFuel"] input.multiselect-dropdown-search',
+      ),
+    },
+    "duplicate-fuel-search": {
+      phase: "post-widget",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_SEARCH_INPUT",
+      mutation: "duplicate Fuel multiselect search input",
+      apply: () => duplicateElement(
+        '[data-for-select="vehicleFuel"] input.multiselect-dropdown-search',
+      ),
+    },
+    "missing-fuel-all": {
+      phase: "post-widget",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_ALL_OPTION_NOT_FOUND",
+      mutation: "remove Fuel checkbox All",
+      apply: () => removeElement(
+        '[data-for-select="vehicleFuel"] .multiselect-dropdown-all-selector',
+      ),
+    },
+    "duplicate-fuel-all": {
+      phase: "post-widget",
+      expectedStatus: "UI_DRIFT",
+      expectedCode: "UI_DRIFT_ALL_OPTION_NOT_FOUND",
+      mutation: "duplicate Fuel checkbox All",
+      apply: () => duplicateElement(
+        '[data-for-select="vehicleFuel"] .multiselect-dropdown-all-selector',
+      ),
+    },
+  });
+
+  function runDevCase(caseId) {
+    const definition = DEV_RUNTIME_CASES[caseId];
+    if (!definition) {
+      const available = Object.keys(DEV_RUNTIME_CASES).join(", ");
+      throw new Error(`Unknown fixture DevTools case '${caseId}'. Available: ${available}`);
+    }
+    const result = definition.apply?.() || { applied: false };
+    return emitCaseLog(
+      caseId,
+      definition.expectedStatus,
+      definition.expectedCode,
+      definition.mutation,
+      result,
+    );
+  }
+
+  function listDevCases() {
+    return Object.entries(DEV_RUNTIME_CASES).map(([caseId, definition]) => ({
+      caseId,
+      phase: definition.phase,
+      expectedStatus: definition.expectedStatus,
+      expectedCode: definition.expectedCode || null,
+      mutation: definition.mutation,
+    }));
+  }
 
   function selectedLabels(select) {
     return Array.from(select?.options || [])
@@ -118,42 +418,8 @@
   }
 
   function applyStructuralScenario(mode) {
-    const category = get("vehicleCategoryGroup");
-    const fuel = get("vehicleFuel");
-    const yAxis = get("yAxis");
-    const apply = get("applyTrigger");
-
-    switch (mode) {
-      case "missing-fuel":
-        fuel?.remove();
-        break;
-      case "renamed-fuel":
-        if (fuel) {
-          fuel.id = "vehicleFuelRenamed";
-          document.querySelector('label[for="vehicleFuel"]')?.setAttribute(
-            "for",
-            "vehicleFuelRenamed",
-          );
-        }
-        break;
-      case "wrong-type":
-        category?.removeAttribute("multiple");
-        break;
-      case "wrong-label":
-        removeOption("vehicleCategoryGroup", "Two Wheeler");
-        break;
-      case "missing-yaxis-option":
-        removeOption("yAxis", "Fuel");
-        break;
-      case "missing-apply":
-        apply?.remove();
-        break;
-      case "visual-only":
-        document.body.classList.add("fixture-visual-only-change");
-        break;
-      default:
-        break;
-    }
+    const definition = DEV_RUNTIME_CASES[mode];
+    if (definition?.phase === "structural") runDevCase(mode);
   }
 
   function setMakerMessages() {
@@ -592,34 +858,33 @@
   }
 
   function removeFuelAtRuntime() {
-    get("vehicleFuel")?.remove();
-    log("Runtime drift: đã xóa #vehicleFuel khỏi DOM.");
+    return runDevCase("missing-fuel");
   }
 
   function renameFuelIdAtRuntime() {
     const fuel = get("vehicleFuel");
-    if (!fuel) {
-      log("Không tìm thấy #vehicleFuel để đổi ID.");
-      return;
+    if (fuel) {
+      fuel.id = "vehicleFuelRenamed";
+      document.querySelector('label[for="vehicleFuel"]')?.setAttribute(
+        "for",
+        "vehicleFuelRenamed",
+      );
     }
-    fuel.id = "vehicleFuelRenamed";
-    document.querySelector('label[for="vehicleFuel"]')?.setAttribute(
-      "for",
-      "vehicleFuelRenamed",
+    return emitCaseLog(
+      "renamed-fuel",
+      "UI_DRIFT",
+      "UI_DRIFT_REQUIRED_CONTROL",
+      "change id #vehicleFuel -> #vehicleFuelRenamed",
+      { applied: Boolean(fuel), selector: "#vehicleFuel", countAfter: 0 },
     );
-    log("Runtime drift: đã đổi ID #vehicleFuel thành #vehicleFuelRenamed.");
   }
 
   function removeCategoryLabelAtRuntime() {
-    const changed = removeOption("vehicleCategoryGroup", "Two Wheeler");
-    log(changed ? "Runtime drift: đã xóa option Two Wheeler." : "Không tìm thấy option Two Wheeler.");
+    return runDevCase("wrong-label");
   }
 
   function duplicateFuelWrapperAtRuntime() {
-    const wrapper = document.querySelector('[data-for-select="vehicleFuel"]');
-    if (!wrapper) return;
-    wrapper.parentElement.appendChild(wrapper.cloneNode(true));
-    log("Runtime drift: đã thêm duplicate Fuel dropdown wrapper.");
+    return runDevCase("wrong-wrapper");
   }
 
   function restoreFixture() {
@@ -627,13 +892,9 @@
     window.location.reload();
   }
 
-  function applyPostWidgetScenario(mode, fuelWrapper) {
-    if (mode === "wrong-wrapper" && fuelWrapper) {
-      fuelWrapper.parentElement?.appendChild(fuelWrapper.cloneNode(true));
-    }
-    if (mode === "moved-wrapper" && fuelWrapper) {
-      document.querySelector(".filters-body")?.appendChild(fuelWrapper);
-    }
+  function applyPostWidgetScenario(mode) {
+    const definition = DEV_RUNTIME_CASES[mode];
+    if (definition?.phase === "post-widget") runDevCase(mode);
   }
 
   function installDevConsole() {
@@ -643,20 +904,33 @@
     panel.innerHTML = `
       <h2>Dev UI Drift Fixture</h2>
       <div>Scenario: <strong>${uiMode}</strong></div>
+      <div class="dev-help">Chạy case rồi gọi <code>vahanUiHealthDebug.runOnTab(tabId)</code> trong Service Worker Console.</div>
       <div class="dev-actions">
-        <button type="button" data-action="remove-fuel">Xóa Fuel runtime</button>
-        <button type="button" data-action="rename-fuel">Đổi ID Fuel runtime</button>
-        <button type="button" data-action="remove-category">Xóa Two Wheeler</button>
-        <button type="button" data-action="duplicate-wrapper">Duplicate wrapper</button>
+        <button type="button" data-action="case" data-case="missing-fuel">Thiếu Fuel</button>
+        <button type="button" data-action="case" data-case="missing-category">Thiếu Category</button>
+        <button type="button" data-action="case" data-case="duplicate-fuel">Duplicate Fuel</button>
+        <button type="button" data-action="case" data-case="empty-fuel">Fuel rỗng</button>
+        <button type="button" data-action="case" data-case="wrong-fuel-type">Fuel sai type</button>
+        <button type="button" data-action="case" data-case="missing-fuel-search">Thiếu ô search</button>
+        <button type="button" data-action="case" data-case="duplicate-fuel-search">Duplicate search</button>
+        <button type="button" data-action="case" data-case="missing-fuel-all">Thiếu checkbox All</button>
+        <button type="button" data-action="case" data-case="duplicate-fuel-all">Duplicate checkbox All</button>
+        <button type="button" data-action="case" data-case="missing-captcha">Thiếu CAPTCHA</button>
+        <button type="button" data-action="case" data-case="missing-apply">Thiếu Apply</button>
+        <button type="button" data-action="case" data-case="data-changed-fuel">Đổi dữ liệu Fuel</button>
+        <button type="button" data-action="case" data-case="visual-only">CSS only</button>
         <button type="button" data-action="restore">Khôi phục</button>
       </div>
-      <div id="fixture-dev-log">Ready. ${DATA.states.length} states / ${Object.keys(DATA.rtoByState).length} RTO maps loaded.</div>
+      <div id="fixture-dev-log">${caseLogBuffer.length
+        ? caseLogBuffer.slice(0, 5).map((entry) =>
+          `[CASE ${entry.caseId}] expected=${entry.expectedStatus}/${entry.expectedCode || "—"}`
+        ).join("\n")
+        : `Ready. ${DATA.states.length} states / ${Object.keys(DATA.rtoByState).length} RTO maps loaded.`}</div>
     `;
     document.body.appendChild(panel);
-    panel.querySelector('[data-action="remove-fuel"]')?.addEventListener("click", removeFuelAtRuntime);
-    panel.querySelector('[data-action="rename-fuel"]')?.addEventListener("click", renameFuelIdAtRuntime);
-    panel.querySelector('[data-action="remove-category"]')?.addEventListener("click", removeCategoryLabelAtRuntime);
-    panel.querySelector('[data-action="duplicate-wrapper"]')?.addEventListener("click", duplicateFuelWrapperAtRuntime);
+    panel.querySelectorAll('[data-action="case"]').forEach((button) => {
+      button.addEventListener("click", () => runDevCase(button.dataset.case));
+    });
     panel.querySelector('[data-action="restore"]')?.addEventListener("click", restoreFixture);
   }
 
@@ -671,7 +945,7 @@
   const categoryWrapper = wrappers.get("vehicleCategoryGroup") || null;
   const fuelWrapper = wrappers.get("vehicleFuel") || null;
 
-  applyPostWidgetScenario(uiMode, fuelWrapper);
+  applyPostWidgetScenario(uiMode);
   installAxisBehavior();
   installFilterDependencies();
   installCaptchaBehavior();
@@ -691,6 +965,8 @@
     renameFuelIdAtRuntime,
     removeCategoryLabelAtRuntime,
     duplicateFuelWrapperAtRuntime,
+    runDevCase,
+    listDevCases,
     restoreFixture,
   };
 

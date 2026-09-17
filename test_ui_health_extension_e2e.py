@@ -23,11 +23,25 @@ from test_vahan_chrome_extension import EXTENSION_DIR
 SCENARIO_EXPECTATIONS = {
     "missing-fuel": ("UI_DRIFT_REQUIRED_CONTROL", "#vehicleFuel"),
     "renamed-fuel": ("UI_DRIFT_REQUIRED_CONTROL", "#vehicleFuel"),
+    "missing-category": ("UI_DRIFT_REQUIRED_CONTROL", "#vehicleCategoryGroup"),
+    "duplicate-category": ("UI_DRIFT_REQUIRED_CONTROL", "#vehicleCategoryGroup"),
+    "duplicate-fuel": ("UI_DRIFT_REQUIRED_CONTROL", "#vehicleFuel"),
+    "empty-fuel": ("UI_DRIFT_EMPTY_OPTIONS", "#vehicleFuel"),
     "wrong-type": ("UI_DRIFT_CONTROL_TYPE", None),
+    "wrong-fuel-type": ("UI_DRIFT_CONTROL_TYPE", None),
     "wrong-label": ("UI_DRIFT_REQUIRED_OPTION", "#vehicleCategoryGroup"),
     "missing-yaxis-option": ("UI_DRIFT_REQUIRED_OPTION", "#yAxis"),
+    "missing-yaxis": ("UI_DRIFT_REQUIRED_CONTROL", "#yAxis"),
+    "missing-xaxis": ("UI_DRIFT_REQUIRED_CONTROL", "#xAxis"),
+    "missing-captcha": ("UI_DRIFT_REQUIRED_CONTROL", "#externalCaptcha"),
+    "missing-form": ("UI_DRIFT_REQUIRED_CONTROL", "#vahanPublicForm"),
     "wrong-wrapper": ("UI_DRIFT_MULTISELECT_WRAPPER", None),
     "moved-wrapper": ("UI_DRIFT_MULTISELECT_WRAPPER", None),
+    "missing-fuel-wrapper": ("UI_DRIFT_MULTISELECT_WRAPPER", None),
+    "missing-fuel-search": ("UI_DRIFT_SEARCH_INPUT", None),
+    "duplicate-fuel-search": ("UI_DRIFT_SEARCH_INPUT", None),
+    "missing-fuel-all": ("UI_DRIFT_ALL_OPTION_NOT_FOUND", None),
+    "duplicate-fuel-all": ("UI_DRIFT_ALL_OPTION_NOT_FOUND", None),
     "missing-apply": ("UI_DRIFT_REQUIRED_CONTROL", "#applyTrigger"),
 }
 
@@ -133,6 +147,17 @@ def run() -> None:
                     response = run_content_health_check(worker, scenario_url)
                     assert_drift(response, code, selector)
                     print(f"UI HEALTH CONTENT SCENARIO PASS mode={mode} code={code}")
+
+                baseline_url = open_fixture(page, base_url, "baseline")
+                runtime_case = page.evaluate(
+                    """() => window.vahanFixture.runDevCase("duplicate-fuel-search")"""
+                )
+                assert runtime_case["caseId"] == "duplicate-fuel-search", runtime_case
+                assert runtime_case["expectedCode"] == "UI_DRIFT_SEARCH_INPUT", runtime_case
+                assert runtime_case["applied"] is True, runtime_case
+                runtime_response = run_content_health_check(worker, baseline_url)
+                assert_drift(runtime_response, "UI_DRIFT_SEARCH_INPUT")
+                print("UI HEALTH CONTENT DEVTOOLS-CASE-LOG PASS case=duplicate-fuel-search")
 
                 baseline_url = open_fixture(page, base_url, "baseline")
                 page.evaluate(
