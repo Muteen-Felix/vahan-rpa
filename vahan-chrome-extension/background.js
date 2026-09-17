@@ -3825,6 +3825,13 @@
       await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
       return;
     }
+    if (message.result === "NO_RECORD") {
+      await reportJobStatus(jobId, "FAILED", "NO_RECORD_FOUND: VAHAN kh\xF4ng c\xF3 d\u1EEF li\u1EC7u kh\u1EDBp b\u1ED9 l\u1ECDc n\xE0y.").catch(() => {
+      });
+      activeJobId = void 0;
+      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      return;
+    }
     if (message.result === "FAILED") {
       await reportJobStatus(jobId, "FAILED", message.error || "VAHAN did not return a result.").catch(() => {
       });

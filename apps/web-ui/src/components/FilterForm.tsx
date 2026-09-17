@@ -205,7 +205,11 @@ export function FilterForm({ runners, busy, onSubmit }: Props) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!selectedRunner) return;
-    await onSubmit(selectedRunner, form as unknown as VahanFilters);
+    try {
+      await onSubmit(selectedRunner, form as unknown as VahanFilters);
+    } catch {
+      // lỗi đã được hiển thị qua banner lỗi cấp App
+    }
   }
 
   return <form className="panel filter-form" onSubmit={submit}>

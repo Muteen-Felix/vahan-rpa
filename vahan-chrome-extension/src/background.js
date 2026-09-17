@@ -408,6 +408,17 @@ async function handlePageResult(message, sender) {
     return;
   }
 
+  // VAHAN filter hợp lệ nhưng không ra dữ liệu — khác lỗi hệ thống thật (selector gãy,
+  // mất mạng...). Vẫn báo FAILED (job model không có trạng thái "rỗng" riêng) nhưng gắn
+  // tiền tố NO_RECORD_FOUND để phía Web UI (batch runner) nhận diện và CHẠY TIẾP kịch bản
+  // kế tiếp thay vì dừng cả hàng đợi như một lỗi thật.
+  if (message.result === "NO_RECORD") {
+    await reportJobStatus(jobId, "FAILED", "NO_RECORD_FOUND: VAHAN không có dữ liệu khớp bộ lọc này.").catch(() => {});
+    activeJobId = undefined;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    return;
+  }
+
   if (message.result === "FAILED") {
     await reportJobStatus(jobId, "FAILED", message.error || "VAHAN did not return a result.").catch(() => {});
     activeJobId = undefined;

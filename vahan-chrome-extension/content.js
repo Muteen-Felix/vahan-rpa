@@ -378,6 +378,11 @@ function resetFloatingSteps() {
 }
 
 const hasInvalidCaptchaMessage = () => /invalid captcha/i.test(document.body?.innerText || "");
+// VAHAN trả text này khi filter hợp lệ nhưng không có dữ liệu khớp (khác timeout/lỗi thật) —
+// #downloadBtn1 sẽ KHÔNG BAO GIỜ xuất hiện trong trường hợp này, nên phải phát hiện riêng,
+// nếu không resumeServerJobAfterApply() sẽ chờ hết 90s rồi báo FAILED "Timed out" gây hiểu lầm.
+const NO_RECORD_TEXT = "no record found";
+const hasNoRecordMessage = () => (document.body?.innerText || "").toLocaleLowerCase().includes(NO_RECORD_TEXT);
 const isVisible = (element) => Boolean(element && (
   element.getClientRects().length || window.getComputedStyle(element).display !== "none"
 ));
@@ -403,6 +408,13 @@ async function resumeServerJobAfterApply() {
         result: "INVALID_CAPTCHA",
         captcha,
       });
+      return;
+    }
+
+    if (hasNoRecordMessage()) {
+      updateFloatingStep("export", "idle");
+      setFloatingStatus("success", "VAHAN không có dữ liệu khớp bộ lọc này (No record found).");
+      await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "NO_RECORD" });
       return;
     }
 

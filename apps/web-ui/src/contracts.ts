@@ -53,6 +53,11 @@ export interface VahanFilters {
   autoExport: boolean;
 }
 
+export interface Scenario {
+  name: string;
+  filters: VahanFilters;
+}
+
 export interface Job {
   id: string;
   runnerId: string;
