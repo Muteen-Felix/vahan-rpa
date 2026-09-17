@@ -49,14 +49,16 @@ try {
   const subscription = await ui.timeout(3_000).emitWithAck("ui:subscribe-job", { jobId: job.id });
   if (!subscription?.ok) throw new Error(subscription?.error || "Job subscription failed.");
 
-  const statusPromise = event(ui, "job:status");
-  const acknowledgement = await runner.timeout(3_000).emitWithAck("job:status", {
-    jobId: job.id,
-    status: "FILLING_FILTERS",
-  });
-  if (!acknowledgement?.ok) throw new Error(acknowledgement?.error || "Status update failed.");
-  const status = await statusPromise;
-  if (status.status !== "FILLING_FILTERS") throw new Error("Web UI received the wrong status.");
+  for (const nextStatus of ["OPENING_VAHAN", "FILLING_FILTERS"]) {
+    const statusPromise = event(ui, "job:status");
+    const acknowledgement = await runner.timeout(3_000).emitWithAck("job:status", {
+      jobId: job.id,
+      status: nextStatus,
+    });
+    if (!acknowledgement?.ok) throw new Error(acknowledgement?.error || "Status update failed.");
+    const status = await statusPromise;
+    if (status.status !== nextStatus) throw new Error("Web UI received the wrong status.");
+  }
 
   console.log(`Web UI flow verified for job: ${job.id}`);
 } finally {

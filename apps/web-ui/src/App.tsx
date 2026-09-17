@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { CaptchaPanel } from "./components/CaptchaPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { FilterForm } from "./components/FilterForm";
+import { HealthCheckReports } from "./components/HealthCheckReports";
+import { HealthCheckSchedule } from "./components/HealthCheckSchedule";
 import { JobStatus } from "./components/JobStatus";
 import type { Acknowledgement, CaptchaChallenge, ConnectionState, Job, Runner, VahanFilters } from "./contracts";
 import { api } from "./services/api-client";
@@ -172,6 +174,9 @@ export default function App() {
         </div>
 
         {error && <div className="global-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
+
+        <HealthCheckSchedule />
+        <HealthCheckReports />
 
         <div className="workspace">
           <FilterForm runners={runners} busy={creating || Boolean(job && !["COMPLETED", "FAILED", "CANCELLED"].includes(job.status))} onSubmit={createJob} />

@@ -1,5 +1,6 @@
 import { io } from "socket.io-client";
 import { normalizeJobFilters } from "./job-config.mjs";
+import { registerUiHealthCheck } from "../ui-drift/health-check.mjs";
 
 const DEFAULT_RUNNER_CONFIG = Object.freeze({
   serverUrl: "http://127.0.0.1:8000",
@@ -37,6 +38,7 @@ let reconnectTimer;
 let activeConfig;
 let activeJobId;
 let cancelledJobIds = new Set();
+let uiHealthCheckController;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -249,6 +251,7 @@ function startHeartbeat() {
 async function connectRunner() {
   clearTimeout(reconnectTimer);
   activeConfig = await loadRunnerConfig();
+  void uiHealthCheckController?.refreshScheduleFromBackend();
   socket?.removeAllListeners();
   socket?.disconnect();
 
@@ -290,6 +293,12 @@ async function connectRunner() {
   socket.on("connect_error", (error) => {
     stopHeartbeat();
     publishConnection("error", error.message || "Không thể kết nối backend.");
+  });
+
+  socket.on("ui-health:schedule-updated", (schedule) => {
+    uiHealthCheckController?.updateSchedule(schedule?.intervalDays).catch((error) => {
+      console.warn("[VAHAN UI HEALTH] Không thể cập nhật lịch kiểm tra:", error.message);
+    });
   });
 
   socket.io.on("reconnect_attempt", () => {
@@ -483,4 +492,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
+// UI Drift Guard is registered as an isolated listener. It owns only the
+// configured read-only health check, backend CSV delivery and pending Dev
+// alert; the MVP runner/job flow above remains unchanged.
+uiHealthCheckController = registerUiHealthCheck(chrome);
 connectRunner();
