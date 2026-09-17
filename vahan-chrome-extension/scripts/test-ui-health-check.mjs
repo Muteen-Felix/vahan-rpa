@@ -30,6 +30,7 @@ function createHarness(
   responses,
   {
     officialTabs = [{ id: 1, status: "complete", url: UI_HEALTH_OFFICIAL_URL, active: true }],
+    activeTabs = officialTabs,
     cloneTabs = [{ id: 2, status: "complete", url: UI_HEALTH_CLONE_URL }],
     tabUrl = UI_HEALTH_OFFICIAL_URL,
   } = {},
@@ -93,6 +94,7 @@ function createHarness(
       tabs: {
         onUpdated: tabsOnUpdated,
         async query(queryInfo = {}) {
+          if (queryInfo.active) return activeTabs;
           return String(queryInfo.url || "").startsWith("https://analytics.parivahan.gov.in/")
             ? officialTabs
             : cloneTabs;
@@ -337,6 +339,24 @@ async function run() {
   assert.equal(scheduledWithoutOfficial.status, "CHECK_ERROR");
   assert.match(scheduledWithoutOfficial.error, /Không có tab VAHAN chính thức/);
   assert.equal(noOfficialHarness.calls.healthLogs.length, 2);
+
+  const backgroundOfficialHarness = createHarness([], {
+    officialTabs: [{ id: 1, status: "complete", url: UI_HEALTH_OFFICIAL_URL, active: false }],
+    activeTabs: [{ id: 9, status: "complete", url: "http://127.0.0.1:5173/#configure", active: true }],
+    tabUrl: "http://127.0.0.1:5173/#configure",
+  });
+  backgroundOfficialHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
+  const activeOnlyController = createUiHealthCheckController(backgroundOfficialHarness.chrome, {
+    retryDelayMs: 1,
+    fetch: backgroundOfficialHarness.chrome.fetch,
+  });
+  const backgroundManual = await activeOnlyController.run("manual-web");
+  assert.equal(backgroundManual.status, "CHECK_ERROR");
+  assert.match(backgroundManual.error, /Tab đang hiển thị hiện tại/);
+  assert.equal(backgroundManual.pageUrl, "http://127.0.0.1:5173/#configure");
+  assert.deepEqual(backgroundOfficialHarness.calls.createdTabs, []);
+  assert.equal(backgroundOfficialHarness.calls.healthLogs.length, 1);
+
   console.log("SCHEDULED HEALTH PASS official_tab_verified=True exact_url_guard=True no_official_tab_logged=True data_change_detected=True backend_csv=True offline_queue=True");
 }
 

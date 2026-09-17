@@ -13,8 +13,10 @@ thức.
 
 - Trang chính thức mà health-check production phải xác minh là
   `https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`.
-- Lịch `alarm` và nút chạy từ Web UI chỉ kiểm tra tab chính thức đã mở sẵn.
-  Extension không tự mở tab và không lấy clone local làm tab production.
+- Lịch `alarm` tìm tab chính thức đã mở sẵn. Riêng nút **Kiểm tra ngay** chỉ
+  kiểm tra tab chính thức đang hiển thị ở cửa sổ hiện tại.
+- Manual check không fallback sang tab nền, không tự mở tab và không lấy clone
+  local làm tab production.
 - `runOnTab(tabId)` là API debug chỉ gọi thủ công trong DevTools. API này cho
   phép kiểm tra clone local tại cổng `8765` hoặc `5500` và ghi log với
   `trigger=devtools`.
@@ -429,7 +431,7 @@ log; dùng `runOnTab` để kiểm tra đầy đủ persistence/backend.
 
 ### 7.2. Không có tab chính thức hoặc URL sai
 
-Đóng tab chính thức, sau đó bấm **Kiểm tra ngay** trên Web UI hoặc gửi message
+Đưa một tab không phải VAHAN lên trước (hoặc đóng tab chính thức), sau đó bấm **Kiểm tra ngay** trên Web UI hoặc gửi message
 `RUN_UI_HEALTH_CHECK_NOW` từ extension. Kết quả cần là:
 
 - `status=CHECK_ERROR`;
@@ -440,6 +442,10 @@ log; dùng `runOnTab` để kiểm tra đầy đủ persistence/backend.
 Mở một tab chính thức rồi điều hướng sang path khác, ví dụ
 `/analytics/other-page`, và chạy lại. Kết quả production vẫn phải là
 `CHECK_ERROR`; extension không được dùng tab sai path làm kết quả hợp lệ.
+
+Nếu có một tab official hợp lệ ở nền nhưng tab đang hiển thị là Web UI hoặc một
+trang khác, manual check vẫn phải trả `CHECK_ERROR` và `page_url` phải là URL
+tab đang hiển thị. Điều này xác nhận nút không kiểm tra nhầm một tab ẩn.
 
 ### 7.3. URL clone không hợp lệ
 
@@ -643,11 +649,15 @@ API `POST /api/ui-health/run-now` phải trả `409` với thông báo chưa có
 Ca này không được giả thành `PASS` và không được dùng clone local cho manual
 production flow.
 
-### 10.3. Runner có kết nối nhưng thiếu tab chính thức
+### 10.3. Runner có kết nối nhưng tab hiển thị không phải official
 
-Giữ backend/extension runner đang kết nối nhưng đóng tab chính thức. Bấm
-**Kiểm tra ngay**. Kỳ vọng backend nhận request, extension tạo `CHECK_ERROR` và
-Web UI nhận row lịch sử qua event `ui-health:log-received`.
+Giữ backend/extension runner đang kết nối nhưng đưa Web UI hoặc một trang khác
+lên trước. Bấm **Kiểm tra ngay**. Kỳ vọng backend nhận request, extension tạo
+`CHECK_ERROR` và Web UI nhận row lịch sử qua event `ui-health:log-received`.
+
+Sau đó đưa đúng URL official lên trước rồi bấm lại. Kỳ vọng extension gửi
+`RUN_SCHEDULED_UI_CHECK`, nhận kết quả từ content script trên chính tab đang
+hiển thị và lưu `PASS`/`UI_DRIFT` tương ứng.
 
 ## 11. Kiểm tra log trên Web UI
 

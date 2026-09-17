@@ -7,7 +7,7 @@ không thay thế controller điền filter/CAPTCHA hiện tại.
 
 1. Service worker đặt `chrome.alarms` theo số ngày người dùng lưu trên Web UI
    (mặc định 3 ngày, cho phép từ 1 đến 365 ngày).
-2. Khi alarm chạy, extension chỉ tìm tab VAHAN chính thức đang mở đúng URL
+2. Khi alarm chạy, extension chỉ tìm tab VAHAN chính thức đã mở đúng URL
    `https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`.
    Extension không tự mở tab; nếu tab chưa mở hoặc URL bị chuyển sang trang khác,
    lượt kiểm tra được ghi là `CHECK_ERROR` để Dev biết cần xử lý.
@@ -45,8 +45,11 @@ alarm hiện tại hoặc dùng mặc định 3 ngày cho lần cài mới.
 
 Nút **Kiểm tra ngay** trên Web UI gọi `POST /api/ui-health/run-now`. Backend chọn
 một runner đang kết nối và phát `ui-health:run-now`; extension chỉ chạy trên tab
-VAHAN chính thức đang mở đúng URL và gửi kết quả về backend như một log bình
-thường. Nếu chưa mở đúng tab hoặc tab đổi URL, lần chạy được ghi là `CHECK_ERROR`.
+VAHAN chính thức đang hiển thị ở cửa sổ hiện tại, đúng URL và có content script
+phản hồi. Manual check không fallback sang tab nền và không tự mở tab. Nếu tab
+đang hiển thị không phải trang official hoặc tab đổi URL, lần chạy được ghi là
+`CHECK_ERROR`. Lịch alarm không có thao tác người dùng nên vẫn có thể chọn một
+tab official khác đã mở.
 
 Web UI gọi `GET /api/ui-health/reports?date=YYYY-MM-DD` để xem các bản ghi của
 một ngày và dùng `GET /api/ui-health/reports/{fileName}/download` để tải đúng

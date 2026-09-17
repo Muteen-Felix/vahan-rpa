@@ -24,12 +24,14 @@ is broadcast to connected runners as `ui-health:schedule-updated`.
 
 `POST /api/ui-health/run-now` requests one immediate read-only check from a
 connected runner and returns `202` with a `requestId`. It returns `409` when no
-runner is connected. The runner checks only an already-open official VAHAN
+runner is connected. The runner checks the currently visible official VAHAN
 Public Report tab at
 `https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`; it
-never opens a tab or accepts a local/other URL for the scheduled check. If the
-official tab is not open or its URL changes after loading, the extension records
-a `CHECK_ERROR`. The runner sends the result through the existing log endpoint, and the backend broadcasts
+never opens a tab, falls back to a background tab for the manual request, or
+accepts a local/other URL. If the visible official tab is not open or its URL
+changes after loading, the extension records a `CHECK_ERROR`. Scheduled alarm
+checks may select another already-open official tab. The runner sends the result
+through the existing log endpoint, and the backend broadcasts
 `ui-health:log-received` to `/ui`.
 
 Health logs are accepted at `POST /api/ui-health/logs`. Daily review is available

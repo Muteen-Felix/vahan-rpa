@@ -133,6 +133,12 @@ async function findUiHealthOfficialTab(chromeApi) {
   return validTabs.find((tab) => tab.active) || validTabs[0] || null;
 }
 
+async function findUiHealthActiveTab(chromeApi) {
+  if (typeof chromeApi.tabs?.query !== "function") return null;
+  const tabs = await chromeApi.tabs.query({ active: true, lastFocusedWindow: true });
+  return tabs?.[0] || null;
+}
+
 async function getVerifiedUiHealthTab(chromeApi, tabId, { allowLocalClone = false } = {}) {
   const tab = await chromeApi.tabs.get(tabId);
   if (isUiHealthOfficialUrl(tab?.url)) return tab;
@@ -152,6 +158,14 @@ function missingOfficialTabError() {
   return (
     "Không có tab VAHAN chính thức đang mở hoặc URL không đúng. Hãy mở " +
     `${UI_HEALTH_OFFICIAL_URL} rồi thử lại.`
+  );
+}
+
+function inactiveOfficialTabError(tab) {
+  return (
+    "Tab đang hiển thị hiện tại không phải đúng trang VAHAN chính thức " +
+    `${UI_HEALTH_OFFICIAL_URL}. URL đang mở: ${tab?.url || "không xác định"}. ` +
+    "Hãy đưa tab VAHAN chính thức lên trước rồi thử lại."
   );
 }
 
@@ -631,10 +645,12 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
     }
   }
 
-  async function runOnOfficialTab(trigger = "alarm") {
+  async function runOnOfficialTab(trigger = "alarm", { activeOnly = false } = {}) {
     let tab;
     try {
-      tab = await findUiHealthOfficialTab(chromeApi);
+      tab = activeOnly
+        ? await findUiHealthActiveTab(chromeApi)
+        : await findUiHealthOfficialTab(chromeApi);
     } catch (error) {
       return persistUiHealthCheck(chromeApi, {
         status: "CHECK_ERROR",
@@ -643,6 +659,17 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
         checkedAt: now(),
         pageUrl: UI_HEALTH_OFFICIAL_URL,
         error: errorMessage(error),
+      }, fetchImpl);
+    }
+
+    if (activeOnly && (!tab?.id || !isUiHealthOfficialUrl(tab.url))) {
+      return persistUiHealthCheck(chromeApi, {
+        status: "CHECK_ERROR",
+        trigger,
+        startedAt: now(),
+        checkedAt: now(),
+        pageUrl: healthCheckPageUrl(tab),
+        error: tab ? inactiveOfficialTabError(tab) : missingOfficialTabError(),
       }, fetchImpl);
     }
 
@@ -670,7 +697,8 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
 
   function run(trigger = "alarm") {
     if (!activeHealthCheck) {
-      activeHealthCheck = runOnOfficialTab(trigger).finally(() => {
+      const activeOnly = trigger === "manual" || trigger === "manual-web";
+      activeHealthCheck = runOnOfficialTab(trigger, { activeOnly }).finally(() => {
         activeHealthCheck = null;
       });
     }

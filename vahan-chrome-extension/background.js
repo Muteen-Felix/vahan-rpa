@@ -3531,6 +3531,11 @@
     );
     return validTabs.find((tab) => tab.active) || validTabs[0] || null;
   }
+  async function findUiHealthActiveTab(chromeApi) {
+    if (typeof chromeApi.tabs?.query !== "function") return null;
+    const tabs = await chromeApi.tabs.query({ active: true, lastFocusedWindow: true });
+    return tabs?.[0] || null;
+  }
   async function getVerifiedUiHealthTab(chromeApi, tabId, { allowLocalClone = false } = {}) {
     const tab = await chromeApi.tabs.get(tabId);
     if (isUiHealthOfficialUrl(tab?.url)) return tab;
@@ -3545,6 +3550,9 @@
   }
   function missingOfficialTabError() {
     return `Kh\xF4ng c\xF3 tab VAHAN ch\xEDnh th\u1EE9c \u0111ang m\u1EDF ho\u1EB7c URL kh\xF4ng \u0111\xFAng. H\xE3y m\u1EDF ${UI_HEALTH_OFFICIAL_URL} r\u1ED3i th\u1EED l\u1EA1i.`;
+  }
+  function inactiveOfficialTabError(tab) {
+    return `Tab \u0111ang hi\u1EC3n th\u1ECB hi\u1EC7n t\u1EA1i kh\xF4ng ph\u1EA3i \u0111\xFAng trang VAHAN ch\xEDnh th\u1EE9c ${UI_HEALTH_OFFICIAL_URL}. URL \u0111ang m\u1EDF: ${tab?.url || "kh\xF4ng x\xE1c \u0111\u1ECBnh"}. H\xE3y \u0111\u01B0a tab VAHAN ch\xEDnh th\u1EE9c l\xEAn tr\u01B0\u1EDBc r\u1ED3i th\u1EED l\u1EA1i.`;
   }
   async function loadBackendSchedule(chromeApi, fetchImpl) {
     if (typeof fetchImpl !== "function") return null;
@@ -3957,10 +3965,10 @@
         }, fetchImpl);
       }
     }
-    async function runOnOfficialTab(trigger = "alarm") {
+    async function runOnOfficialTab(trigger = "alarm", { activeOnly = false } = {}) {
       let tab;
       try {
-        tab = await findUiHealthOfficialTab(chromeApi);
+        tab = activeOnly ? await findUiHealthActiveTab(chromeApi) : await findUiHealthOfficialTab(chromeApi);
       } catch (error) {
         return persistUiHealthCheck(chromeApi, {
           status: "CHECK_ERROR",
@@ -3969,6 +3977,16 @@
           checkedAt: now(),
           pageUrl: UI_HEALTH_OFFICIAL_URL,
           error: errorMessage(error)
+        }, fetchImpl);
+      }
+      if (activeOnly && (!tab?.id || !isUiHealthOfficialUrl(tab.url))) {
+        return persistUiHealthCheck(chromeApi, {
+          status: "CHECK_ERROR",
+          trigger,
+          startedAt: now(),
+          checkedAt: now(),
+          pageUrl: healthCheckPageUrl(tab),
+          error: tab ? inactiveOfficialTabError(tab) : missingOfficialTabError()
         }, fetchImpl);
       }
       if (!tab?.id) {
@@ -3992,7 +4010,8 @@
     }
     function run(trigger = "alarm") {
       if (!activeHealthCheck) {
-        activeHealthCheck = runOnOfficialTab(trigger).finally(() => {
+        const activeOnly = trigger === "manual" || trigger === "manual-web";
+        activeHealthCheck = runOnOfficialTab(trigger, { activeOnly }).finally(() => {
           activeHealthCheck = null;
         });
       }
@@ -4348,7 +4367,7 @@
     socket.on("ui-health:run-now", (request = {}) => {
       uiHealthCheckController?.run("manual-web").then((healthCheck) => {
         console.info(
-          "[VAHAN UI HEALTH] Ki\u1EC3m tra tab clone t\u1EE9c th\u1EDDi ho\xE0n t\u1EA5t:",
+          "[VAHAN UI HEALTH] Ki\u1EC3m tra tab VAHAN \u0111ang hi\u1EC3n th\u1ECB t\u1EE9c th\u1EDDi ho\xE0n t\u1EA5t:",
           request.requestId || "unknown-request",
           healthCheck.status
         );

@@ -70,7 +70,7 @@ export function HealthCheckSchedule() {
     try {
       const result = await api.runUiHealthCheckNow();
       setNotice(
-        `Đã gửi yêu cầu kiểm tra tab VAHAN chính thức tới ${result.runnerName}. Kết quả sẽ xuất hiện trong báo cáo sau khi extension hoàn tất.`,
+        `Đã gửi yêu cầu kiểm tra tab VAHAN chính thức đang hiển thị tới ${result.runnerName}. Kết quả sẽ xuất hiện trong báo cáo sau khi extension hoàn tất.`,
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể yêu cầu kiểm tra ngay.");
@@ -85,7 +85,7 @@ export function HealthCheckSchedule() {
         <span className="step-number">0</span>
         <div>
           <h2>Lịch kiểm tra giao diện</h2>
-          <p>Kiểm tra đúng tab VAHAN chính thức đang mở và ghi log CSV để Dev xử lý.</p>
+          <p>Kiểm tra đúng tab VAHAN chính thức đang hiển thị và ghi log CSV để Dev xử lý.</p>
         </div>
       </div>
 
@@ -117,7 +117,7 @@ export function HealthCheckSchedule() {
             type="button"
             onClick={runCheckNow}
             disabled={loading || saving || checkingNow}
-            title="Yêu cầu extension kiểm tra đúng tab VAHAN chính thức đang mở"
+            title="Yêu cầu extension kiểm tra đúng tab VAHAN chính thức đang hiển thị"
           >
             {checkingNow ? "Đang yêu cầu..." : "Kiểm tra ngay"}
           </button>
@@ -134,7 +134,7 @@ export function HealthCheckSchedule() {
       )}
       <p className="security-note health-schedule-note">
         Extension sẽ nhận lịch mới và đặt lại tác vụ kiểm tra tự động. Health-check chỉ chạy trên
-        đúng tab VAHAN chính thức đang mở, không tự mở tab hoặc kiểm tra URL khác; chỉ đọc giao diện,
+        đúng tab VAHAN chính thức đang hiển thị, không tự mở tab hoặc kiểm tra URL khác; chỉ đọc giao diện,
         không điền CAPTCHA và không bấm Apply.
       </p>
     </section>
