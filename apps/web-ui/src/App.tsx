@@ -25,6 +25,7 @@ export default function App() {
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0, current: "" });
   const [batchLog, setBatchLog] = useState<{ name: string; status: "ok" | "empty" | "error"; detail: string }[]>([]);
+  const [healthReportsRefreshToken, setHealthReportsRefreshToken] = useState(0);
 
   const runnersRef = useRef<Runner[]>([]);
   useEffect(() => { runnersRef.current = runners; }, [runners]);
@@ -89,6 +90,7 @@ export default function App() {
     const onCaptcha = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: false });
     const onCaptchaInvalid = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: true });
     const onCaptchaRefreshed = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: false, refreshed: true });
+    const onUiHealthLogReceived = () => setHealthReportsRefreshToken((value) => value + 1);
 
     uiSocket.on("connect", onConnect);
     uiSocket.on("disconnect", onDisconnect);
@@ -99,6 +101,7 @@ export default function App() {
     uiSocket.on("captcha:required", onCaptcha);
     uiSocket.on("captcha:invalid", onCaptchaInvalid);
     uiSocket.on("captcha:refreshed", onCaptchaRefreshed);
+    uiSocket.on("ui-health:log-received", onUiHealthLogReceived);
     uiSocket.connect();
 
     return () => {
@@ -111,6 +114,7 @@ export default function App() {
       uiSocket.off("captcha:required", onCaptcha);
       uiSocket.off("captcha:invalid", onCaptchaInvalid);
       uiSocket.off("captcha:refreshed", onCaptchaRefreshed);
+      uiSocket.off("ui-health:log-received", onUiHealthLogReceived);
       uiSocket.disconnect();
     };
   }, []);
@@ -288,7 +292,7 @@ export default function App() {
         {error && <div className="global-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
 
         <HealthCheckSchedule />
-        <HealthCheckReports />
+        <HealthCheckReports refreshToken={healthReportsRefreshToken} />
 
         <div className="workspace">
           <div className="left-column">

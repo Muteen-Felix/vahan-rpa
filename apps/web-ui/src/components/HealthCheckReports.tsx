@@ -32,9 +32,61 @@ function diagnosticText(value: string) {
   }
 }
 
-export function HealthCheckReports() {
+function HealthReportTable({ rows }: { rows: Array<Record<string, string>> }) {
+  return (
+    <table className="health-report-table">
+      <thead>
+        <tr>
+          <th>Thời điểm</th>
+          <th>Trạng thái</th>
+          <th>Mã lỗi / tiêu đề</th>
+          <th>Đối tượng</th>
+          <th>Expected / Actual</th>
+          <th>Chi tiết</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.log_id}>
+            <td className="report-nowrap">{formatDateTime(row.checked_at)}</td>
+            <td>
+              <span className={`report-status report-status-${(row.status || "CHECK_ERROR").toLowerCase()}`}>
+                {statusLabels[row.status] || row.status || "Không rõ"}
+              </span>
+            </td>
+            <td>
+              <strong>{row.error_code || "—"}</strong>
+              <small>{row.error_title || (row.status === "PASS" ? "Kiểm tra giao diện thành công" : "Không có lỗi")}</small>
+            </td>
+            <td>
+              <strong>{row.target || "—"}</strong>
+              <small>{row.selector || row.page_path || "—"}</small>
+            </td>
+            <td>
+              <small><b>Expected:</b> {row.expected || "—"}</small>
+              <small><b>Actual:</b> {row.actual || row.error || (row.status === "PASS" ? "UI contract khớp" : "—")}</small>
+            </td>
+            <td>
+              <details>
+                <summary>Xem diagnostic</summary>
+                <pre>{diagnosticText(row.diagnostic_details)}</pre>
+                <small><b>Log ID:</b> {row.log_id || "—"}</small>
+                <small><b>Trigger:</b> {row.trigger || "—"} · <b>Failure:</b> {row.failure_type || "—"}</small>
+                <small><b>Duration:</b> {row.duration_ms ? `${row.duration_ms} ms` : "—"} · <b>Path:</b> {row.page_path || "—"}</small>
+                {row.action && <small><b>Action:</b> {row.action}</small>}
+              </details>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export function HealthCheckReports({ refreshToken = 0 }: { refreshToken?: number }) {
   const [data, setData] = useState<UiHealthReportsResponse | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -57,11 +109,18 @@ export function HealthCheckReports() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [selectedDate]);
+  }, [selectedDate, refreshToken]);
+
+  useEffect(() => {
+    setShowAllHistory(false);
+  }, [selectedDate, refreshToken]);
 
   const activeDate = selectedDate || data?.selectedDate || "";
   const selectedSummary = data?.availableDates.find((item) => item.date === activeDate);
   const selectedFiles = data?.reports.filter((report) => report.containsSelectedDate) || [];
+  const historyRows = data?.rows || [];
+  const visibleHistoryRows = showAllHistory ? historyRows : historyRows.slice(0, 5);
+  const remainingHistoryCount = Math.max(historyRows.length - 5, 0);
 
   return (
     <section className="panel health-reports" id="health-reports">
@@ -69,7 +128,7 @@ export function HealthCheckReports() {
         <span className="step-number">4</span>
         <div>
           <h2>Báo cáo kiểm tra theo ngày</h2>
-          <p>Xem chi tiết lỗi và tải CSV từ backend.</p>
+          <p>Xem lịch sử kiểm tra và tải CSV từ backend.</p>
         </div>
       </div>
 
@@ -108,69 +167,58 @@ export function HealthCheckReports() {
           </div>
 
           <div className="health-reports-downloads">
-            <div>
-              <strong>File CSV chứa ngày {activeDate}</strong>
+            <div className="health-report-download-title">
+              <strong>CSV ngày {activeDate}</strong>
               <small>Backend lưu theo cửa sổ tối đa 10 ngày hoặc 512 KiB.</small>
             </div>
             <div className="health-report-links">
               {selectedFiles.length > 0 ? selectedFiles.map((report) => (
-                <a
-                  key={report.fileName}
-                  className="secondary-button health-report-download"
-                  href={`${API_URL}${report.downloadUrl}`}
-                  download={report.fileName}
-                >
-                  Tải {report.fileName} · {formatBytes(report.sizeBytes)}
-                </a>
+                <div className="health-report-file" key={report.fileName}>
+                  <span className="health-report-file-name" title={report.fileName}>{report.fileName}</span>
+                  <small>{formatBytes(report.sizeBytes)}</small>
+                  <a
+                    className="secondary-button health-report-download"
+                    href={`${API_URL}${report.downloadUrl}`}
+                    download={report.fileName}
+                  >
+                    Tải CSV
+                  </a>
+                </div>
               )) : <span className="health-reports-empty">Không tìm thấy file CSV cho ngày này.</span>}
             </div>
           </div>
 
-          {data.rows.length > 0 ? (
-            <div className="health-report-table-wrap">
-              <table className="health-report-table">
-                <thead>
-                  <tr>
-                    <th>Thời điểm</th>
-                    <th>Trạng thái</th>
-                    <th>Mã lỗi / tiêu đề</th>
-                    <th>Đối tượng</th>
-                    <th>Expected / Actual</th>
-                    <th>Chi tiết</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((row) => (
-                    <tr key={row.log_id}>
-                      <td className="report-nowrap">{formatDateTime(row.checked_at)}</td>
-                      <td><span className={`report-status report-status-${row.status.toLowerCase()}`}>{statusLabels[row.status] || row.status}</span></td>
-                      <td>
-                        <strong>{row.error_code || "—"}</strong>
-                        <small>{row.error_title || "Không có lỗi"}</small>
-                      </td>
-                      <td>
-                        <strong>{row.target || "—"}</strong>
-                        <small>{row.selector || row.page_path || "—"}</small>
-                      </td>
-                      <td>
-                        <small><b>Expected:</b> {row.expected || "—"}</small>
-                        <small><b>Actual:</b> {row.actual || row.error || "—"}</small>
-                      </td>
-                      <td>
-                        <details>
-                          <summary>Xem diagnostic</summary>
-                          <pre>{diagnosticText(row.diagnostic_details)}</pre>
-                          <small><b>Log ID:</b> {row.log_id || "—"}</small>
-                          <small><b>Trigger:</b> {row.trigger || "—"} · <b>Failure:</b> {row.failure_type || "—"}</small>
-                          <small><b>Duration:</b> {row.duration_ms ? `${row.duration_ms} ms` : "—"} · <b>Path:</b> {row.page_path || "—"}</small>
-                          {row.action && <small><b>Action:</b> {row.action}</small>}
-                        </details>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {historyRows.length > 0 ? (
+            <>
+              <div className="health-report-log health-report-history">
+                <div className="health-report-log-heading">
+                  <div>
+                    <strong>Lịch sử kiểm tra</strong>
+                    <small>
+                      Hiển thị {visibleHistoryRows.length}/{historyRows.length} bản ghi, gồm cả kết quả của nút “Kiểm tra ngay”.
+                    </small>
+                  </div>
+                  {remainingHistoryCount > 0 && (
+                    <button
+                      className="secondary-button health-report-more-button"
+                      type="button"
+                      aria-controls="health-report-history"
+                      aria-expanded={showAllHistory}
+                      onClick={() => setShowAllHistory((current) => !current)}
+                    >
+                      {showAllHistory ? "Thu gọn" : `Xem thêm (${remainingHistoryCount})`}
+                    </button>
+                  )}
+                </div>
+                <div
+                  className={`health-report-table-wrap ${showAllHistory ? "is-expanded" : "is-collapsed"}`}
+                  id="health-report-history"
+                >
+                  <HealthReportTable rows={visibleHistoryRows} />
+                </div>
+              </div>
+
+            </>
           ) : <p className="health-reports-empty">Ngày này chưa có bản ghi.</p>}
         </>
       )}

@@ -15,8 +15,28 @@ export const UI_HEALTH_SCHEDULE_PATH = "/api/ui-health/schedule";
 export const UI_HEALTH_LOG_PATH = "/api/ui-health/logs";
 export const UI_HEALTH_PENDING_LOGS_KEY = "vahanUiHealthPendingLogs";
 export const UI_HEALTH_LOG_TIMEOUT_MS = 15_000;
-export const VAHAN_PUBLIC_REPORT_URL =
+export const UI_HEALTH_OFFICIAL_URL =
   "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en";
+// Backward-compatible name for callers that used the original production URL export.
+export const VAHAN_PUBLIC_REPORT_URL = UI_HEALTH_OFFICIAL_URL;
+export const UI_HEALTH_OFFICIAL_HOST = "analytics.parivahan.gov.in";
+export const UI_HEALTH_REPORT_PATH = "/analytics/vahanpublicreport";
+export const UI_HEALTH_OFFICIAL_TAB_MATCHES = Object.freeze([
+  "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*",
+]);
+export const UI_HEALTH_CLONE_URL =
+  "http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline";
+export const UI_HEALTH_CLONE_PORTS = Object.freeze(["8765", "5500"]);
+export const UI_HEALTH_CLONE_TAB_MATCHES = Object.freeze([
+  "http://127.0.0.1:8765/analytics/vahanpublicreport*",
+  "http://127.0.0.1:8765/*/analytics/vahanpublicreport*",
+  "http://127.0.0.1:5500/analytics/vahanpublicreport*",
+  "http://127.0.0.1:5500/*/analytics/vahanpublicreport*",
+  "http://localhost:8765/analytics/vahanpublicreport*",
+  "http://localhost:8765/*/analytics/vahanpublicreport*",
+  "http://localhost:5500/analytics/vahanpublicreport*",
+  "http://localhost:5500/*/analytics/vahanpublicreport*",
+]);
 
 const DATA_CHANGED_STATUS = "DATA_CHANGED";
 
@@ -72,6 +92,69 @@ function intervalMinutesForDays(intervalDays) {
   return intervalDays * 24 * 60;
 }
 
+function isReportPath(value) {
+  return String(value || "").replace(/\/+$/, "") === UI_HEALTH_REPORT_PATH;
+}
+
+export function isUiHealthOfficialUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return (
+      url.protocol === "https:" &&
+      url.hostname === UI_HEALTH_OFFICIAL_HOST &&
+      url.port === "" &&
+      isReportPath(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isUiHealthCloneUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return (
+      url.protocol === "http:" &&
+      (url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
+      UI_HEALTH_CLONE_PORTS.includes(url.port) &&
+      isReportPath(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function findUiHealthOfficialTab(chromeApi) {
+  if (typeof chromeApi.tabs?.query !== "function") return null;
+  const tabs = await chromeApi.tabs.query({ url: UI_HEALTH_OFFICIAL_TAB_MATCHES });
+  const validTabs = (tabs || []).filter(
+    (tab) => tab?.id !== undefined && isUiHealthOfficialUrl(tab.url),
+  );
+  return validTabs.find((tab) => tab.active) || validTabs[0] || null;
+}
+
+async function getVerifiedUiHealthTab(chromeApi, tabId, { allowLocalClone = false } = {}) {
+  const tab = await chromeApi.tabs.get(tabId);
+  if (isUiHealthOfficialUrl(tab?.url)) return tab;
+  if (allowLocalClone && isUiHealthCloneUrl(tab?.url)) return tab;
+  throw new Error(
+    "Health-check chỉ được chạy trên đúng trang VAHAN chính thức " +
+    `${UI_HEALTH_OFFICIAL_URL}. URL đang mở: ${tab?.url || "không xác định"}.`,
+  );
+}
+
+function healthCheckPageUrl(tab, fallback = UI_HEALTH_OFFICIAL_URL) {
+  const value = String(tab?.url || "").trim();
+  return value || fallback;
+}
+
+function missingOfficialTabError() {
+  return (
+    "Không có tab VAHAN chính thức đang mở hoặc URL không đúng. Hãy mở " +
+    `${UI_HEALTH_OFFICIAL_URL} rồi thử lại.`
+  );
+}
+
 async function loadBackendSchedule(chromeApi, fetchImpl) {
   if (typeof fetchImpl !== "function") return null;
 
@@ -110,7 +193,7 @@ async function postHealthCheck(chromeApi, healthCheck, fetchImpl) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         healthCheck,
-        pageUrl: VAHAN_PUBLIC_REPORT_URL,
+        pageUrl: healthCheck.pageUrl || UI_HEALTH_OFFICIAL_URL,
         runnerId: runnerConfig.runnerId || null,
       }),
     }),
@@ -214,7 +297,7 @@ function normalizeUiDriftReport(report = {}) {
     expected: String(report.expected || "không có dữ liệu"),
     actual: String(report.actual || "không có dữ liệu"),
     action: String(report.action || "Dev cần kiểm tra UI contract."),
-    message: String(report.message || "Phát hiện thay đổi trên trang VAHAN."),
+    message: String(report.message || "Phát hiện thay đổi trên trang VAHAN Public Report."),
     diagnostics: report.diagnostics && typeof report.diagnostics === "object"
       ? report.diagnostics
       : {},
@@ -234,7 +317,7 @@ function dataChangedReport(changes, previousContract, currentContract) {
   return {
     code: "UI_DRIFT_OPTION_DATA_CHANGED",
     step: "scheduled-health-check",
-    title: "Dữ liệu option của trang VAHAN đã thay đổi",
+    title: "Dữ liệu option của trang VAHAN Public Report đã thay đổi",
     target,
     expected: "Bộ dữ liệu option khớp lần kiểm tra trước",
     actual,
@@ -361,7 +444,7 @@ function waitForTabReady(chromeApi, tabId, timeoutMs = UI_HEALTH_CHECK_TAB_READY
       callback(value);
     };
     const timeoutId = setTimeout(
-      () => finish(reject, new Error("Timed out while loading the VAHAN health-check tab.")),
+      () => finish(reject, new Error("Timed out while loading the VAHAN Public Report health-check tab.")),
       timeoutMs,
     );
 
@@ -374,17 +457,25 @@ function waitForTabReady(chromeApi, tabId, timeoutMs = UI_HEALTH_CHECK_TAB_READY
   });
 }
 
-async function requestUiHealthCheck(chromeApi, tabId, retryDelayMs = 500) {
+async function requestUiHealthCheck(
+  chromeApi,
+  tabId,
+  retryDelayMs = 500,
+  requireOfficial = true,
+) {
   let lastError;
   for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
-      return await chromeApi.tabs.sendMessage(tabId, { type: UI_HEALTH_CHECK_MESSAGE });
+      return await chromeApi.tabs.sendMessage(tabId, {
+        type: UI_HEALTH_CHECK_MESSAGE,
+        requireOfficial,
+      });
     } catch (error) {
       lastError = error;
       await wait(retryDelayMs);
     }
   }
-  throw lastError || new Error("VAHAN health-check content script did not respond.");
+  throw lastError || new Error("VAHAN Public Report health-check content script did not respond.");
 }
 
 export function createUiHealthCheckController(chromeApi, options = {}) {
@@ -454,20 +545,25 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
     }
   }
 
-  async function execute(trigger) {
+  async function execute(trigger, requestedTabId, { allowLocalClone = false } = {}) {
     const startedAt = now();
     const previousState = await chromeApi.storage.local.get(UI_HEALTH_CHECK_STATE_KEY);
     const previousHealthCheck = previousState[UI_HEALTH_CHECK_STATE_KEY];
-    let tabId;
+    const tabId = requestedTabId;
+    let pageUrl = UI_HEALTH_OFFICIAL_URL;
 
     try {
-      const tab = await chromeApi.tabs.create({ url: VAHAN_PUBLIC_REPORT_URL, active: false });
-      tabId = tab.id;
       if (!tabId) throw new Error("Chrome did not return a health-check tab ID.");
+      const candidate = await chromeApi.tabs.get(tabId);
+      pageUrl = healthCheckPageUrl(candidate);
+      const tab = await getVerifiedUiHealthTab(chromeApi, tabId, { allowLocalClone });
+      pageUrl = healthCheckPageUrl(tab, pageUrl);
 
       await waitForTabReady(chromeApi, tabId, tabReadyTimeoutMs);
+      const readyTab = await getVerifiedUiHealthTab(chromeApi, tabId, { allowLocalClone });
+      pageUrl = healthCheckPageUrl(readyTab, pageUrl);
       const response = await withTimeout(
-        requestUiHealthCheck(chromeApi, tabId, retryDelayMs),
+        requestUiHealthCheck(chromeApi, tabId, retryDelayMs, !allowLocalClone),
         checkTimeoutMs,
         "Timed out while checking the VAHAN UI contract.",
       );
@@ -485,6 +581,7 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
             trigger,
             startedAt,
             checkedAt,
+            pageUrl,
             contract,
             report: dataChangedReport(
               changes,
@@ -498,6 +595,7 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
           trigger,
           startedAt,
           checkedAt,
+          pageUrl,
           contract,
         }, fetchImpl);
       }
@@ -508,6 +606,7 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
           trigger,
           startedAt,
           checkedAt,
+          pageUrl,
           report: normalizeUiDriftReport(response.uiDrift),
         }, fetchImpl);
       }
@@ -517,7 +616,8 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
         trigger,
         startedAt,
         checkedAt,
-        error: errorMessage(response?.error || "The VAHAN health check returned no result."),
+        pageUrl,
+        error: errorMessage(response?.error || "The VAHAN Public Report health check returned no result."),
       }, fetchImpl);
     } catch (error) {
       return persistUiHealthCheck(chromeApi, {
@@ -525,11 +625,39 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
         trigger,
         startedAt,
         checkedAt: now(),
+        pageUrl,
         error: errorMessage(error),
       }, fetchImpl);
-    } finally {
-      if (tabId) await chromeApi.tabs.remove(tabId).catch(() => {});
     }
+  }
+
+  async function runOnOfficialTab(trigger = "alarm") {
+    let tab;
+    try {
+      tab = await findUiHealthOfficialTab(chromeApi);
+    } catch (error) {
+      return persistUiHealthCheck(chromeApi, {
+        status: "CHECK_ERROR",
+        trigger,
+        startedAt: now(),
+        checkedAt: now(),
+        pageUrl: UI_HEALTH_OFFICIAL_URL,
+        error: errorMessage(error),
+      }, fetchImpl);
+    }
+
+    if (!tab?.id) {
+      return persistUiHealthCheck(chromeApi, {
+        status: "CHECK_ERROR",
+        trigger,
+        startedAt: now(),
+        checkedAt: now(),
+        pageUrl: UI_HEALTH_OFFICIAL_URL,
+        error: missingOfficialTabError(),
+      }, fetchImpl);
+    }
+
+    return execute(trigger, tab.id);
   }
 
   async function getState() {
@@ -542,7 +670,20 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
 
   function run(trigger = "alarm") {
     if (!activeHealthCheck) {
-      activeHealthCheck = execute(trigger).finally(() => {
+      activeHealthCheck = runOnOfficialTab(trigger).finally(() => {
+        activeHealthCheck = null;
+      });
+    }
+    return activeHealthCheck;
+  }
+
+  function runOnTab(tabId, trigger = "devtools") {
+    const numericTabId = Number(tabId);
+    if (!Number.isInteger(numericTabId) || numericTabId < 1) {
+      return Promise.reject(new Error("DevTools test cần một tabId hợp lệ."));
+    }
+    if (!activeHealthCheck) {
+      activeHealthCheck = execute(trigger, numericTabId, { allowLocalClone: true }).finally(() => {
         activeHealthCheck = null;
       });
     }
@@ -554,6 +695,7 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
     getState,
     refreshScheduleFromBackend,
     run,
+    runOnTab,
     updateSchedule,
   });
 }

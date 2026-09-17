@@ -163,7 +163,9 @@
     } else if (code === "UI_DRIFT_WRONG_PAGE") {
       target = "trang VAHAN Public Report";
       title = "Đang ở sai trang";
-      expected = `URL phải chứa ${REPORT_PATH_FRAGMENT}`;
+      expected = displayDiagnosticValue(
+        details.expectedUrl || details.expected_url || `URL phải chứa ${REPORT_PATH_FRAGMENT}`,
+      );
       actual = displayDiagnosticValue(details.url);
     } else if (code === "UI_DRIFT_CHANGED_DURING_RUN") {
       const change = details.changedControls?.[0] || details.changed_controls?.[0];

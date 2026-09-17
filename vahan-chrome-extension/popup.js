@@ -37,6 +37,24 @@ const runnerName = document.querySelector("#runnerName");
 const runnerToken = document.querySelector("#runnerToken");
 const saveRunnerConfigButton = document.querySelector("#saveRunnerConfig");
 let activeTabId;
+let activeTabUrl = "";
+
+function isSupportedReportUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const reportPath = url.pathname.includes("/analytics/vahanpublicreport");
+    const officialPage = url.protocol === "https:"
+      && url.hostname === "analytics.parivahan.gov.in"
+      && reportPath;
+    const clonePage = url.protocol === "http:"
+      && (url.hostname === "127.0.0.1" || url.hostname === "localhost")
+      && ["8765", "5500"].includes(url.port)
+      && reportPath;
+    return officialPage || clonePage;
+  } catch {
+    return false;
+  }
+}
 
 function renderRunnerConnection(connection = {}) {
   const labels = {
@@ -227,13 +245,24 @@ function replaceWithSelect(id, definition, labels, selectedValue) {
 }
 
 async function message(payload) {
-  if (!activeTabId) throw new Error("Không tìm thấy tab VAHAN.");
+  if (!activeTabId) throw new Error("Không tìm thấy tab VAHAN hoặc clone local.");
+  if (activeTabUrl && !isSupportedReportUrl(activeTabUrl)) {
+    throw new Error(
+      "Hãy chuyển sang tab VAHAN hoặc clone local tại /analytics/vahanpublicreport rồi mở lại extension.",
+    );
+  }
   return chrome.tabs.sendMessage(activeTabId, payload);
 }
 
 async function initializeDynamicFields() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   activeTabId = tab?.id;
+  activeTabUrl = tab?.url || "";
+  if (!isSupportedReportUrl(activeTabUrl)) {
+    throw new Error(
+      "Extension chỉ hoạt động trên trang VAHAN hoặc clone local /analytics/vahanpublicreport.",
+    );
+  }
   const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
   const response = await message({ type: "GET_VAHAN_OPTIONS", selectors: dropdowns });
   if (!response?.ok) throw new Error(response?.error || "Không thể tải danh sách lựa chọn từ VAHAN.");
@@ -392,7 +421,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (error) {
     status.className = "error";
     status.textContent = error.message.includes("Receiving end")
-      ? "Hãy mở hoặc tải lại trang VAHAN, sau đó mở lại extension."
+      ? "Tab chưa có content script. Hãy tải lại tab VAHAN/clone local, sau đó Reload extension nếu vừa đổi manifest."
       : error.message;
   }
 });

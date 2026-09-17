@@ -3,6 +3,8 @@
 
   const HEALTH_CHECK_STEP = "scheduled-health-check";
   const DATA_CONTRACT_VERSION = "v1";
+  const OFFICIAL_HOST = "analytics.parivahan.gov.in";
+  const OFFICIAL_PATH = "/analytics/vahanpublicreport";
   const DATA_CONTROLS = Object.freeze({
     category: "#vehicleCategoryGroup",
     fuel: "#vehicleFuel",
@@ -28,6 +30,18 @@
       label: String(option.label || option.textContent || "").replace(/\s+/g, " ").trim(),
       value: String(option.value || ""),
     }));
+  }
+
+  function isOfficialReportPage(value = global.location?.href) {
+    try {
+      const url = new URL(String(value || ""));
+      return url.protocol === "https:"
+        && url.hostname === OFFICIAL_HOST
+        && url.port === ""
+        && url.pathname.replace(/\/+$/, "") === OFFICIAL_PATH;
+    } catch {
+      return false;
+    }
   }
 
   function dataSnapshot() {
@@ -80,9 +94,21 @@
     );
   }
 
-  function inspect() {
+  function inspect({ requireOfficial = false } = {}) {
     const api = global.VahanUiDrift;
     if (!api) throw new Error("VAHAN UI drift contract is not available.");
+
+    if (requireOfficial && !isOfficialReportPage()) {
+      throw new api.UiDriftError(
+        "UI_DRIFT_WRONG_PAGE",
+        "Tab hiện tại không phải đúng trang VAHAN Public Report chính thức.",
+        HEALTH_CHECK_STEP,
+        {
+          expectedUrl: `https://${OFFICIAL_HOST}${OFFICIAL_PATH}`,
+          url: global.location?.href || "",
+        },
+      );
+    }
 
     const contract = api.getUiContract(HEALTH_CHECK_STEP);
     requireOption(api, DATA_CONTROLS.category, "category", "Two Wheeler");
@@ -111,9 +137,9 @@
     };
   }
 
-  function inspectForBackground() {
+  function inspectForBackground(requireOfficial) {
     try {
-      return Promise.resolve({ ok: true, contract: inspect() });
+      return Promise.resolve({ ok: true, contract: inspect({ requireOfficial }) });
     } catch (error) {
       const uiDrift = reportFor(error);
       return Promise.resolve(uiDrift
@@ -126,7 +152,7 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "RUN_SCHEDULED_UI_CHECK") return;
-    inspectForBackground().then(sendResponse);
+    inspectForBackground(message.requireOfficial !== false).then(sendResponse);
     return true;
   });
 })(globalThis);

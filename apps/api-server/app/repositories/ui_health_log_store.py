@@ -136,6 +136,9 @@ def _diagnostic_details(
     if status == "CHECK_ERROR":
         return {
             "source": "background-health-check",
+            "expected_page_url": "https://analytics.parivahan.gov.in/analytics/vahanpublicreport",
+            "actual_page_url": _text(health_check.get("pageUrl")),
+            "trigger": _text(health_check.get("trigger")),
             "error": _text(health_check.get("error")),
         }
     return {}

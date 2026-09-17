@@ -46,6 +46,17 @@ async def test_ui_health_schedule_rejects_invalid_interval() -> None:
     assert too_long.status_code == 422
 
 
+async def test_ui_health_run_now_requires_connected_runner() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        response = await client.post("/api/ui-health/run-now", json={})
+
+    assert response.status_code == 409
+    assert "runner" in response.json()["detail"].lower()
+
+
 async def test_ui_health_log_can_be_saved_reviewed_and_downloaded() -> None:
     payload = {
         "healthCheck": {

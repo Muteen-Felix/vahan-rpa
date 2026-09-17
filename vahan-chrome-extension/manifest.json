@@ -7,6 +7,10 @@
   "permissions": ["storage", "downloads", "alarms"],
   "host_permissions": [
     "https://analytics.parivahan.gov.in/*",
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*",
+    "http://127.0.0.1:5500/*",
+    "http://localhost:5500/*",
     "http://127.0.0.1:8000/*",
     "http://localhost:8000/*"
   ],
@@ -30,6 +34,20 @@
   "content_scripts": [
     {
       "matches": ["https://analytics.parivahan.gov.in/analytics/vahanpublicreport*"],
+      "js": ["ui-drift/guard.js", "content.js", "ui-drift/health-check-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://127.0.0.1:8765/analytics/vahanpublicreport*",
+        "http://127.0.0.1:8765/*/analytics/vahanpublicreport*",
+        "http://127.0.0.1:5500/analytics/vahanpublicreport*",
+        "http://127.0.0.1:5500/*/analytics/vahanpublicreport*",
+        "http://localhost:8765/analytics/vahanpublicreport*",
+        "http://localhost:8765/*/analytics/vahanpublicreport*",
+        "http://localhost:5500/analytics/vahanpublicreport*",
+        "http://localhost:5500/*/analytics/vahanpublicreport*"
+      ],
       "js": ["ui-drift/guard.js", "content.js", "ui-drift/health-check-content.js"],
       "run_at": "document_idle"
     }

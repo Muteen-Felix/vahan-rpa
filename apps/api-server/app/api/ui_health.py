@@ -1,15 +1,19 @@
-from datetime import date
+from datetime import date, datetime, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
 from app.models.ui_health import (
+    UiHealthCheckNowRequest,
+    UiHealthCheckNowResponse,
     UiHealthLogRequest,
     UiHealthLogResponse,
     UiHealthReportsResponse,
     UiHealthSchedule,
     UiHealthScheduleUpdate,
 )
+from app.models.runner import Runner, RunnerStatus
 from app.realtime.server import sio
 from app.services import services
 
@@ -53,6 +57,61 @@ async def update_ui_health_schedule(command: UiHealthScheduleUpdate) -> UiHealth
     return schedule
 
 
+def _select_runner(runners: list[Runner], requested_runner_id: str | None) -> Runner | None:
+    if requested_runner_id:
+        return next((runner for runner in runners if runner.id == requested_runner_id), None)
+
+    connected = [runner for runner in runners if runner.status != RunnerStatus.RECONNECTING]
+    # Prefer an idle runner, but a busy runner can still open the isolated,
+    # read-only health-check tab without interrupting the active report job.
+    return (
+        next((runner for runner in connected if runner.status == RunnerStatus.ONLINE and not runner.current_job_id), None)
+        or next((runner for runner in connected if runner.status == RunnerStatus.ONLINE), None)
+        or next((runner for runner in connected if runner.status == RunnerStatus.BUSY), None)
+    )
+
+
+@router.post(
+    "/run-now",
+    response_model=UiHealthCheckNowResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def request_ui_health_check_now(
+    command: UiHealthCheckNowRequest | None = None,
+) -> UiHealthCheckNowResponse:
+    requested_runner_id = command.runner_id if command else None
+    runner = _select_runner(await services.runners.list(), requested_runner_id)
+    if runner is None:
+        if requested_runner_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requested extension runner was not found.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Chưa có extension runner nào đang kết nối để chạy kiểm tra.",
+        )
+    if runner.status == RunnerStatus.RECONNECTING:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Extension runner đang kết nối lại.")
+
+    request_id = str(uuid4())
+    requested_at = datetime.now(timezone.utc)
+    await sio.emit(
+        "ui-health:run-now",
+        {
+            "requestId": request_id,
+            "requestedAt": requested_at.isoformat(),
+            "trigger": "manual-web",
+        },
+        room=f"runner:{runner.id}",
+        namespace="/runner",
+    )
+    return UiHealthCheckNowResponse(
+        requestId=request_id,
+        runnerId=runner.id,
+        runnerName=runner.name,
+        requestedAt=requested_at,
+    )
+
+
 @router.post(
     "/logs",
     response_model=UiHealthLogResponse,
@@ -64,7 +123,18 @@ async def receive_ui_health_log(command: UiHealthLogRequest) -> UiHealthLogRespo
         command.health_check,
         page_url=command.page_url,
     )
-    return UiHealthLogResponse.model_validate(result)
+    response = UiHealthLogResponse.model_validate(result)
+    await sio.emit(
+        "ui-health:log-received",
+        {
+            **response.model_dump(mode="json", by_alias=True),
+            "status": str(command.health_check.get("status") or "CHECK_ERROR"),
+            "checkedAt": str(command.health_check.get("checkedAt") or ""),
+            "trigger": str(command.health_check.get("trigger") or ""),
+        },
+        namespace="/ui",
+    )
+    return response
 
 
 @router.get(

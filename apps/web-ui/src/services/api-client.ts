@@ -1,6 +1,7 @@
 import type {
   Job,
   Runner,
+  UiHealthCheckNowResponse,
   UiHealthReportsResponse,
   UiHealthSchedule,
   VahanFilters,
@@ -31,6 +32,11 @@ export const api = {
     request<UiHealthSchedule>("/api/ui-health/schedule", {
       method: "PUT",
       body: JSON.stringify({ intervalDays }),
+    }),
+  runUiHealthCheckNow: (runnerId?: string) =>
+    request<UiHealthCheckNowResponse>("/api/ui-health/run-now", {
+      method: "POST",
+      body: JSON.stringify(runnerId ? { runnerId } : {}),
     }),
   uiHealthReports: (date?: string) => request<UiHealthReportsResponse>(
     `/api/ui-health/reports${date ? `?date=${encodeURIComponent(date)}` : ""}`,

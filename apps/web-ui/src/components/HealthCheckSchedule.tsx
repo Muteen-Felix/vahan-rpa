@@ -17,6 +17,7 @@ export function HealthCheckSchedule() {
   const [days, setDays] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [checkingNow, setCheckingNow] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -62,13 +63,29 @@ export function HealthCheckSchedule() {
     }
   }
 
+  async function runCheckNow() {
+    setCheckingNow(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await api.runUiHealthCheckNow();
+      setNotice(
+        `Đã gửi yêu cầu kiểm tra tab VAHAN chính thức tới ${result.runnerName}. Kết quả sẽ xuất hiện trong báo cáo sau khi extension hoàn tất.`,
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể yêu cầu kiểm tra ngay.");
+    } finally {
+      setCheckingNow(false);
+    }
+  }
+
   return (
     <section className="panel health-schedule" id="health-check">
       <div className="panel-heading">
         <span className="step-number">0</span>
         <div>
           <h2>Lịch kiểm tra giao diện</h2>
-          <p>Tự động kiểm tra trang VAHAN và ghi log CSV.</p>
+          <p>Kiểm tra đúng tab VAHAN chính thức đang mở và ghi log CSV để Dev xử lý.</p>
         </div>
       </div>
 
@@ -84,16 +101,27 @@ export function HealthCheckSchedule() {
               max="365"
               step="1"
               value={days}
-              disabled={loading || saving}
+              disabled={loading || saving || checkingNow}
               onChange={(event) => setDays(event.currentTarget.value)}
               placeholder="3"
             />
             <span className="health-schedule-unit">ngày</span>
           </span>
         </label>
-        <button className="primary-button" type="submit" disabled={loading || saving}>
-          {saving ? "Đang lưu..." : "Lưu lịch kiểm tra"}
-        </button>
+        <div className="health-schedule-actions">
+          <button className="primary-button" type="submit" disabled={loading || saving || checkingNow}>
+            {saving ? "Đang lưu..." : "Lưu lịch kiểm tra"}
+          </button>
+          <button
+            className="secondary-button health-check-now-button"
+            type="button"
+            onClick={runCheckNow}
+            disabled={loading || saving || checkingNow}
+            title="Yêu cầu extension kiểm tra đúng tab VAHAN chính thức đang mở"
+          >
+            {checkingNow ? "Đang yêu cầu..." : "Kiểm tra ngay"}
+          </button>
+        </div>
       </form>
 
       {notice && <p className="health-schedule-status success" role="status">{notice}</p>}
@@ -105,7 +133,8 @@ export function HealthCheckSchedule() {
         </div>
       )}
       <p className="security-note health-schedule-note">
-        Extension sẽ nhận lịch mới và đặt lại tác vụ kiểm tra tự động. Kiểm tra chỉ đọc giao diện,
+        Extension sẽ nhận lịch mới và đặt lại tác vụ kiểm tra tự động. Health-check chỉ chạy trên
+        đúng tab VAHAN chính thức đang mở, không tự mở tab hoặc kiểm tra URL khác; chỉ đọc giao diện,
         không điền CAPTCHA và không bấm Apply.
       </p>
     </section>

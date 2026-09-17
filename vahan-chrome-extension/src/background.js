@@ -1,6 +1,9 @@
 import { io } from "socket.io-client";
 import { normalizeJobFilters } from "./job-config.mjs";
-import { registerUiHealthCheck } from "../ui-drift/health-check.mjs";
+import {
+  registerUiHealthCheck,
+  UI_HEALTH_CLONE_TAB_MATCHES,
+} from "../ui-drift/health-check.mjs";
 
 const DEFAULT_RUNNER_CONFIG = Object.freeze({
   serverUrl: "http://127.0.0.1:8000",
@@ -106,6 +109,16 @@ async function getVahanTab() {
   if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
   await waitForTabComplete(tab.id);
   return tab.id;
+}
+
+async function getOptionsTab() {
+  const cloneTabs = await chrome.tabs.query({ url: UI_HEALTH_CLONE_TAB_MATCHES });
+  const cloneTab = cloneTabs.find((tab) => tab?.id !== undefined);
+  if (cloneTab?.id) {
+    await waitForTabComplete(cloneTab.id);
+    return cloneTab.id;
+  }
+  return getVahanTab();
 }
 
 async function sendToVahan(tabId, message) {
@@ -301,6 +314,18 @@ async function connectRunner() {
     });
   });
 
+  socket.on("ui-health:run-now", (request = {}) => {
+    uiHealthCheckController?.run("manual-web").then((healthCheck) => {
+      console.info(
+        "[VAHAN UI HEALTH] Kiểm tra tab clone tức thời hoàn tất:",
+        request.requestId || "unknown-request",
+        healthCheck.status,
+      );
+    }).catch((error) => {
+      console.warn("[VAHAN UI HEALTH] Kiểm tra tức thời thất bại:", error.message);
+    });
+  });
+
   socket.io.on("reconnect_attempt", () => {
     publishConnection("connecting", "Đang kết nối lại backend...");
   });
@@ -351,7 +376,7 @@ async function connectRunner() {
   });
   socket.on("runner:options", async (request, acknowledge) => {
     try {
-      const tabId = await getVahanTab();
+      const tabId = await getOptionsTab();
       const messageByType = {
         GET_ALL_OPTIONS: {
           type: "GET_VAHAN_OPTIONS",
@@ -507,4 +532,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // configured read-only health check, backend CSV delivery and pending Dev
 // alert; the MVP runner/job flow above remains unchanged.
 uiHealthCheckController = registerUiHealthCheck(chrome);
+globalThis.vahanUiHealthDebug = Object.freeze({
+  getState: () => uiHealthCheckController?.getState(),
+  runOnTab: (tabId) => uiHealthCheckController?.runOnTab(tabId, "devtools"),
+});
 connectRunner();

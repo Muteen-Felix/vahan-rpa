@@ -17,6 +17,15 @@ export interface UiHealthSchedule {
   nextCheckAt: string;
 }
 
+export interface UiHealthCheckNowResponse {
+  ok: boolean;
+  requestId: string;
+  runnerId: string;
+  runnerName: string;
+  requestedAt: string;
+  status: "REQUESTED";
+}
+
 export interface UiHealthDaySummary {
   date: string;
   total: number;

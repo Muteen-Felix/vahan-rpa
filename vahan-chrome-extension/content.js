@@ -1,6 +1,20 @@
 const splitValues = (value) => String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const UI_HEALTH_CLONE_PORTS = new Set(["8765", "5500"]);
+
+function isLocalClonePage() {
+  return location.protocol === "http:"
+    && (location.hostname === "127.0.0.1" || location.hostname === "localhost")
+    && UI_HEALTH_CLONE_PORTS.has(location.port)
+    && location.pathname.includes("/analytics/vahanpublicreport");
+}
+
+function readOptionLabels(selector) {
+  return [...document.querySelectorAll(`${selector} option`)]
+    .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
 
 function getOptionMap(select) {
   return [...select.options].map((option) => ({
@@ -74,6 +88,11 @@ function readOptions(selectors) {
 async function fetchRtos(stateLabels) {
   const labels = splitValues(stateLabels);
   if (labels.length !== 1) return [];
+  if (isLocalClonePage()) {
+    await selectLabels("#stateName", stateLabels);
+    await delay(50);
+    return readOptionLabels("#rtoCode");
+  }
   const state = [...document.querySelectorAll("#stateName option")]
     .find((option) => normalize(option.label || option.textContent) === normalize(labels[0]));
   if (!state) return [];
@@ -85,6 +104,12 @@ async function fetchRtos(stateLabels) {
 }
 
 async function fetchMakers(search) {
+  if (isLocalClonePage()) {
+    const term = normalize(search);
+    return readOptionLabels("#vehicleMaker")
+      .filter((label) => !term || normalize(label).includes(term))
+      .slice(0, 20);
+  }
   const url = new URL("/analytics/vahanpublicreport/lazy/vehicle-makers", location.origin);
   url.search = new URLSearchParams({ page: "0", size: "20", search }).toString();
   const response = await fetch(url, { credentials: "same-origin" });

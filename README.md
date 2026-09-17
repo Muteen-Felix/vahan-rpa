@@ -164,9 +164,14 @@ Sau khi sửa `.env`, phải khởi động lại Vite.
 
 Trong Web UI, phần **Lịch kiểm tra giao diện** cho phép nhập số ngày giữa hai
 lần kiểm tra. Khi bấm **Lưu lịch kiểm tra**, backend lưu cấu hình và báo ngay cho
-extension đang kết nối để đặt lại `chrome.alarm`. Extension gửi kết quả PASS,
-DATA_CHANGED hoặc lỗi giao diện về backend; backend ghi CSV để xem theo ngày và
-tải lại từ Web UI.
+extension đang kết nối để đặt lại `chrome.alarm`. Health-check định kỳ và nút
+**Kiểm tra ngay** chỉ kiểm tra tab VAHAN chính thức đang mở đúng URL
+`https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`.
+Extension không tự mở tab; nếu chưa mở đúng trang hoặc URL thay đổi sau khi tải,
+lượt kiểm tra ghi `CHECK_ERROR` kèm URL thực tế để Dev biết nguyên nhân.
+
+Extension gửi kết quả PASS, DATA_CHANGED hoặc lỗi giao diện về backend; backend
+ghi CSV để xem theo ngày và tải lại từ Web UI.
 
 Phần **Báo cáo kiểm tra theo ngày** cho phép chọn ngày, xem diagnostic của từng
 lần kiểm tra và tải các file `report-YYYY-MM-DD-to-YYYY-MM-DD*.csv` chứa ngày đó.

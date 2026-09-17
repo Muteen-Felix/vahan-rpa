@@ -244,3 +244,77 @@ async def test_ui_health_schedule_update_reaches_runner(live_server_url: str) ->
     finally:
         if runner.connected:
             await runner.disconnect()
+
+
+async def test_ui_health_manual_check_request_reaches_runner(live_server_url: str) -> None:
+    runner = socketio.AsyncClient()
+    request_received = asyncio.Event()
+    received_payload: dict = {}
+
+    @runner.on("ui-health:run-now", namespace="/runner")
+    async def on_manual_check(payload: dict) -> None:
+        received_payload.update(payload)
+        request_received.set()
+
+    try:
+        await runner.connect(
+            live_server_url,
+            namespaces=["/runner"],
+            transports=["websocket"],
+            auth={
+                "runnerId": "manual-check-runner",
+                "runnerName": "Manual Check Chrome",
+                "version": "0.1.0",
+                "token": settings.runner_token,
+            },
+        )
+        async with AsyncClient(base_url=live_server_url) as client:
+            response = await client.post("/api/ui-health/run-now", json={})
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["runnerId"] == "manual-check-runner"
+        assert body["runnerName"] == "Manual Check Chrome"
+        await asyncio.wait_for(request_received.wait(), timeout=2)
+        assert received_payload["requestId"] == body["requestId"]
+        assert received_payload["trigger"] == "manual-web"
+    finally:
+        if runner.connected:
+            await runner.disconnect()
+
+
+async def test_ui_health_log_received_is_broadcast_to_web_ui(live_server_url: str) -> None:
+    ui = socketio.AsyncClient()
+    log_received = asyncio.Event()
+    received_payload: dict = {}
+
+    @ui.on("ui-health:log-received", namespace="/ui")
+    async def on_log_received(payload: dict) -> None:
+        received_payload.update(payload)
+        log_received.set()
+
+    try:
+        await ui.connect(live_server_url, namespaces=["/ui"], transports=["websocket"])
+        async with AsyncClient(base_url=live_server_url) as client:
+            response = await client.post(
+                "/api/ui-health/logs",
+                json={
+                    "healthCheck": {
+                        "status": "PASS",
+                        "trigger": "manual-web",
+                        "startedAt": "2026-04-01T08:00:00.000Z",
+                        "checkedAt": "2026-04-01T08:00:01.000Z",
+                        "contract": {"contractVersion": "v1", "signature": "socket-test"},
+                    },
+                    "pageUrl": "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en",
+                },
+            )
+
+        assert response.status_code == 201
+        await asyncio.wait_for(log_received.wait(), timeout=2)
+        assert received_payload["status"] == "PASS"
+        assert received_payload["trigger"] == "manual-web"
+        assert received_payload["fileName"].endswith(".csv")
+    finally:
+        if ui.connected:
+            await ui.disconnect()

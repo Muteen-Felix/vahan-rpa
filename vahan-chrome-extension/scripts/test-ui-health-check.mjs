@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import {
   MAX_UI_HEALTH_CHECK_INTERVAL_DAYS,
   UI_HEALTH_CHECK_ALARM,
+  UI_HEALTH_CLONE_URL,
   UI_HEALTH_CHECK_INTERVAL_MINUTES,
+  UI_HEALTH_OFFICIAL_URL,
+  isUiHealthOfficialUrl,
   createUiHealthCheckController,
 } from "../ui-drift/health-check.mjs";
 
@@ -23,7 +26,14 @@ function createEvent() {
   };
 }
 
-function createHarness(responses) {
+function createHarness(
+  responses,
+  {
+    officialTabs = [{ id: 1, status: "complete", url: UI_HEALTH_OFFICIAL_URL, active: true }],
+    cloneTabs = [{ id: 2, status: "complete", url: UI_HEALTH_CLONE_URL }],
+    tabUrl = UI_HEALTH_OFFICIAL_URL,
+  } = {},
+) {
   const storage = {};
   const calls = {
     alarms: [],
@@ -82,12 +92,17 @@ function createHarness(responses) {
       },
       tabs: {
         onUpdated: tabsOnUpdated,
+        async query(queryInfo = {}) {
+          return String(queryInfo.url || "").startsWith("https://analytics.parivahan.gov.in/")
+            ? officialTabs
+            : cloneTabs;
+        },
         async create(options) {
           calls.createdTabs.push(options);
-          return { id: calls.createdTabs.length, status: "complete" };
+          return { id: calls.createdTabs.length, status: "complete", url: options.url };
         },
         async get(tabId) {
-          return { id: tabId, status: "complete" };
+          return { id: tabId, status: "complete", url: tabUrl };
         },
         async sendMessage() {
           return responses[nextResponse++];
@@ -220,7 +235,44 @@ async function run() {
   const first = await controller.run("manual");
   assert.equal(first.status, "PASS");
   assert.equal(first.backendLog.ok, true);
+  assert.equal(first.pageUrl, UI_HEALTH_OFFICIAL_URL);
   assert.equal(harness.storage.vahanUiHealthCheck.contract.dataSnapshot.signature, "data-a");
+
+  assert.equal(isUiHealthOfficialUrl(UI_HEALTH_OFFICIAL_URL), true);
+  assert.equal(
+    isUiHealthOfficialUrl("https://analytics.parivahan.gov.in/analytics/other"),
+    false,
+  );
+
+  const cloneDevtoolsHarness = createHarness(
+    [{ ok: true, contract: contract("devtools") }],
+    { officialTabs: [], tabUrl: UI_HEALTH_CLONE_URL },
+  );
+  cloneDevtoolsHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
+  const devtoolsController = createUiHealthCheckController(cloneDevtoolsHarness.chrome, {
+    retryDelayMs: 1,
+    fetch: cloneDevtoolsHarness.chrome.fetch,
+  });
+  const devtoolsRun = await devtoolsController.runOnTab(42);
+  assert.equal(devtoolsRun.status, "PASS");
+  assert.equal(devtoolsRun.pageUrl, UI_HEALTH_CLONE_URL);
+  assert.deepEqual(cloneDevtoolsHarness.calls.createdTabs, []);
+  assert.deepEqual(cloneDevtoolsHarness.calls.removedTabs, []);
+
+  const officialHarness = createHarness(
+    [{ ok: true, contract: contract("official") }],
+    { tabUrl: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en" },
+  );
+  officialHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
+  const officialController = createUiHealthCheckController(officialHarness.chrome, {
+    retryDelayMs: 1,
+    fetch: officialHarness.chrome.fetch,
+  });
+  const officialRun = await officialController.runOnTab(42);
+  assert.equal(officialRun.status, "PASS");
+  assert.equal(officialRun.pageUrl, UI_HEALTH_OFFICIAL_URL);
+  assert.deepEqual(officialHarness.calls.createdTabs, []);
+  assert.deepEqual(officialHarness.calls.removedTabs, []);
 
   const changed = await controller.run("alarm");
   assert.equal(changed.status, "DATA_CHANGED");
@@ -233,8 +285,8 @@ async function run() {
   assert.equal(drift.status, "UI_DRIFT");
   assert.equal(drift.report.code, "UI_DRIFT_REQUIRED_OPTION");
   assert.equal(drift.report.diagnostics.optionCount, 0);
-  assert.deepEqual(harness.calls.createdTabs.map((tab) => tab.active), [false, false, false]);
-  assert.deepEqual(harness.calls.removedTabs, [1, 2, 3]);
+  assert.deepEqual(harness.calls.createdTabs, []);
+  assert.deepEqual(harness.calls.removedTabs, []);
 
   const state = await controller.getState();
   assert.equal(state.vahanUiHealthCheck.status, "UI_DRIFT");
@@ -252,7 +304,40 @@ async function run() {
   assert.equal(queued.backendLog.ok, false);
   assert.equal(queued.backendLog.queued, true);
   assert.equal(offlineHarness.storage.vahanUiHealthPendingLogs.length, 1);
-  console.log("SCHEDULED HEALTH PASS interval_days=5 data_change_detected=True backend_csv=True offline_queue=True");
+
+  const wrongPageHarness = createHarness([], {
+    officialTabs: [],
+    cloneTabs: [],
+    tabUrl: "https://analytics.parivahan.gov.in/analytics/not-public-report",
+  });
+  wrongPageHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
+  const wrongPageController = createUiHealthCheckController(wrongPageHarness.chrome, {
+    retryDelayMs: 1,
+    fetch: wrongPageHarness.chrome.fetch,
+  });
+  const wrongPage = await wrongPageController.runOnTab(42);
+  assert.equal(wrongPage.status, "CHECK_ERROR");
+  assert.match(wrongPage.error, /đúng trang VAHAN chính thức/);
+  assert.match(wrongPage.pageUrl, /not-public-report/);
+
+  const noOfficialHarness = createHarness([], { officialTabs: [] });
+  noOfficialHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
+  const noOfficialController = createUiHealthCheckController(noOfficialHarness.chrome, {
+    retryDelayMs: 1,
+    fetch: noOfficialHarness.chrome.fetch,
+  });
+  const noOfficial = await noOfficialController.run("manual-web");
+  assert.equal(noOfficial.status, "CHECK_ERROR");
+  assert.match(noOfficial.error, /Không có tab VAHAN chính thức/);
+  assert.equal(noOfficial.pageUrl, UI_HEALTH_OFFICIAL_URL);
+  assert.deepEqual(noOfficialHarness.calls.createdTabs, []);
+  assert.deepEqual(noOfficialHarness.calls.removedTabs, []);
+
+  const scheduledWithoutOfficial = await noOfficialController.run("alarm");
+  assert.equal(scheduledWithoutOfficial.status, "CHECK_ERROR");
+  assert.match(scheduledWithoutOfficial.error, /Không có tab VAHAN chính thức/);
+  assert.equal(noOfficialHarness.calls.healthLogs.length, 2);
+  console.log("SCHEDULED HEALTH PASS official_tab_verified=True exact_url_guard=True no_official_tab_logged=True data_change_detected=True backend_csv=True offline_queue=True");
 }
 
 run().catch((error) => {

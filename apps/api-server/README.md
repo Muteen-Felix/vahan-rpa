@@ -22,6 +22,16 @@ The UI health schedule is available at `GET/PUT /api/ui-health/schedule`.
 `intervalDays` accepts an integer from 1 to 365, defaults to 3, and every update
 is broadcast to connected runners as `ui-health:schedule-updated`.
 
+`POST /api/ui-health/run-now` requests one immediate read-only check from a
+connected runner and returns `202` with a `requestId`. It returns `409` when no
+runner is connected. The runner checks only an already-open official VAHAN
+Public Report tab at
+`https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en`; it
+never opens a tab or accepts a local/other URL for the scheduled check. If the
+official tab is not open or its URL changes after loading, the extension records
+a `CHECK_ERROR`. The runner sends the result through the existing log endpoint, and the backend broadcasts
+`ui-health:log-received` to `/ui`.
+
 Health logs are accepted at `POST /api/ui-health/logs`. Daily review is available
 at `GET /api/ui-health/reports?date=YYYY-MM-DD`; a report file can be downloaded
 from `GET /api/ui-health/reports/{fileName}/download`. Files are stored in
