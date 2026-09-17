@@ -11,6 +11,41 @@ export interface Runner {
   lastSeenAt: string;
 }
 
+export interface UiHealthSchedule {
+  intervalDays: number;
+  updatedAt: string;
+  nextCheckAt: string;
+}
+
+export interface UiHealthDaySummary {
+  date: string;
+  total: number;
+  pass: number;
+  dataChanged: number;
+  uiDrift: number;
+  checkError: number;
+  latestCheckedAt: string;
+}
+
+export interface UiHealthReportFile {
+  fileName: string;
+  fromDate: string;
+  toDate: string;
+  part: number;
+  rowCount: number;
+  sizeBytes: number;
+  updatedAt: string;
+  containsSelectedDate: boolean;
+  downloadUrl: string;
+}
+
+export interface UiHealthReportsResponse {
+  selectedDate: string | null;
+  availableDates: UiHealthDaySummary[];
+  reports: UiHealthReportFile[];
+  rows: Array<Record<string, string>>;
+}
+
 export type JobStatus =
   | "QUEUED"
   | "ASSIGNED"

@@ -207,3 +207,40 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
             await ui.disconnect()
         if runner.connected:
             await runner.disconnect()
+
+
+async def test_ui_health_schedule_update_reaches_runner(live_server_url: str) -> None:
+    runner = socketio.AsyncClient()
+    schedule_updated = asyncio.Event()
+    received_schedule: dict = {}
+
+    @runner.on("ui-health:schedule-updated", namespace="/runner")
+    async def on_schedule_updated(payload: dict) -> None:
+        received_schedule.update(payload)
+        schedule_updated.set()
+
+    try:
+        await runner.connect(
+            live_server_url,
+            namespaces=["/runner"],
+            transports=["websocket"],
+            auth={
+                "runnerId": "schedule-runner",
+                "runnerName": "Schedule Chrome",
+                "version": "0.1.0",
+                "token": settings.runner_token,
+            },
+        )
+        async with AsyncClient(base_url=live_server_url) as client:
+            response = await client.put(
+                "/api/ui-health/schedule",
+                json={"intervalDays": 11},
+            )
+
+        assert response.status_code == 200
+        await asyncio.wait_for(schedule_updated.wait(), timeout=2)
+        assert received_schedule["intervalDays"] == 11
+        assert received_schedule["nextCheckAt"] > received_schedule["updatedAt"]
+    finally:
+        if runner.connected:
+            await runner.disconnect()

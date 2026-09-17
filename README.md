@@ -60,6 +60,7 @@ VAHAN_API_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 VAHAN_API_SOCKETIO_CORS_ORIGINS=*
 VAHAN_API_RUNNER_TOKEN=change-me
 VAHAN_API_RUNNER_DISCONNECT_GRACE_SECONDS=30
+VAHAN_UI_HEALTH_LOG_DIR=runtime/ui-health-logs
 ```
 
 Backend hiện đọc biến môi trường của process và chưa tự load file `.env`. Nếu
@@ -160,6 +161,17 @@ VITE_API_URL=http://127.0.0.1:8000
 Sau khi sửa `.env`, phải khởi động lại Vite.
 
 ## 5. Chạy full flow
+
+Trong Web UI, phần **Lịch kiểm tra giao diện** cho phép nhập số ngày giữa hai
+lần kiểm tra. Khi bấm **Lưu lịch kiểm tra**, backend lưu cấu hình và báo ngay cho
+extension đang kết nối để đặt lại `chrome.alarm`. Extension gửi kết quả PASS,
+DATA_CHANGED hoặc lỗi giao diện về backend; backend ghi CSV để xem theo ngày và
+tải lại từ Web UI.
+
+Phần **Báo cáo kiểm tra theo ngày** cho phép chọn ngày, xem diagnostic của từng
+lần kiểm tra và tải các file `report-YYYY-MM-DD-to-YYYY-MM-DD*.csv` chứa ngày đó.
+Backend lưu file tại `apps/api-server/runtime/ui-health-logs` mặc định, tự
+rollover sau tối đa 10 ngày hoặc 512 KiB.
 
 1. Xác nhận backend đang chạy.
 2. Xác nhận popup extension báo đã kết nối backend.
@@ -323,7 +335,8 @@ VAHAN. Background cũng sẽ thử reload tab và gửi lại message tự độ
 - Job và runner được lưu in-memory; restart backend sẽ mất trạng thái.
 - Web UI chưa có đăng nhập/phân quyền.
 - Socket.IO cho Web UI chưa có authentication.
-- Báo cáo được tải về thư mục Downloads của Chrome, chưa upload lên storage.
+- Log UI health được lưu ở backend và tải CSV từ Web UI; file Excel của job vẫn
+  được tải về thư mục Downloads của Chrome.
 - Một runner chỉ xử lý một job tại một thời điểm.
 - Người dùng phải tự đọc và nhập CAPTCHA.
 
