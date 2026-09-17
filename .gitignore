@@ -4,3 +4,12 @@ __pycache__/
 .claude/
 *.log
 diagnostics/
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+node_modules/
+dist/
+*.tsbuildinfo
+.venv

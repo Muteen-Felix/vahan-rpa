@@ -1,0 +1,16 @@
+{
+  "name": "vahan-browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/background.js --bundle --format=iife --platform=browser --target=chrome116 --outfile=background.js",
+    "check": "node --check background.js && node --check content.js && node --check popup.js && node scripts/test-job-config.mjs",
+    "smoke:runner": "node scripts/smoke-runner.mjs"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

@@ -2,111 +2,6 @@ const splitValues = (value) => String(value || "").split(",").map((item) => item
 const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const {
-  UiDriftError,
-  assertUiContract,
-  formatUiDrift,
-  getDropdownContainer,
-  isUiDriftError,
-  requireOne,
-  waitForUiContract,
-} = globalThis.VahanUiDrift;
-
-const PAGE_CONTROLS = {
-  archivedFlags: "#archivedFlags",
-  reportType: "#reportType",
-  financialYearSelect: "#financialYearSelect",
-  reportYear: "#reportYear",
-  reportMonth: "#reportMonth",
-  fromYear: "#fromYear",
-  toYear: "#toYear",
-  fromDate: "#fromDate",
-  toDate: "#toDate",
-  delhiNcr: "#delhiNcr",
-  stateName: "#stateName",
-  rtoCode: "#rtoCode",
-  vehicleEmission: "#vehicleEmission",
-  vehicleMaker: "#vehicleMaker",
-  vehicleSubCategory: "#vehicleSubCategory",
-  vehicleClass: "#vehicleClass",
-  evType: "#evType",
-  vehicleStatus: "#vehicleStatus",
-  vehicleOwnerType: "#vehicleOwnerType",
-  vehicleType: "#vehicleType",
-  fitnessCheck: "#fitnessCheck",
-  yAxisHidden: "#yAxis_hidden",
-  xAxisHidden: "#xAxis_hidden",
-};
-
-const MULTISELECT_NAMES = [
-  "category",
-  "fuel",
-  "archivedFlags",
-  "financialYearSelect",
-  "stateName",
-  "rtoCode",
-  "vehicleEmission",
-  "vehicleMaker",
-  "vehicleSubCategory",
-  "vehicleClass",
-  "evType",
-  "vehicleStatus",
-  "vehicleOwnerType",
-];
-
-let pageUiContract = null;
-let lastUiDriftError = null;
-let uiDriftDetected = false;
-const FLOW_STATE_KEY = "vahanUiFlowState";
-let applyGuardCleanup;
-
-async function getFlowState() {
-  const data = await chrome.storage.local.get(FLOW_STATE_KEY);
-  return data[FLOW_STATE_KEY] || null;
-}
-
-async function setFlowState(state) {
-  if (state === null) {
-    await chrome.storage.local.remove(FLOW_STATE_KEY);
-  } else {
-    await chrome.storage.local.set({ [FLOW_STATE_KEY]: state });
-  }
-}
-
-function hasInvalidCaptchaMessage() {
-  const bodyText = document.body?.innerText || "";
-  return bodyText.includes("Invalid CAPTCHA") || bodyText.includes("invalid captcha");
-}
-
-function watchForInvalidCaptcha() {
-  let stopped = false;
-  let timeoutId;
-  const observer = new MutationObserver(() => {
-    if (stopped || !hasInvalidCaptchaMessage()) return;
-    stop();
-    void setFlowState(null).catch((error) => {
-      console.error("[VAHAN RPA] Không thể xoá flow state sau CAPTCHA không hợp lệ.", error);
-    });
-    updateFloatingStep("captcha", "error");
-    updateFloatingStep("apply", "error");
-    setFloatingStatus(
-      "error",
-      "CAPTCHA không hợp lệ. Hãy nhập CAPTCHA mới rồi bấm Apply lại."
-    );
-  });
-
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    observer.disconnect();
-    clearTimeout(timeoutId);
-  };
-
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-  timeoutId = setTimeout(stop, 30000);
-  return stop;
-}
-
 function getOptionMap(select) {
   return [...select.options].map((option) => ({
     label: normalize(option.label || option.textContent),
@@ -125,104 +20,40 @@ async function waitForOptions(selector, labels, timeout = 15000) {
     }
     await delay(200);
   }
-  throw new UiDriftError(
-    "UI_DRIFT_DYNAMIC_CONTROL_TIMEOUT",
-    `${selector}: dynamic options did not load within ${timeout} ms.`,
-    "dynamic-options",
-    { selector, expectedOptions: labels }
-  );
+  throw new Error(`${selector}: dynamic options did not load within ${timeout} ms.`);
 }
 
-function controlNameFromSelector(selector) {
-  return String(selector).replace(/^#/, "");
-}
-
-function findWidgetRows(widget) {
-  return Array.from(
-    widget.querySelectorAll(
-      "[data-search-text], .multiselect-dropdown-list > div:not(.multiselect-dropdown-all-selector)"
-    )
-  ).filter((row, index, rows) => rows.indexOf(row) === index);
-}
-
-async function selectLabels(selector, rawValue, step = "filter") {
+async function selectLabels(selector, rawValue) {
   const labels = splitValues(rawValue);
-  const controlName = controlNameFromSelector(selector);
-  const select = requireOne(selector, controlName, step);
+  const select = document.querySelector(selector);
+  if (!select) throw new Error(`Could not find ${selector}.`);
   const options = getOptionMap(select);
   if (!labels.length && !select.multiple) return;
   const values = labels.map((label) => options.find((option) => option.label === normalize(label))?.value);
-  const missingLabel = labels.find((label, index) => values[index] === undefined);
-  if (missingLabel !== undefined) {
-    throw new UiDriftError(
-      "UI_DRIFT_REQUIRED_OPTION",
-      `${selector}: could not find "${missingLabel}".`,
-      step,
-      {
-        control: controlName,
-        selector,
-        expectedOption: missingLabel,
-        optionCount: select.options.length,
-      }
-    );
-  }
+  if (values.some((value) => value === undefined)) throw new Error(`${selector}: could not find "${labels.join(", ")}".`);
 
-  const widget = select.multiple ? getDropdownContainer(select.id, step) : null;
-
-  if (select.multiple && widget) {
-    const desired = new Set(labels.map(normalize));
-    widget.click();
-    const rows = findWidgetRows(widget);
-    const rowLabels = new Set();
-    for (const row of rows) {
-      const label = normalize(
-        row.getAttribute("data-search-text") ||
-        row.querySelector("label")?.textContent ||
-        row.textContent
-      );
-      rowLabels.add(label);
-      const isSelected = row.classList.contains("checked") || row.querySelector("input")?.checked;
-      const shouldSelect = desired.has(label);
-      if (Boolean(isSelected) !== shouldSelect) row.click();
-    }
-    const missingWidgetLabel = labels.find((label) => !rowLabels.has(normalize(label)));
-    if (missingWidgetLabel !== undefined) {
-      throw new UiDriftError(
-        "UI_DRIFT_OPTION_NOT_UNIQUE",
-        `Không tìm thấy option "${missingWidgetLabel}" trong ${selector}.`,
-        step,
-        { label: controlName, target: missingWidgetLabel, count: 0 }
-      );
-    }
-  } else {
-    for (const option of select.options) option.selected = values.includes(option.value);
-  }
-
+  // Write to the native select first. The VAHAN multi-select widget can omit
+  // filtered/lazy rows from its DOM, so clicking visible widget rows is not a
+  // reliable way to update RTO and other dynamic multi-selects.
+  for (const option of select.options) option.selected = values.includes(option.value);
   select.dispatchEvent(new Event("change", { bubbles: true }));
+  if (typeof select.loadOptions === "function") select.loadOptions();
+  await delay(50);
 
   const actual = [...select.selectedOptions].map((option) => normalize(option.label || option.textContent));
   const expected = labels.map(normalize);
   if (actual.length !== expected.length || expected.some((label) => !actual.includes(label))) {
-    throw new UiDriftError(
-      "UI_DRIFT_SELECTION_NOT_SYNCED",
-      `${selector}: VAHAN widget did not apply the requested selection.`,
-      step,
-      { label: controlName, option: labels.join(", "), selectedOptions: actual }
-    );
+    throw new Error(`${selector}: VAHAN widget did not apply the requested selection.`);
   }
 }
 
 async function loadMakerOptions(rawValue) {
   const makers = splitValues(rawValue);
-  if (!makers.length) return;
-  const select = requireOne("#vehicleMaker", "vehicleMaker", "vehicle-filters");
+  const select = document.querySelector("#vehicleMaker");
+  if (!makers.length || !select) return;
   for (const maker of makers) {
     if ([...select.options].some((option) => normalize(option.label || option.textContent) === normalize(maker))) continue;
-    const url = new URL("/analytics/vahanpublicreport/lazy/vehicle-makers", location.origin);
-    url.search = new URLSearchParams({ page: "0", size: "20", search: maker }).toString();
-    const response = await fetch(url, { credentials: "same-origin" });
-    if (!response.ok) throw new Error(`Could not load Maker options (${response.status}).`);
-    const values = await response.json();
+    const values = await fetchMakers(maker);
     for (const value of values) {
       if (![...select.options].some((option) => option.value === value)) select.add(new Option(value, value));
     }
@@ -245,14 +76,7 @@ async function fetchRtos(stateLabels) {
   if (labels.length !== 1) return [];
   const state = [...document.querySelectorAll("#stateName option")]
     .find((option) => normalize(option.label || option.textContent) === normalize(labels[0]));
-  if (!state) {
-    throw new UiDriftError(
-      "UI_DRIFT_REQUIRED_OPTION",
-      `Không tìm thấy State "${labels[0]}" để tải RTO.`,
-      "state-rto",
-      { control: "stateName", selector: "#stateName", expectedOption: labels[0] }
-    );
-  }
+  if (!state) return [];
   const url = new URL("/analytics/json_rtos", location.origin);
   url.searchParams.set("stateCode", state.value);
   const response = await fetch(url, { credentials: "same-origin" });
@@ -265,21 +89,21 @@ async function fetchMakers(search) {
   url.search = new URLSearchParams({ page: "0", size: "20", search }).toString();
   const response = await fetch(url, { credentials: "same-origin" });
   if (!response.ok) throw new Error(`Could not search Maker options (${response.status}).`);
-  return response.json();
+  const payload = await response.json();
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload.content || payload.results || payload.data || payload.items || [];
+  return rows.map((item) => typeof item === "string"
+    ? item
+    : item.label || item.name || item.value || item.makerName,
+  ).filter(Boolean);
 }
 
 async function getXAxisOptions(yAxisLabel) {
-  const yAxis = requireOne("#yAxis", "yAxis", "axis");
-  if (!yAxisLabel) return [];
+  const yAxis = document.querySelector("#yAxis");
+  if (!yAxis || !yAxisLabel) return [];
   const match = getOptionMap(yAxis).find((option) => option.label === normalize(yAxisLabel));
-  if (!match) {
-    throw new UiDriftError(
-      "UI_DRIFT_REQUIRED_OPTION",
-      `Không tìm thấy Y-Axis "${yAxisLabel}".`,
-      "axis",
-      { control: "yAxis", selector: "#yAxis", expectedOption: yAxisLabel, optionCount: yAxis.options.length }
-    );
-  }
+  if (!match) return [];
   yAxis.value = match.value;
   yAxis.dispatchEvent(new Event("change", { bubbles: true }));
   yAxis.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -290,86 +114,161 @@ async function getXAxisOptions(yAxisLabel) {
 }
 
 async function getStateOptions(delhiNcrLabel) {
-  await selectLabels("#delhiNcr", delhiNcrLabel, "state");
+  await selectLabels("#delhiNcr", delhiNcrLabel);
   await delay(150);
-  const state = requireOne("#stateName", "stateName", "state");
-  return [...state.options]
-    .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim())
-    .filter(Boolean);
+  const state = document.querySelector("#stateName");
+  return state
+    ? [...state.options]
+        .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+    : [];
 }
 
 function fill(selector, value) {
   if (!value) return;
-  const input = requireOne(selector, controlNameFromSelector(selector), "time");
+  const input = document.querySelector(selector);
+  if (!input) throw new Error(`Could not find ${selector}.`);
   input.value = value;
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-async function fillVahan(config, expectedSignature = null) {
-  if (lastUiDriftError) throw lastUiDriftError;
-  const checkContract = (step) =>
-    assertUiContract(step, expectedSignature, PAGE_CONTROLS, MULTISELECT_NAMES, pageUiContract);
-
-  checkContract("before-fill");
-  await selectLabels("#archivedFlags", config.archivedFlags, "time");
-  await selectLabels("#reportType", config.period, "time");
+async function fillVahan(config) {
+  const has = (key) => Object.prototype.hasOwnProperty.call(config, key);
+  if (has("archivedFlags")) await selectLabels("#archivedFlags", config.archivedFlags);
+  if (has("period")) await selectLabels("#reportType", config.period);
   await delay(300);
-  await selectLabels("#financialYearSelect", config.financialYears, "time");
-  await selectLabels("#reportYear", config.reportYear, "time");
-  await selectLabels("#reportMonth", config.reportMonth, "time");
-  fill("#fromYear", config.fromYear);
-  fill("#toYear", config.toYear);
-  fill("#fromDate", config.fromDate);
-  fill("#toDate", config.toDate);
-  checkContract("after-time");
+  if (has("financialYears")) await selectLabels("#financialYearSelect", config.financialYears);
+  if (has("reportYear")) await selectLabels("#reportYear", config.reportYear);
+  if (has("reportMonth")) await selectLabels("#reportMonth", config.reportMonth);
+  if (has("fromYear")) fill("#fromYear", config.fromYear);
+  if (has("toYear")) fill("#toYear", config.toYear);
+  if (has("fromDate")) fill("#fromDate", config.fromDate);
+  if (has("toDate")) fill("#toDate", config.toDate);
 
   // VAHAN rebuilds the State options whenever Delhi NCR changes. Apply this
   // first so the State selection below is not cleared by the page script.
-  await selectLabels("#delhiNcr", config.delhiNcr, "state");
-  await delay(100);
-  await selectLabels("#stateName", config.states, "state");
-  if (splitValues(config.rtos).length) {
+  if (has("delhiNcr")) {
+    await selectLabels("#delhiNcr", config.delhiNcr);
+    await delay(100);
+  }
+  if (has("states")) await selectLabels("#stateName", config.states);
+  if (has("rtos") && splitValues(config.rtos).length) {
     await waitForOptions("#rtoCode", splitValues(config.rtos));
-    await selectLabels("#rtoCode", config.rtos, "state-rto");
+    await selectLabels("#rtoCode", config.rtos);
   }
-  checkContract("after-state");
-
-  await selectLabels("#vehicleEmission", config.emissions, "vehicle-filters");
-  await loadMakerOptions(config.makers);
-  await selectLabels("#vehicleMaker", config.makers, "vehicle-filters");
-  await selectLabels("#vehicleCategoryGroup", config.categoryGroups, "vehicle-filters");
-  await selectLabels("#vehicleSubCategory", config.subCategories, "vehicle-filters");
-  await selectLabels("#vehicleClass", config.classes, "vehicle-filters");
-  await selectLabels("#vehicleFuel", config.fuels, "vehicle-filters");
-  await selectLabels("#evType", config.evTypes, "vehicle-filters");
-  await selectLabels("#vehicleStatus", config.statuses, "vehicle-filters");
-  await selectLabels("#vehicleOwnerType", config.ownerTypes, "vehicle-filters");
-  await selectLabels("#vehicleType", config.vehicleType, "vehicle-filters");
-  await selectLabels("#fitnessCheck", config.fitness, "vehicle-filters");
-  checkContract("after-vehicle-filters");
-
-  await selectLabels("#yAxis", config.yAxis, "axis");
-  const yAxis = requireOne("#yAxis", "yAxis", "axis");
-  yAxis.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  if (splitValues(config.xAxis).length) {
+  if (has("emissions")) await selectLabels("#vehicleEmission", config.emissions);
+  if (has("makers")) {
+    await loadMakerOptions(config.makers);
+    await selectLabels("#vehicleMaker", config.makers);
+  }
+  const optionalSelects = {
+    categoryGroups: "#vehicleCategoryGroup", subCategories: "#vehicleSubCategory",
+    classes: "#vehicleClass", fuels: "#vehicleFuel", evTypes: "#evType",
+    statuses: "#vehicleStatus", ownerTypes: "#vehicleOwnerType",
+    vehicleType: "#vehicleType", fitness: "#fitnessCheck",
+  };
+  for (const [key, selector] of Object.entries(optionalSelects)) {
+    if (has(key)) await selectLabels(selector, config[key]);
+  }
+  if (has("yAxis")) {
+    await selectLabels("#yAxis", config.yAxis);
+    document.querySelector("#yAxis")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }
+  if (has("xAxis") && splitValues(config.xAxis).length) {
     await waitForOptions("#xAxis", splitValues(config.xAxis));
-    await selectLabels("#xAxis", config.xAxis, "axis");
+    await selectLabels("#xAxis", config.xAxis);
   }
-  const yAxisHidden = requireOne("#yAxis_hidden", "yAxisHidden", "axis");
-  const xAxisHidden = requireOne("#xAxis_hidden", "xAxisHidden", "axis");
-  const expectedAxis = `${yAxis.value}/${document.querySelector("#xAxis")?.value || ""}`;
-  const actualAxis = `${yAxisHidden.value}/${xAxisHidden.value}`;
-  if (expectedAxis !== actualAxis) {
-    throw new UiDriftError(
-      "UI_DRIFT_AXIS_NOT_SYNCED",
-      "Y-Axis/X-Axis hiển thị đã chọn nhưng field gửi lên server không đồng bộ.",
-      "axis",
-      { expected: expectedAxis, actual: actualAxis }
-    );
+  if (has("autoApply")) configureAutoApply(config.autoApply);
+}
+
+async function captureCaptcha(timeout = 15000) {
+  const deadline = Date.now() + timeout;
+  let image;
+  while (Date.now() < deadline) {
+    image = document.querySelector("#captchaImage");
+    if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) break;
+    await delay(200);
   }
-  checkContract("before-captcha");
-  configureAutoApply(config.autoApply);
+  if (!image?.complete || !image.naturalWidth || !image.naturalHeight) {
+    throw new Error("CAPTCHA image did not load within the allowed time.");
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not create a canvas for the CAPTCHA image.");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const sourceUrl = image.currentSrc || image.src || image.getAttribute("src");
+  if (!sourceUrl) throw new Error("The CAPTCHA image has no identifier.");
+  const imageDataUrl = canvas.toDataURL("image/png");
+  let hash = 2166136261;
+  for (let index = 0; index < imageDataUrl.length; index += 1) {
+    hash ^= imageDataUrl.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return {
+    captchaId: `${sourceUrl}#${(hash >>> 0).toString(16)}`,
+    imageDataUrl,
+  };
+}
+
+let captchaRefreshTimer;
+async function notifyCaptchaRefresh() {
+  clearTimeout(captchaRefreshTimer);
+  captchaRefreshTimer = setTimeout(async () => {
+    try {
+      const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+      if (!activeServerJob || activeServerJob.stage !== "WAITING_CAPTCHA") return;
+      const captcha = await captureCaptcha();
+      if (captcha.captchaId === activeServerJob.captchaId) return;
+      await chrome.runtime.sendMessage({ type: "SERVER_CAPTCHA_CHANGED", captcha });
+    } catch (_error) {
+      // A transient image load is expected while VAHAN swaps CAPTCHA pixels.
+    }
+  }, 150);
+}
+
+function observeCaptchaChanges() {
+  document.addEventListener("load", (event) => {
+    if (event.target?.id === "captchaImage") notifyCaptchaRefresh();
+  }, true);
+  const observer = new MutationObserver((mutations) => {
+    if (mutations.some((mutation) =>
+      mutation.target?.id === "captchaImage" ||
+      [...mutation.addedNodes].some((node) => node.nodeType === Node.ELEMENT_NODE && (
+        node.id === "captchaImage" || node.querySelector?.("#captchaImage")
+      )),
+    )) notifyCaptchaRefresh();
+  });
+  observer.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["src"],
+  });
+}
+
+function submitRemoteCaptcha(value, autoApply) {
+  const input = document.querySelector("#externalCaptcha");
+  if (!input) throw new Error("Could not find the CAPTCHA input on VAHAN.");
+  input.focus();
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  updateFloatingStep("captcha", "done");
+
+  if (!autoApply) {
+    setFloatingStatus("waiting", "CAPTCHA đã được điền. Hãy kiểm tra và bấm Apply trên VAHAN.");
+    return { applied: false };
+  }
+
+  // configureAutoApply owns the delayed click and prevents duplicate submits.
+  configureAutoApply(true);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  return { applied: true };
 }
 
 let autoApplyCleanup;
@@ -413,70 +312,6 @@ function configureAutoApply(enabled) {
   onInput();
 }
 
-// Guard Apply for both manual and automatic submissions. The first click is
-// paused long enough to validate/persist the UI signature; only then is the
-// original click replayed so the page can navigate safely.
-function installApplyGuard() {
-  applyGuardCleanup?.();
-  const applyButton = requireOne("#applyTrigger", "apply", "before-apply");
-  let forwarding = false;
-  let preparing = false;
-  let invalidCaptchaCleanup;
-
-  const onClick = (event) => {
-    if (forwarding) {
-      forwarding = false;
-      return;
-    }
-
-    const captcha = document.querySelector("#externalCaptcha");
-    if (!uiDriftDetected && captcha && captcha.value.trim().length < 6) return;
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (preparing || uiDriftDetected) return;
-    preparing = true;
-
-    void (async () => {
-      try {
-        const contract = assertUiContract(
-          "before-apply",
-          pageUiContract?.signature || null,
-          PAGE_CONTROLS,
-          MULTISELECT_NAMES,
-          pageUiContract
-        );
-        pageUiContract = contract;
-        await setFlowState({
-          status: "AWAITING_RESULT",
-          attempts: 1,
-          uiContract: contract,
-          startedAt: Date.now(),
-        });
-        invalidCaptchaCleanup = watchForInvalidCaptcha();
-        forwarding = true;
-        applyButton.click();
-      } catch (error) {
-        if (isUiDriftError(error)) {
-          showUiDriftError(error);
-        } else {
-          setFloatingStatus("error", error.message);
-        }
-      } finally {
-        preparing = false;
-      }
-    })();
-  };
-
-  applyButton.addEventListener("click", onClick, true);
-  applyGuardCleanup = () => {
-    applyButton.removeEventListener("click", onClick, true);
-    invalidCaptchaCleanup?.();
-    invalidCaptchaCleanup = undefined;
-    applyGuardCleanup = undefined;
-  };
-}
-
 async function initializeAutoApplyPreference() {
   const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
   configureAutoApply(vahanConfig?.autoApply);
@@ -486,12 +321,12 @@ let exportClicked = false;
 let exportWatcherTimer;
 let exportWatcherTimeout;
 async function startAutoExportWatcher() {
-  const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
+  const { vahanConfig, activeServerJob } = await chrome.storage.local.get(["vahanConfig", "activeServerJob"]);
   clearInterval(exportWatcherTimer);
   clearTimeout(exportWatcherTimeout);
   exportWatcherTimer = undefined;
   exportWatcherTimeout = undefined;
-  if (!(vahanConfig?.autoExport ?? true) || exportClicked) return;
+  if (activeServerJob || !(vahanConfig?.autoExport ?? true) || exportClicked) return;
   exportWatcherTimer = setInterval(() => {
     const button = document.querySelector("#downloadBtn1");
     if (!exportClicked && button && button.getClientRects().length) {
@@ -525,64 +360,15 @@ function setFloatingStatus(state, message) {
   const badge = root.querySelector(".badge");
   const status = root.querySelector(".status");
   const labels = {
-    checking: "Đang kiểm tra UI...",
     ready: "Sẵn sàng",
     running: "Đang xử lý...",
     waiting: "Chờ nhập CAPTCHA",
     success: "Thành công",
     error: "Có lỗi xảy ra",
-    "ui-drift": "Cần cập nhật tool",
   };
   badge.dataset.state = state;
   badge.textContent = labels[state] || labels.ready;
   status.textContent = message;
-}
-
-function renderUiDriftDetail(report) {
-  const root = floatingWidget?.shadowRoot;
-  const detail = root?.querySelector(".drift-detail");
-  if (!detail) return;
-
-  for (const field of ["target", "expected", "actual", "step", "code", "action"]) {
-    const valueEl = detail.querySelector(`[data-ui-drift-field="${field}"]`);
-    if (valueEl) valueEl.textContent = report[field] || "không có dữ liệu";
-  }
-  detail.hidden = false;
-}
-
-function markUiDriftStep(step) {
-  const normalizedStep = String(step || "").toLocaleLowerCase();
-  const stepName = normalizedStep.includes("axis")
-    ? "axes"
-    : normalizedStep.includes("state") || normalizedStep.includes("rto")
-      ? "time"
-      : normalizedStep.includes("vehicle") || normalizedStep.includes("category") || normalizedStep.includes("fuel")
-        ? "vehicle"
-        : normalizedStep.includes("captcha")
-          ? "captcha"
-          : normalizedStep.includes("apply")
-            ? "apply"
-            : "time";
-  updateFloatingStep(stepName, "error");
-}
-
-function showUiDriftError(error) {
-  const report = formatUiDrift(error);
-  lastUiDriftError = error;
-  uiDriftDetected = true;
-  console.error("[VAHAN RPA UI DRIFT]", report, error);
-
-  markUiDriftStep(report.step);
-  setFloatingStatus("ui-drift", `⚠️ ${report.message} Mã: ${report.code}.`);
-  renderUiDriftDetail(report);
-
-  const root = floatingWidget?.shadowRoot;
-  const button = root?.querySelector(".start");
-  if (button) {
-    button.dataset.uiDrift = "true";
-    button.disabled = true;
-    button.textContent = "⛔ Giao diện chưa được hỗ trợ";
-  }
 }
 
 function resetFloatingSteps() {
@@ -591,10 +377,89 @@ function resetFloatingSteps() {
   }
 }
 
+const hasInvalidCaptchaMessage = () => /invalid captcha/i.test(document.body?.innerText || "");
+// VAHAN trả text này khi filter hợp lệ nhưng không có dữ liệu khớp (khác timeout/lỗi thật) —
+// #downloadBtn1 sẽ KHÔNG BAO GIỜ xuất hiện trong trường hợp này, nên phải phát hiện riêng,
+// nếu không resumeServerJobAfterApply() sẽ chờ hết 90s rồi báo FAILED "Timed out" gây hiểu lầm.
+const NO_RECORD_TEXT = "no record found";
+const hasNoRecordMessage = () => (document.body?.innerText || "").toLocaleLowerCase().includes(NO_RECORD_TEXT);
+const isVisible = (element) => Boolean(element && (
+  element.getClientRects().length || window.getComputedStyle(element).display !== "none"
+));
+
+async function resumeServerJobAfterApply() {
+  const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+  if (!activeServerJob || activeServerJob.stage !== "WAITING_RESULT") return;
+
+  updateFloatingStep("captcha", "done");
+  updateFloatingStep("apply", "done");
+  updateFloatingStep("export", "running");
+  setFloatingStatus("running", "Trang đã tải lại. Đang kiểm tra kết quả VAHAN...");
+
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    if (hasInvalidCaptchaMessage()) {
+      updateFloatingStep("captcha", "error");
+      updateFloatingStep("export", "idle");
+      setFloatingStatus("waiting", "CAPTCHA không đúng. Đang gửi ảnh mới sang Web UI...");
+      const captcha = await captureCaptcha();
+      await chrome.runtime.sendMessage({
+        type: "SERVER_JOB_PAGE_RESULT",
+        result: "INVALID_CAPTCHA",
+        captcha,
+      });
+      return;
+    }
+
+    if (hasNoRecordMessage()) {
+      updateFloatingStep("export", "idle");
+      setFloatingStatus("success", "VAHAN không có dữ liệu khớp bộ lọc này (No record found).");
+      await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "NO_RECORD" });
+      return;
+    }
+
+    const downloadButton = document.querySelector("#downloadBtn1");
+    if (isVisible(downloadButton)) {
+      if (activeServerJob.config?.autoExport ?? true) {
+        setFloatingStatus("running", "Báo cáo đã sẵn sàng. Đang tải và xác minh file Excel...");
+        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "DOWNLOAD_READY" });
+      } else {
+        setFloatingStatus("success", "Báo cáo đã sẵn sàng. Bạn có thể tải Excel thủ công.");
+        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "COMPLETED" });
+      }
+      updateFloatingStep("export", "done");
+      return;
+    }
+    await delay(500);
+  }
+
+  updateFloatingStep("export", "error");
+  setFloatingStatus("error", "Quá thời gian chờ kết quả từ VAHAN.");
+  await chrome.runtime.sendMessage({
+    type: "SERVER_JOB_PAGE_RESULT",
+    result: "FAILED",
+    error: "Timed out waiting for the VAHAN result after 90 seconds.",
+  });
+}
+
+function renderFloatingRunnerConnection(connection = {}) {
+  const element = floatingWidget?.shadowRoot?.querySelector(".backend-connection");
+  if (!element) return;
+  const labels = {
+    connected: "Backend đã kết nối",
+    connecting: "Đang kết nối backend...",
+    disconnected: "Backend đã ngắt kết nối",
+    error: "Không thể kết nối backend",
+  };
+  element.dataset.state = connection.status || "disconnected";
+  element.querySelector("span:last-child").textContent =
+    labels[connection.status] || labels.disconnected;
+  element.title = connection.detail || "";
+}
+
 async function runFromFloatingWidget() {
   const root = floatingWidget.shadowRoot;
   const button = root.querySelector(".start");
-  if (uiDriftDetected) return;
   button.disabled = true;
   resetFloatingSteps();
   setFloatingStatus("running", "Đang đọc cấu hình đã lưu...");
@@ -606,13 +471,7 @@ async function runFromFloatingWidget() {
       throw new Error("Chưa có cấu hình. Hãy mở popup extension và chọn bộ lọc trước.");
     }
 
-    const contract = pageUiContract || await waitForUiContract(
-      "before-fill",
-      null,
-      PAGE_CONTROLS,
-      MULTISELECT_NAMES
-    );
-    await fillVahan(vahanConfig, contract.signature);
+    await fillVahan(vahanConfig);
     updateFloatingStep("time", "done");
     updateFloatingStep("vehicle", "done");
     updateFloatingStep("axes", "done");
@@ -625,15 +484,11 @@ async function runFromFloatingWidget() {
     );
     button.textContent = "↻ Điền Lại Bộ Lọc";
   } catch (error) {
-    if (isUiDriftError(error)) {
-      showUiDriftError(error);
-    } else {
-      updateFloatingStep("time", "error");
-      setFloatingStatus("error", error.message);
-      button.textContent = "↻ Thử Lại";
-    }
+    updateFloatingStep("time", "error");
+    setFloatingStatus("error", error.message);
+    button.textContent = "↻ Thử Lại";
   } finally {
-    button.disabled = uiDriftDetected;
+    button.disabled = false;
   }
 }
 
@@ -667,17 +522,31 @@ function injectFloatingWidget() {
       .toggle:hover { background: rgba(255,255,255,.3); }
       .body { padding: 14px 16px; }
       .body[hidden] { display: none; }
+      .backend-connection {
+        display: flex; align-items: center; gap: 7px; margin: 0 0 12px;
+        color: #586069; font-size: 12px;
+      }
+      .backend-dot {
+        width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%;
+        background: #bf8700; box-shadow: 0 0 0 3px rgba(191,135,0,.12);
+      }
+      .backend-connection[data-state="connected"] .backend-dot {
+        background: #2ea44f; box-shadow: 0 0 0 3px rgba(46,164,79,.14);
+      }
+      .backend-connection[data-state="disconnected"] .backend-dot,
+      .backend-connection[data-state="error"] .backend-dot {
+        background: #cb2431; box-shadow: 0 0 0 3px rgba(203,36,49,.12);
+      }
       .badge {
         display: inline-block; margin-left: auto; padding: 3px 8px;
         border: 1px solid rgba(255,255,255,.45); border-radius: 12px;
         background: rgba(255,255,255,.16); color: #fff; font-size: 12px; font-weight: 600;
       }
-      .badge[data-state="checking"], .badge[data-state="running"], .badge[data-state="waiting"] {
+      .badge[data-state="running"], .badge[data-state="waiting"] {
         border-color: #fff5b1; background: #fffbdd; color: #9a6700;
       }
       .badge[data-state="success"] { border-color: #bef5cb; background: #dcffe4; color: #22863a; }
       .badge[data-state="error"] { border-color: #ffdce0; background: #ffeef0; color: #cb2431; }
-      .badge[data-state="ui-drift"] { border-color: #fecdd3; background: #fff1f2; color: #9f1239; }
       .steps { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; font-size: 13px; }
       .step { display: flex; align-items: center; gap: 8px; color: #666; line-height: 1.35; }
       .step-icon { width: 16px; color: #8c959f; font-size: 16px; font-weight: 700; text-align: center; }
@@ -709,22 +578,15 @@ function injectFloatingWidget() {
       }
       .open-popup:hover { background: #f6f8fa; border-color: #8c959f; }
       .status { min-height: 22px; margin-top: 10px; color: #586069; font-size: 12px; line-height: 1.45; }
-      .drift-detail {
-        margin-top: 10px; padding: 10px; border: 1px solid #fecdd3;
-        border-radius: 8px; background: #fff7f8; color: #4c0519;
-        font-size: 10px; line-height: 1.45;
-      }
-      .drift-detail[hidden] { display: none; }
-      .drift-detail-title { margin-bottom: 6px; font-weight: 700; }
-      .drift-detail-action { margin-top: 6px; }
     </style>
     <section class="card" aria-label="VAHAN RPA Tool">
       <header class="header">
         <div class="title"><span aria-hidden="true">🤖</span> VAHAN RPA Tool</div>
-        <div class="badge" data-state="checking">Đang kiểm tra UI...</div>
+        <div class="badge" data-state="ready">Sẵn sàng</div>
         <button class="toggle" type="button" aria-label="Thu gọn widget" aria-expanded="true">−</button>
       </header>
       <div class="body">
+        <div class="backend-connection" data-state="connecting"><span class="backend-dot"></span><span>Đang kết nối backend...</span></div>
         <div class="steps">
           <div class="step" data-step="time" data-state="idle"><span class="step-icon">○</span><span>1. Điền thời gian và khu vực</span></div>
           <div class="step" data-step="vehicle" data-state="idle"><span class="step-icon">○</span><span>2. Điền bộ lọc phương tiện</span></div>
@@ -739,16 +601,7 @@ function injectFloatingWidget() {
         </div>
         <button class="start" type="button">▶ Điền Bộ Lọc Tự Động</button>
         <button class="open-popup" type="button">⚙ Mở Cấu Hình</button>
-        <div class="status" role="status">Đang kiểm tra giao diện và cấu trúc control...</div>
-        <div class="drift-detail" hidden aria-live="assertive">
-          <div class="drift-detail-title">Chi tiết thay đổi UI</div>
-          <div><strong>Vị trí:</strong> <span data-ui-drift-field="target"></span></div>
-          <div><strong>Mong đợi:</strong> <span data-ui-drift-field="expected"></span></div>
-          <div><strong>Thực tế:</strong> <span data-ui-drift-field="actual"></span></div>
-          <div><strong>Bước:</strong> <span data-ui-drift-field="step"></span></div>
-          <div><strong>Mã lỗi:</strong> <span data-ui-drift-field="code"></span></div>
-          <div class="drift-detail-action"><strong>Hướng xử lý:</strong> <span data-ui-drift-field="action"></span></div>
-        </div>
+        <div class="status" role="status">Nhấn nút trên để dùng cấu hình đã lưu từ popup.</div>
       </div>
     </section>`;
 
@@ -778,7 +631,8 @@ function injectFloatingWidget() {
       setFloatingStatus("error", `Không thể mở cấu hình: ${error.message}`);
     }
   });
-  chrome.storage.local.get("vahanConfig").then(({ vahanConfig }) => {
+  chrome.storage.local.get(["vahanConfig", "runnerConnection"]).then(({ vahanConfig, runnerConnection }) => {
+    renderFloatingRunnerConnection(runnerConnection);
     root.querySelector('[data-setting="autoApply"]').checked = vahanConfig?.autoApply ?? false;
     root.querySelector('[data-setting="autoExport"]').checked = vahanConfig?.autoExport ?? true;
     if (vahanConfig?.autoApply) {
@@ -787,59 +641,18 @@ function injectFloatingWidget() {
   });
 }
 
-async function resumeAfterApply(state) {
-  if (!state.uiContract?.signature) {
-    await setFlowState(null);
-    showUiDriftError(
-      new UiDriftError(
-        "UI_DRIFT_STALE_FLOW_STATE",
-        "Flow cũ không có thông tin UI contract; không tiếp tục tự động.",
-        "resume"
-      )
-    );
-    return;
-  }
-
-  try {
-    pageUiContract = await waitForUiContract(
-      "post-apply",
-      state.uiContract.signature,
-      PAGE_CONTROLS,
-      MULTISELECT_NAMES,
-      10000,
-      state.uiContract
-    );
-  } catch (error) {
-    await setFlowState(null);
-    if (isUiDriftError(error)) {
-      showUiDriftError(error);
-    } else {
-      setFloatingStatus("error", error.message);
-    }
-    return;
-  }
-
-  installApplyGuard();
-  for (const name of ["time", "vehicle", "axes", "captcha", "apply"]) {
-    updateFloatingStep(name, "done");
-  }
-  const bodyText = document.body.innerText || "";
-  await setFlowState(null);
-
-  if (bodyText.includes("Invalid CAPTCHA") || bodyText.includes("invalid captcha")) {
-    updateFloatingStep("captcha", "error");
-    setFloatingStatus(
-      "error",
-      "CAPTCHA không hợp lệ. Hãy nhập CAPTCHA mới rồi bấm Apply lại."
-    );
-    return;
-  }
-
-  setFloatingStatus("running", "Apply đã gửi — đang kiểm tra bảng kết quả...");
-}
-
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes.vahanConfig) return;
+  if (areaName !== "local") return;
+  if (changes.activeServerJob?.newValue) {
+    clearInterval(exportWatcherTimer);
+    clearTimeout(exportWatcherTimeout);
+    exportWatcherTimer = undefined;
+    exportWatcherTimeout = undefined;
+  }
+  if (changes.runnerConnection) {
+    renderFloatingRunnerConnection(changes.runnerConnection.newValue);
+  }
+  if (!changes.vahanConfig) return;
   const previous = changes.vahanConfig.oldValue || {};
   const current = changes.vahanConfig.newValue || {};
   const autoApply = current.autoApply ?? false;
@@ -857,6 +670,15 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   let operation;
   if (message?.type === "FILL_VAHAN") operation = fillVahan(message.config).then(() => ({ ok: true }));
+  else if (message?.type === "CAPTURE_CAPTCHA") operation = captureCaptcha().then((captcha) => ({ ok: true, ...captcha }));
+  else if (message?.type === "SUBMIT_REMOTE_CAPTCHA") {
+    operation = Promise.resolve({ ok: true, ...submitRemoteCaptcha(message.value, message.autoApply) });
+  }
+  else if (message?.type === "CLICK_EXCEL_DOWNLOAD") {
+    const button = document.querySelector("#downloadBtn1");
+    if (!isVisible(button)) operation = Promise.resolve({ ok: false, error: "Excel download button is not visible." });
+    else { button.click(); operation = Promise.resolve({ ok: true }); }
+  }
   else if (message?.type === "GET_VAHAN_OPTIONS") operation = Promise.resolve({ ok: true, options: readOptions(message.selectors) });
   else if (message?.type === "GET_STATE_OPTIONS") operation = getStateOptions(message.delhiNcr).then((options) => ({ ok: true, options }));
   else if (message?.type === "GET_RTO_OPTIONS") operation = fetchRtos(message.stateLabels).then((options) => ({ ok: true, options }));
@@ -866,47 +688,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   operation
     .then(sendResponse)
-    .catch((error) => {
-      const response = { ok: false, error: error.message };
-      if (isUiDriftError(error)) {
-        showUiDriftError(error);
-        const report = formatUiDrift(error);
-        response.error = report.message;
-        response.uiDrift = report;
-      }
-      sendResponse(response);
-    });
+    .catch((error) => sendResponse({ ok: false, error: error.message }));
   return true;
 });
 
-async function initializeContent() {
-  injectFloatingWidget();
-  setFloatingStatus("checking", "Đang kiểm tra giao diện và cấu trúc control...");
-  try {
-    pageUiContract = await waitForUiContract(
-      "preflight",
-      null,
-      PAGE_CONTROLS,
-      MULTISELECT_NAMES
-    );
-    const state = await getFlowState();
-    if (state?.status === "AWAITING_RESULT") {
-      await resumeAfterApply(state);
-    } else {
-      installApplyGuard();
-      setFloatingStatus("ready", "Giao diện đã được kiểm tra. Nhấn nút trên để dùng cấu hình đã lưu từ popup.");
-    }
-    if (uiDriftDetected) return;
-    await initializeAutoApplyPreference();
-    await startAutoExportWatcher();
-  } catch (error) {
-    await setFlowState(null);
-    if (isUiDriftError(error)) {
-      showUiDriftError(error);
-    } else {
-      setFloatingStatus("error", error.message);
-    }
-  }
-}
-
-initializeContent();
+injectFloatingWidget();
+initializeAutoApplyPreference();
+startAutoExportWatcher();
+observeCaptchaChanges();
+resumeServerJobAfterApply().catch((error) => {
+  chrome.runtime.sendMessage({
+    type: "SERVER_JOB_PAGE_RESULT",
+    result: "FAILED",
+    error: error.message,
+  }).catch(() => {});
+});

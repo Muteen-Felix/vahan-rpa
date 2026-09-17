@@ -31,7 +31,56 @@ const dropdowns = {
 
 const status = document.querySelector("#status");
 const fillButton = document.querySelector("#fill");
+const runnerConnection = document.querySelector("#runnerConnection");
+const runnerServerUrl = document.querySelector("#runnerServerUrl");
+const runnerName = document.querySelector("#runnerName");
+const runnerToken = document.querySelector("#runnerToken");
+const saveRunnerConfigButton = document.querySelector("#saveRunnerConfig");
 let activeTabId;
+
+function renderRunnerConnection(connection = {}) {
+  const labels = {
+    connected: "Backend đã kết nối",
+    connecting: "Đang kết nối backend...",
+    disconnected: "Backend đã ngắt kết nối",
+    error: "Không thể kết nối backend",
+  };
+  runnerConnection.dataset.state = connection.status || "disconnected";
+  runnerConnection.querySelector(".connection-text").textContent =
+    labels[connection.status] || labels.disconnected;
+  runnerConnection.title = connection.detail || "";
+}
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === "RUNNER_CONNECTION_CHANGED") {
+    renderRunnerConnection(message.connection);
+  }
+});
+
+async function initializeRunnerConfig() {
+  const { runnerConfig = {} } = await chrome.storage.local.get("runnerConfig");
+  runnerServerUrl.value = runnerConfig.serverUrl || "http://127.0.0.1:8000";
+  runnerName.value = runnerConfig.runnerName || "VAHAN Chrome";
+  runnerToken.value = runnerConfig.token || "change-me";
+}
+
+saveRunnerConfigButton.addEventListener("click", async () => {
+  const serverUrl = runnerServerUrl.value.trim().replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(serverUrl)) {
+    renderRunnerConnection({ status: "error", detail: "Server URL phải bắt đầu bằng http:// hoặc https://" });
+    return;
+  }
+  const { runnerConfig = {} } = await chrome.storage.local.get("runnerConfig");
+  await chrome.storage.local.set({
+    runnerConfig: {
+      ...runnerConfig,
+      serverUrl,
+      runnerName: runnerName.value.trim() || "VAHAN Chrome",
+      token: runnerToken.value,
+    },
+  });
+  renderRunnerConnection({ status: "connecting", detail: "Đang kết nối lại backend..." });
+});
 
 function selectedLabels(element) {
   if (element.tagName === "SELECT") {
@@ -262,25 +311,81 @@ async function refreshXAxis(selectedValue = "") {
 
 function setupMakerAutocomplete(initialValue) {
   const input = document.getElementById("makers");
-  const list = document.createElement("datalist");
-  list.id = "makerOptions";
-  input.setAttribute("list", list.id);
-  input.after(list);
-  input.value = initialValue;
+  input.type = "hidden";
+  const picker = document.createElement("div");
+  picker.className = "maker-picker";
+  const chips = document.createElement("div");
+  chips.className = "maker-chips";
+  const searchInput = document.createElement("input");
+  searchInput.type = "search";
+  searchInput.placeholder = "Nhập ít nhất 2 ký tự để tìm...";
+  const results = document.createElement("div");
+  results.className = "maker-results";
+  picker.append(chips, searchInput, results);
+  input.after(picker);
+  let selected = String(initialValue || "").split(",").map((item) => item.trim()).filter(Boolean);
   let timer;
-  input.addEventListener("input", () => {
+
+  const sync = () => {
+    input.value = selected.join(",");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    chips.replaceChildren(...selected.map((maker) => {
+      const chip = document.createElement("span");
+      chip.className = "maker-chip";
+      chip.append(document.createTextNode(maker));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = `Bỏ ${maker}`;
+      remove.addEventListener("click", () => {
+        selected = selected.filter((item) => item !== maker);
+        sync();
+      });
+      chip.append(remove);
+      return chip;
+    }));
+  };
+
+  searchInput.addEventListener("input", () => {
     clearTimeout(timer);
-    const search = input.value.split(",").at(-1).trim();
-    if (search.length < 2) return;
+    const search = searchInput.value.trim();
+    if (search.length < 2) {
+      results.replaceChildren();
+      return;
+    }
+    results.textContent = "Đang tìm...";
     timer = setTimeout(async () => {
       const response = await message({ type: "SEARCH_MAKERS", search });
-      if (!response?.ok) return;
-      list.replaceChildren(...response.options.map((label) => new Option(label)));
+      results.replaceChildren();
+      if (!response?.ok) {
+        results.textContent = response?.error || "Không tìm được Maker.";
+        return;
+      }
+      const choices = response.options.filter((maker) => !selected.includes(maker));
+      if (!choices.length) results.textContent = "Không có kết quả.";
+      for (const maker of choices) {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.textContent = maker;
+        option.addEventListener("click", () => {
+          selected.push(maker);
+          searchInput.value = "";
+          results.replaceChildren();
+          sync();
+        });
+        results.append(option);
+      }
     }, 250);
   });
+  sync();
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  await initializeRunnerConfig();
+  chrome.runtime.sendMessage({ type: "GET_RUNNER_CONNECTION" }, (response) => {
+    renderRunnerConnection(response?.connection);
+  });
   try {
     await initializeDynamicFields();
     status.textContent = "Đã tải các lựa chọn từ VAHAN.";

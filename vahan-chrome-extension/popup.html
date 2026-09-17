@@ -18,6 +18,21 @@
         Cấu hình và tự động điền bộ lọc báo cáo VAHAN. Bạn chỉ cần nhập CAPTCHA và bấm Apply trên trang.
       </p>
 
+      <div id="runnerConnection" class="runner-connection" data-state="connecting">
+        <span class="connection-dot" aria-hidden="true"></span>
+        <span class="connection-text">Đang kết nối backend...</span>
+      </div>
+
+      <details class="backend-settings">
+        <summary>Kết nối backend</summary>
+        <div class="details-body">
+          <label>Server URL<input id="runnerServerUrl" type="url" value="http://127.0.0.1:8000" /></label>
+          <label>Tên runner<input id="runnerName" value="VAHAN Chrome" /></label>
+          <label>Runner token<input id="runnerToken" type="password" value="change-me" autocomplete="off" /></label>
+          <button id="saveRunnerConfig" class="btn-secondary" type="button">Lưu &amp; Kết Nối Lại</button>
+        </div>
+      </details>
+
       <section class="form-card" aria-label="Cấu hình báo cáo">
         <details open>
           <summary><span class="step-number">1</span> Thời gian &amp; khu vực</summary>

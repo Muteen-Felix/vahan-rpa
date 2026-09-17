@@ -3,11 +3,12 @@
   "name": "VAHAN RPA Assistant",
   "version": "0.1.0",
   "description": "Fills VAHAN report filters and exports Excel after manual CAPTCHA completion.",
-  "permissions": ["storage"],
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "downloads"],
   "host_permissions": [
     "https://analytics.parivahan.gov.in/*",
-    "http://127.0.0.1/*",
-    "http://localhost/*"
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
   ],
   "icons": {
     "16": "icons/icon-16.png",
@@ -28,12 +29,8 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*",
-        "http://127.0.0.1/analytics/vahanpublicreport*",
-        "http://localhost/analytics/vahanpublicreport*"
-      ],
-      "js": ["ui-drift.js", "content.js"],
+      "matches": ["https://analytics.parivahan.gov.in/analytics/vahanpublicreport*"],
+      "js": ["content.js"],
       "run_at": "document_idle"
     }
   ]

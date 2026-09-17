@@ -4,19 +4,6 @@ Chrome Extension Manifest V3 chạy trực tiếp trên máy client. Extension h
 
 Các dropdown trong popup được đọc trực tiếp từ option hiện có trên trang mỗi lần mở. Dropdown nhiều lựa chọn có Search và Select All giống luồng VAHAN. RTO cập nhật theo State, X-Axis cập nhật theo Y-Axis; Maker dùng autocomplete từ endpoint lazy-load của VAHAN (tối đa 10 theo quy tắc trang). Các trường năm/ngày vẫn là ô nhập.
 
-Trước khi điền và trước các bước phụ thuộc dữ liệu, extension chạy UI contract
-fail-closed trong `ui-drift.js`. Contract kiểm tra trang, control, loại
-multi-select, wrapper trong đúng `form-group`, control động và hidden fields của
-hai trục. Nếu UI thay đổi, extension không tiếp tục thao tác; widget trên trang
-hiển thị panel `Chi tiết thay đổi UI` với đúng vị trí (ví dụ
-`Fuel (#vehicleFuel)`), mong đợi, thực tế, bước và mã `UI_DRIFT_*`. Cùng report
-được gửi về popup khi lỗi xảy ra trong lúc popup yêu cầu điền bộ lọc.
-
-Trước khi Apply, extension chặn click đầu tiên để kiểm tra và lưu signature của
-UI. Sau khi VAHAN reload trang kết quả, extension đối chiếu lại signature đó;
-nếu giao diện đã đổi giữa hai thời điểm, flow dừng fail-closed và báo đúng vùng
-thay đổi thay vì tiếp tục gửi hoặc đọc sai dữ liệu.
-
 ## Cài vào Chrome
 
 1. Mở `chrome://extensions`.
@@ -29,15 +16,27 @@ thay đổi thay vì tiếp tục gửi hoặc đọc sai dữ liệu.
 
 Không tự động đọc, giải hoặc vượt CAPTCHA. Đây là attended RPA.
 
-## Kiểm thử local
+## Kết nối backend MVP
 
-Fixture local có thể được dùng để kiểm tra cả luồng điền filter và cảnh báo UI
-drift:
+Extension bundle `socket.io-client` vào service worker. Sau khi sửa
+`src/background.js`, cần build lại:
 
-```bash
-python3 test_vahan_chrome_extension.py
+```powershell
+npm.cmd install
+npm.cmd run build
 ```
 
-Kịch bản test xác nhận baseline, điền Category/Fuel/Y-Axis/X-Axis, Apply/reload
-với đối chiếu signature, thiếu Fuel runtime và mất option `Two Wheeler`. Khi test trên fixture, manifest đã cho phép
-`localhost` và `127.0.0.1`; khi phát hành thật, chỉ giữ host VAHAN cần thiết.
+Mặc định extension kết nối `http://127.0.0.1:8000/runner` với token
+`change-me`. Có thể đổi Server URL, tên runner và token trong phần **Kết nối
+backend** của popup. Chrome 116 trở lên được yêu cầu để WebSocket activity giữ
+Manifest V3 service worker hoạt động.
+
+## UI Drift Protection — đã hoãn, chưa wire vào bản này
+
+Nhánh `develop` từng có `ui-drift.js` (kiểm tra chữ ký UI VAHAN fail-closed
+trước/sau Apply). File này **vẫn còn trong repo** nhưng **không được nạp** qua
+`manifest.json`/`content.js` hiện tại — vì `content.js` của nhánh này đi theo
+kiến trúc server-orchestrated (không tương thích trực tiếp với luồng UI drift
+cũ). Đây là quyết định merge có chủ đích (ưu tiên giữ toàn bộ tính năng
+server-job/batch runner), không phải xoá bỏ — cần port lại UI Drift Protection
+sang kiến trúc hiện tại ở một nhánh riêng sau.

@@ -1,0 +1,135 @@
+[
+  {
+    "name": "1. Baseline robot (FACT logic, nhung fuels=[] da sua thanh full list - CHUA chay lai qua extension moi) - Fuel=All",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["BIO-CNG/BIO-GAS", "CNG ONLY", "DI-METHYL ETHER", "DIESEL", "DIESEL/HYBRID", "DUAL DIESEL/BIO CNG", "DUAL DIESEL/CNG", "DUAL DIESEL/LNG", "ELECTRIC(BOV)", "ETHANOL(E100)", "FLEX-FUEL(BIO-DIESEL)", "FLEX-FUEL(ETHANOL)", "FUEL CELL HYDROGEN", "HCNG", "HYDROGEN(ICE)", "LNG", "LPG ONLY", "METHANOL", "NOT APPLICABLE", "PETROL", "PETROL(E20)", "PETROL(E20)/CNG", "PETROL(E20)/HYBRID", "PETROL(E20)/HYBRID/CNG", "PETROL(E20)/LPG", "PETROL/CNG", "PETROL/HYBRID", "PETROL/HYBRID/CNG", "PETROL/LPG", "PETROL/METHANOL", "PLUG-IN HYBRID EV", "PURE EV", "SOLAR", "STRONG HYBRID EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "2. Fuel=PETROL (truc Y/X doi ve cap da xac nhan chay duoc, KHAC voi baseline tay Role 1 dung Total Consolidated - cap do chua verify qua automation)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["PETROL"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "3. Fuel=DIESEL (ASSUMPTION, chua chay thu)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["DIESEL"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "4. Fuel=ELECTRIC(BOV), State=Delhi (ASSUMPTION, seed FilterForm.tsx; truc Y/X doi ve cap da xac nhan chay duoc thay vi Vehicle Class/Month Wise chua verify)",
+    "filters": {
+      "states": ["Delhi"],
+      "rtos": ["DWARKA - DL9"],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["ELECTRIC(BOV)"],
+      "evTypes": ["ELECTRIC(BOV)"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "5. Fuel=PURE EV (ASSUMPTION)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["PURE EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "6. Fuel=STRONG HYBRID EV (ASSUMPTION)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["STRONG HYBRID EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "7. Fuel=CNG ONLY (ASSUMPTION)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["CNG ONLY"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "8. Fuel=PETROL(E20)/HYBRID/CNG - test ky tu dac biet (ASSUMPTION, rui ro cao nhat)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["PETROL(E20)/HYBRID/CNG"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "9. Fuel=All, Year 2025-2025 (ASSUMPTION, ngoai pham vi spike goc)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["BIO-CNG/BIO-GAS", "CNG ONLY", "DI-METHYL ETHER", "DIESEL", "DIESEL/HYBRID", "DUAL DIESEL/BIO CNG", "DUAL DIESEL/CNG", "DUAL DIESEL/LNG", "ELECTRIC(BOV)", "ETHANOL(E100)", "FLEX-FUEL(BIO-DIESEL)", "FLEX-FUEL(ETHANOL)", "FUEL CELL HYDROGEN", "HCNG", "HYDROGEN(ICE)", "LNG", "LPG ONLY", "METHANOL", "NOT APPLICABLE", "PETROL", "PETROL(E20)", "PETROL(E20)/CNG", "PETROL(E20)/HYBRID", "PETROL(E20)/HYBRID/CNG", "PETROL(E20)/LPG", "PETROL/CNG", "PETROL/HYBRID", "PETROL/HYBRID/CNG", "PETROL/LPG", "PETROL/METHANOL", "PLUG-IN HYBRID EV", "PURE EV", "SOLAR", "STRONG HYBRID EV"],
+      "fromYear": "2025",
+      "toYear": "2025",
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "10. Fuel=All lan 2, cung truc Y/X voi bo #1 (da doi khoi Vehicle Category Group/Total Consolidated vi timeout xAxis that - xem ghi chu duoi file)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["BIO-CNG/BIO-GAS", "CNG ONLY", "DI-METHYL ETHER", "DIESEL", "DIESEL/HYBRID", "DUAL DIESEL/BIO CNG", "DUAL DIESEL/CNG", "DUAL DIESEL/LNG", "ELECTRIC(BOV)", "ETHANOL(E100)", "FLEX-FUEL(BIO-DIESEL)", "FLEX-FUEL(ETHANOL)", "FUEL CELL HYDROGEN", "HCNG", "HYDROGEN(ICE)", "LNG", "LPG ONLY", "METHANOL", "NOT APPLICABLE", "PETROL", "PETROL(E20)", "PETROL(E20)/CNG", "PETROL(E20)/HYBRID", "PETROL(E20)/HYBRID/CNG", "PETROL(E20)/LPG", "PETROL/CNG", "PETROL/HYBRID", "PETROL/HYBRID/CNG", "PETROL/LPG", "PETROL/METHANOL", "PLUG-IN HYBRID EV", "PURE EV", "SOLAR", "STRONG HYBRID EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  }
+]
