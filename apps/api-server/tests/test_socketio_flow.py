@@ -47,6 +47,8 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
     assigned = asyncio.Event()
     captcha_visible = asyncio.Event()
     captcha_forwarded = asyncio.Event()
+    captcha_invalid_visible = asyncio.Event()
+    captcha_refreshed_visible = asyncio.Event()
     assigned_payload: dict = {}
 
     @runner.on("job:assigned", namespace="/runner")
@@ -61,6 +63,19 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
     @runner.on("captcha:submitted", namespace="/runner")
     async def on_captcha_submitted(_payload: dict) -> None:
         captcha_forwarded.set()
+
+    @runner.on("runner:options", namespace="/runner")
+    async def on_runner_options(payload: dict) -> dict:
+        assert payload["type"] == "GET_ALL_OPTIONS"
+        return {"ok": True, "options": {"states": ["Delhi"]}}
+
+    @ui.on("captcha:invalid", namespace="/ui")
+    async def on_captcha_invalid(_payload: dict) -> None:
+        captcha_invalid_visible.set()
+
+    @ui.on("captcha:refreshed", namespace="/ui")
+    async def on_captcha_refreshed(_payload: dict) -> None:
+        captcha_refreshed_visible.set()
 
     try:
         await runner.connect(
@@ -79,6 +94,14 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
             namespaces=["/ui"],
             transports=["websocket"],
         )
+
+        options_response = await ui.call(
+            "ui:runner-options",
+            {"runnerId": "runner-e2e", "request": {"type": "GET_ALL_OPTIONS"}},
+            namespace="/ui",
+            timeout=2,
+        )
+        assert options_response == {"ok": True, "options": {"states": ["Delhi"]}}
 
         async with AsyncClient(base_url=live_server_url) as client:
             response = await client.post(
@@ -115,6 +138,20 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         assert acknowledgement["ok"] is True
         await asyncio.wait_for(captcha_visible.wait(), timeout=2)
 
+        captcha_id = "captcha-sequence-refreshed"
+        acknowledgement = await runner.call(
+            "captcha:refreshed",
+            {
+                "jobId": job_id,
+                "captchaId": captcha_id,
+                "imageDataUrl": "data:image/png;base64,iVBORw0KGgo=",
+            },
+            namespace="/runner",
+            timeout=2,
+        )
+        assert acknowledgement["ok"] is True
+        await asyncio.wait_for(captcha_refreshed_visible.wait(), timeout=2)
+
         acknowledgement = await ui.call(
             "captcha:submitted",
             {
@@ -127,6 +164,19 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         )
         assert acknowledgement["ok"] is True
         await asyncio.wait_for(captcha_forwarded.wait(), timeout=2)
+
+        acknowledgement = await runner.call(
+            "captcha:invalid",
+            {
+                "jobId": job_id,
+                "captchaId": "captcha-sequence-2",
+                "imageDataUrl": "data:image/png;base64,iVBORw0KGgo=",
+            },
+            namespace="/runner",
+            timeout=2,
+        )
+        assert acknowledgement["ok"] is True
+        await asyncio.wait_for(captcha_invalid_visible.wait(), timeout=2)
     finally:
         if ui.connected:
             await ui.disconnect()

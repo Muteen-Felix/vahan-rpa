@@ -21,6 +21,7 @@ export function CaptchaPanel({ challenge, submitting, autoApply, onSubmit }: Pro
         <div><h2>Nhập CAPTCHA</h2><p>Đọc ảnh và nhập thủ công 6 ký tự.</p></div>
       </div>
       {challenge.invalid && <p className="error-message">CAPTCHA không đúng. Vui lòng nhập ảnh mới.</p>}
+      {challenge.refreshed && <p className="captcha-refresh-message">CAPTCHA đã thay đổi. Vui lòng nhập lại theo ảnh mới.</p>}
       <img className="captcha-image" src={challenge.imageDataUrl} alt="VAHAN CAPTCHA" />
       <label>Mã CAPTCHA
         <input

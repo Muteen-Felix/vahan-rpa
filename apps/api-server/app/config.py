@@ -20,6 +20,7 @@ class Settings:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )
+    socketio_cors_origins: str | tuple[str, ...] = "*"
     runner_token: str = "change-me"
 
     @classmethod
@@ -32,11 +33,22 @@ class Settings:
             ).split(",")
             if origin.strip()
         )
+        socketio_origins_value = os.getenv("VAHAN_API_SOCKETIO_CORS_ORIGINS", "*").strip()
+        socketio_origins: str | tuple[str, ...] = (
+            "*"
+            if socketio_origins_value == "*"
+            else tuple(
+                origin.strip()
+                for origin in socketio_origins_value.split(",")
+                if origin.strip()
+            )
+        )
         return cls(
             host=os.getenv("VAHAN_API_HOST", "127.0.0.1"),
             port=int(os.getenv("VAHAN_API_PORT", "8000")),
             debug=_as_bool(os.getenv("VAHAN_API_DEBUG")),
             cors_origins=origins,
+            socketio_cors_origins=socketio_origins,
             runner_token=os.getenv("VAHAN_API_RUNNER_TOKEN", "change-me"),
         )
 

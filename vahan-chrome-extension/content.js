@@ -32,26 +32,13 @@ async function selectLabels(selector, rawValue) {
   const values = labels.map((label) => options.find((option) => option.label === normalize(label))?.value);
   if (values.some((value) => value === undefined)) throw new Error(`${selector}: could not find "${labels.join(", ")}".`);
 
-  const widget = select.nextElementSibling?.classList?.contains("multiselect-dropdown")
-    ? select.nextElementSibling
-    : null;
-
-  if (select.multiple && widget) {
-    const desired = new Set(labels.map(normalize));
-    const rows = [...widget.querySelectorAll(
-      ".multiselect-dropdown-list > div:not(.multiselect-dropdown-all-selector)",
-    )];
-    for (const row of rows) {
-      const label = normalize(row.querySelector("label")?.textContent);
-      const isSelected = row.classList.contains("checked") || row.querySelector("input")?.checked;
-      const shouldSelect = desired.has(label);
-      if (Boolean(isSelected) !== shouldSelect) row.click();
-    }
-  } else {
-    for (const option of select.options) option.selected = values.includes(option.value);
-  }
-
+  // Write to the native select first. The VAHAN multi-select widget can omit
+  // filtered/lazy rows from its DOM, so clicking visible widget rows is not a
+  // reliable way to update RTO and other dynamic multi-selects.
+  for (const option of select.options) option.selected = values.includes(option.value);
   select.dispatchEvent(new Event("change", { bubbles: true }));
+  if (typeof select.loadOptions === "function") select.loadOptions();
+  await delay(50);
 
   const actual = [...select.selectedOptions].map((option) => normalize(option.label || option.textContent));
   const expected = labels.map(normalize);
@@ -66,11 +53,7 @@ async function loadMakerOptions(rawValue) {
   if (!makers.length || !select) return;
   for (const maker of makers) {
     if ([...select.options].some((option) => normalize(option.label || option.textContent) === normalize(maker))) continue;
-    const url = new URL("/analytics/vahanpublicreport/lazy/vehicle-makers", location.origin);
-    url.search = new URLSearchParams({ page: "0", size: "20", search: maker }).toString();
-    const response = await fetch(url, { credentials: "same-origin" });
-    if (!response.ok) throw new Error(`Could not load Maker options (${response.status}).`);
-    const values = await response.json();
+    const values = await fetchMakers(maker);
     for (const value of values) {
       if (![...select.options].some((option) => option.value === value)) select.add(new Option(value, value));
     }
@@ -106,7 +89,14 @@ async function fetchMakers(search) {
   url.search = new URLSearchParams({ page: "0", size: "20", search }).toString();
   const response = await fetch(url, { credentials: "same-origin" });
   if (!response.ok) throw new Error(`Could not search Maker options (${response.status}).`);
-  return response.json();
+  const payload = await response.json();
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload.content || payload.results || payload.data || payload.items || [];
+  return rows.map((item) => typeof item === "string"
+    ? item
+    : item.label || item.name || item.value || item.makerName,
+  ).filter(Boolean);
 }
 
 async function getXAxisOptions(yAxisLabel) {
@@ -211,12 +201,54 @@ async function captureCaptcha(timeout = 15000) {
   if (!context) throw new Error("Could not create a canvas for the CAPTCHA image.");
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-  const captchaId = image.currentSrc || image.src || image.getAttribute("src");
-  if (!captchaId) throw new Error("The CAPTCHA image has no identifier.");
+  const sourceUrl = image.currentSrc || image.src || image.getAttribute("src");
+  if (!sourceUrl) throw new Error("The CAPTCHA image has no identifier.");
+  const imageDataUrl = canvas.toDataURL("image/png");
+  let hash = 2166136261;
+  for (let index = 0; index < imageDataUrl.length; index += 1) {
+    hash ^= imageDataUrl.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
   return {
-    captchaId,
-    imageDataUrl: canvas.toDataURL("image/png"),
+    captchaId: `${sourceUrl}#${(hash >>> 0).toString(16)}`,
+    imageDataUrl,
   };
+}
+
+let captchaRefreshTimer;
+async function notifyCaptchaRefresh() {
+  clearTimeout(captchaRefreshTimer);
+  captchaRefreshTimer = setTimeout(async () => {
+    try {
+      const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+      if (!activeServerJob || activeServerJob.stage !== "WAITING_CAPTCHA") return;
+      const captcha = await captureCaptcha();
+      if (captcha.captchaId === activeServerJob.captchaId) return;
+      await chrome.runtime.sendMessage({ type: "SERVER_CAPTCHA_CHANGED", captcha });
+    } catch (_error) {
+      // A transient image load is expected while VAHAN swaps CAPTCHA pixels.
+    }
+  }, 150);
+}
+
+function observeCaptchaChanges() {
+  document.addEventListener("load", (event) => {
+    if (event.target?.id === "captchaImage") notifyCaptchaRefresh();
+  }, true);
+  const observer = new MutationObserver((mutations) => {
+    if (mutations.some((mutation) =>
+      mutation.target?.id === "captchaImage" ||
+      [...mutation.addedNodes].some((node) => node.nodeType === Node.ELEMENT_NODE && (
+        node.id === "captchaImage" || node.querySelector?.("#captchaImage")
+      )),
+    )) notifyCaptchaRefresh();
+  });
+  observer.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["src"],
+  });
 }
 
 function submitRemoteCaptcha(value, autoApply) {
@@ -289,12 +321,12 @@ let exportClicked = false;
 let exportWatcherTimer;
 let exportWatcherTimeout;
 async function startAutoExportWatcher() {
-  const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
+  const { vahanConfig, activeServerJob } = await chrome.storage.local.get(["vahanConfig", "activeServerJob"]);
   clearInterval(exportWatcherTimer);
   clearTimeout(exportWatcherTimeout);
   exportWatcherTimer = undefined;
   exportWatcherTimeout = undefined;
-  if (!(vahanConfig?.autoExport ?? true) || exportClicked) return;
+  if (activeServerJob || !(vahanConfig?.autoExport ?? true) || exportClicked) return;
   exportWatcherTimer = setInterval(() => {
     const button = document.querySelector("#downloadBtn1");
     if (!exportClicked && button && button.getClientRects().length) {
@@ -343,6 +375,59 @@ function resetFloatingSteps() {
   for (const name of ["time", "vehicle", "axes", "captcha", "apply", "export"]) {
     updateFloatingStep(name, "idle");
   }
+}
+
+const hasInvalidCaptchaMessage = () => /invalid captcha/i.test(document.body?.innerText || "");
+const isVisible = (element) => Boolean(element && (
+  element.getClientRects().length || window.getComputedStyle(element).display !== "none"
+));
+
+async function resumeServerJobAfterApply() {
+  const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+  if (!activeServerJob || activeServerJob.stage !== "WAITING_RESULT") return;
+
+  updateFloatingStep("captcha", "done");
+  updateFloatingStep("apply", "done");
+  updateFloatingStep("export", "running");
+  setFloatingStatus("running", "Trang đã tải lại. Đang kiểm tra kết quả VAHAN...");
+
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    if (hasInvalidCaptchaMessage()) {
+      updateFloatingStep("captcha", "error");
+      updateFloatingStep("export", "idle");
+      setFloatingStatus("waiting", "CAPTCHA không đúng. Đang gửi ảnh mới sang Web UI...");
+      const captcha = await captureCaptcha();
+      await chrome.runtime.sendMessage({
+        type: "SERVER_JOB_PAGE_RESULT",
+        result: "INVALID_CAPTCHA",
+        captcha,
+      });
+      return;
+    }
+
+    const downloadButton = document.querySelector("#downloadBtn1");
+    if (isVisible(downloadButton)) {
+      if (activeServerJob.config?.autoExport ?? true) {
+        downloadButton.click();
+        setFloatingStatus("success", "Báo cáo đã sẵn sàng và lệnh tải Excel đã được gửi.");
+      } else {
+        setFloatingStatus("success", "Báo cáo đã sẵn sàng. Bạn có thể tải Excel thủ công.");
+      }
+      updateFloatingStep("export", "done");
+      await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "COMPLETED" });
+      return;
+    }
+    await delay(500);
+  }
+
+  updateFloatingStep("export", "error");
+  setFloatingStatus("error", "Quá thời gian chờ kết quả từ VAHAN.");
+  await chrome.runtime.sendMessage({
+    type: "SERVER_JOB_PAGE_RESULT",
+    result: "FAILED",
+    error: "Timed out waiting for the VAHAN result after 90 seconds.",
+  });
 }
 
 function renderFloatingRunnerConnection(connection = {}) {
@@ -546,6 +631,12 @@ function injectFloatingWidget() {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
+  if (changes.activeServerJob?.newValue) {
+    clearInterval(exportWatcherTimer);
+    clearTimeout(exportWatcherTimeout);
+    exportWatcherTimer = undefined;
+    exportWatcherTimeout = undefined;
+  }
   if (changes.runnerConnection) {
     renderFloatingRunnerConnection(changes.runnerConnection.newValue);
   }
@@ -587,3 +678,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 injectFloatingWidget();
 initializeAutoApplyPreference();
 startAutoExportWatcher();
+observeCaptchaChanges();
+resumeServerJobAfterApply().catch((error) => {
+  chrome.runtime.sendMessage({
+    type: "SERVER_JOB_PAGE_RESULT",
+    result: "FAILED",
+    error: error.message,
+  }).catch(() => {});
+});

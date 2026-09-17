@@ -11,4 +11,5 @@ htmlcov/
 node_modules/
 dist/
 *.tsbuildinfo
+.venv
 

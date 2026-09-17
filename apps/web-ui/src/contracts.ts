@@ -28,6 +28,25 @@ export interface VahanFilters {
   rtos: string[];
   categoryGroups: string[];
   fuels: string[];
+  archivedFlags?: string[];
+  period?: string;
+  financialYears?: string[];
+  reportYear?: string;
+  reportMonth?: string;
+  fromYear?: string;
+  toYear?: string;
+  fromDate?: string;
+  toDate?: string;
+  delhiNcr?: string;
+  emissions?: string[];
+  makers?: string[];
+  subCategories?: string[];
+  classes?: string[];
+  evTypes?: string[];
+  statuses?: string[];
+  ownerTypes?: string[];
+  vehicleType?: string;
+  fitness?: string;
   yAxis: string;
   xAxis: string;
   autoApply: boolean;
@@ -50,6 +69,7 @@ export interface CaptchaChallenge {
   captchaId: string;
   imageDataUrl: string;
   invalid?: boolean;
+  refreshed?: boolean;
 }
 
 export interface Acknowledgement {

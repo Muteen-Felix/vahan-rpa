@@ -27,6 +27,32 @@ async def subscribe_job(sid: str, payload: dict) -> dict:
     }
 
 
+@sio.on("ui:runner-options", namespace="/ui")
+async def runner_options(_sid: str, payload: dict) -> dict:
+    runner_id = str(payload.get("runnerId", "")).strip()
+    request = payload.get("request")
+    if not runner_id or not isinstance(request, dict):
+        return {"ok": False, "error": "Invalid runner options request."}
+    if request.get("type") not in {
+        "GET_ALL_OPTIONS", "GET_STATE_OPTIONS", "GET_RTO_OPTIONS",
+        "GET_X_AXIS_OPTIONS", "SEARCH_MAKERS",
+    }:
+        return {"ok": False, "error": "Unsupported runner options request."}
+    runner = await services.runners.get(runner_id)
+    if not runner:
+        return {"ok": False, "error": "Runner is offline."}
+    try:
+        return await sio.call(
+            "runner:options",
+            request,
+            to=runner.socket_id,
+            namespace="/runner",
+            timeout=20,
+        )
+    except TimeoutError:
+        return {"ok": False, "error": "Runner did not return VAHAN options in time."}
+
+
 @sio.on("captcha:submitted", namespace="/ui")
 async def submit_captcha(_sid: str, payload: dict) -> dict:
     try:

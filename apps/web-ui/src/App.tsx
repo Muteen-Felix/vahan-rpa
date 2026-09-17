@@ -30,9 +30,15 @@ export default function App() {
     const onDisconnect = () => setConnection("disconnected");
     const onConnectError = () => setConnection("error");
     const onRunnerChange = () => refreshRunners();
-    const onJobStatus = (updated: Job) => setJob(updated);
+    const onJobStatus = (updated: Job) => {
+      setJob(updated);
+      if (["COMPLETED", "FAILED", "CANCELLED"].includes(updated.status)) {
+        refreshRunners();
+      }
+    };
     const onCaptcha = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: false });
     const onCaptchaInvalid = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: true });
+    const onCaptchaRefreshed = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: false, refreshed: true });
 
     uiSocket.on("connect", onConnect);
     uiSocket.on("disconnect", onDisconnect);
@@ -42,6 +48,7 @@ export default function App() {
     uiSocket.on("job:status", onJobStatus);
     uiSocket.on("captcha:required", onCaptcha);
     uiSocket.on("captcha:invalid", onCaptchaInvalid);
+    uiSocket.on("captcha:refreshed", onCaptchaRefreshed);
     uiSocket.connect();
 
     return () => {
@@ -53,6 +60,7 @@ export default function App() {
       uiSocket.off("job:status", onJobStatus);
       uiSocket.off("captcha:required", onCaptcha);
       uiSocket.off("captcha:invalid", onCaptchaInvalid);
+      uiSocket.off("captcha:refreshed", onCaptchaRefreshed);
       uiSocket.disconnect();
     };
   }, []);

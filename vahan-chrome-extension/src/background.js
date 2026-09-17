@@ -8,6 +8,28 @@ const DEFAULT_RUNNER_CONFIG = Object.freeze({
 });
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const VAHAN_URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en";
+const VAHAN_OPTION_SELECTORS = Object.freeze({
+  archivedFlags: { selector: "#archivedFlags", multiple: true },
+  period: { selector: "#reportType" },
+  financialYears: { selector: "#financialYearSelect", multiple: true },
+  reportYear: { selector: "#reportYear" },
+  reportMonth: { selector: "#reportMonth" },
+  states: { selector: "#stateName", multiple: true },
+  rtos: { selector: "#rtoCode", multiple: true },
+  emissions: { selector: "#vehicleEmission", multiple: true },
+  categoryGroups: { selector: "#vehicleCategoryGroup", multiple: true },
+  subCategories: { selector: "#vehicleSubCategory", multiple: true },
+  classes: { selector: "#vehicleClass", multiple: true },
+  fuels: { selector: "#vehicleFuel", multiple: true },
+  evTypes: { selector: "#evType", multiple: true },
+  statuses: { selector: "#vehicleStatus", multiple: true },
+  ownerTypes: { selector: "#vehicleOwnerType", multiple: true },
+  vehicleType: { selector: "#vehicleType" },
+  fitness: { selector: "#fitnessCheck" },
+  delhiNcr: { selector: "#delhiNcr" },
+  yAxis: { selector: "#yAxis" },
+  xAxis: { selector: "#xAxis" },
+});
 
 let socket;
 let heartbeatTimer;
@@ -118,7 +140,7 @@ async function executeJob(job) {
     if (!captcha?.ok) throw new Error(captcha?.error || "Could not capture the CAPTCHA.");
     assertJobActive(jobId);
     await chrome.storage.local.set({
-      activeServerJob: { ...job, tabId, config, captchaId: captcha.captchaId },
+      activeServerJob: { ...job, tabId, config, captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA", attempts: 0 },
     });
     await publishCaptcha(jobId, captcha);
   } catch (error) {
@@ -228,13 +250,21 @@ async function connectRunner() {
     const jobId = String(payload?.jobId || "");
     try {
       const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
-      if (!activeServerJob || activeServerJob.jobId !== jobId || activeJobId !== jobId) {
+      if (!activeServerJob || activeServerJob.jobId !== jobId || (activeJobId && activeJobId !== jobId)) {
         throw new Error("The active VAHAN job no longer matches this CAPTCHA.");
       }
+      activeJobId = jobId;
       if (activeServerJob.captchaId !== payload.captchaId) {
         throw new Error("The CAPTCHA has changed or expired.");
       }
       assertJobActive(jobId);
+      await chrome.storage.local.set({
+        activeServerJob: {
+          ...activeServerJob,
+          stage: "WAITING_RESULT",
+          attempts: (activeServerJob.attempts || 0) + 1,
+        },
+      });
       const response = await sendToVahan(activeServerJob.tabId, {
         type: "SUBMIT_REMOTE_CAPTCHA",
         value: String(payload.value || ""),
@@ -247,6 +277,85 @@ async function connectRunner() {
       if (activeJobId === jobId) activeJobId = undefined;
       await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
     }
+  });
+  socket.on("runner:options", async (request, acknowledge) => {
+    try {
+      const tabId = await getVahanTab();
+      const messageByType = {
+        GET_ALL_OPTIONS: {
+          type: "GET_VAHAN_OPTIONS",
+          selectors: VAHAN_OPTION_SELECTORS,
+        },
+        GET_STATE_OPTIONS: { type: "GET_STATE_OPTIONS", delhiNcr: request.delhiNcr },
+        GET_RTO_OPTIONS: { type: "GET_RTO_OPTIONS", stateLabels: request.stateLabels },
+        GET_X_AXIS_OPTIONS: { type: "GET_X_AXIS_OPTIONS", yAxis: request.yAxis },
+        SEARCH_MAKERS: { type: "SEARCH_MAKERS", search: request.search },
+      };
+      const message = messageByType[request.type];
+      if (!message) throw new Error("Unsupported VAHAN options request.");
+      acknowledge(await sendToVahan(tabId, message));
+    } catch (error) {
+      acknowledge({ ok: false, error: error.message });
+    }
+  });
+}
+
+async function handlePageResult(message, sender) {
+  const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+  if (!activeServerJob || (activeJobId && activeServerJob.jobId !== activeJobId)) return;
+  activeJobId = activeServerJob.jobId;
+  if (sender.tab?.id !== activeServerJob.tabId) return;
+  const jobId = activeServerJob.jobId;
+
+  if (message.result === "INVALID_CAPTCHA") {
+    if ((activeServerJob.attempts || 0) >= 3) {
+      await reportJobStatus(jobId, "FAILED", "CAPTCHA was invalid 3 consecutive times.").catch(() => {});
+      activeJobId = undefined;
+      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      return;
+    }
+    const captcha = message.captcha;
+    if (!captcha?.captchaId || !captcha?.imageDataUrl) return;
+    await chrome.storage.local.set({
+      activeServerJob: { ...activeServerJob, captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA" },
+    });
+    const response = await socket.timeout(5_000).emitWithAck("captcha:invalid", {
+      jobId,
+      captchaId: captcha.captchaId,
+      imageDataUrl: captcha.imageDataUrl,
+    });
+    if (!response?.ok) throw new Error(response?.error || "Could not publish the refreshed CAPTCHA.");
+    return;
+  }
+
+  if (message.result === "COMPLETED") {
+    await reportJobStatus(jobId, "COMPLETED");
+    activeJobId = undefined;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    return;
+  }
+
+  if (message.result === "FAILED") {
+    await reportJobStatus(jobId, "FAILED", message.error || "VAHAN did not return a result.").catch(() => {});
+    activeJobId = undefined;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+  }
+}
+
+async function handleCaptchaChanged(message, sender) {
+  const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+  if (!activeServerJob || activeServerJob.stage !== "WAITING_CAPTCHA") return;
+  if (sender.tab?.id !== activeServerJob.tabId) return;
+  const captcha = message.captcha;
+  if (!captcha?.captchaId || !captcha?.imageDataUrl || captcha.captchaId === activeServerJob.captchaId) return;
+  const response = await socket.timeout(5_000).emitWithAck("captcha:refreshed", {
+    jobId: activeServerJob.jobId,
+    captchaId: captcha.captchaId,
+    imageDataUrl: captcha.imageDataUrl,
+  });
+  if (!response?.ok) throw new Error(response?.error || "Could not publish refreshed CAPTCHA.");
+  await chrome.storage.local.set({
+    activeServerJob: { ...activeServerJob, captchaId: captcha.captchaId },
   });
 }
 
@@ -263,6 +372,19 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "SERVER_CAPTCHA_CHANGED") {
+    handleCaptchaChanged(message, _sender)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+  if (message?.type === "SERVER_JOB_PAGE_RESULT") {
+    handlePageResult(message, _sender)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "OPEN_ACTION_POPUP") {
     if (typeof chrome.action.openPopup !== "function") {
       sendResponse({ ok: false, error: "Tính năng này cần Google Chrome 127 trở lên." });
