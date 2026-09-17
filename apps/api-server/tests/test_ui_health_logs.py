@@ -96,3 +96,34 @@ async def test_backend_csv_deduplicates_retried_log_id(tmp_path) -> None:
     assert second == first
     assert report["availableDates"][0]["total"] == 1
     assert len(report["rows"]) == 1
+
+
+async def test_backend_csv_keeps_id_change_diagnostic_for_developer_analysis(tmp_path) -> None:
+    store = UiHealthLogStore(tmp_path / "logs")
+    check = health_check("2026-03-02T08:00:00.000Z", "UI_DRIFT")
+    check["checkId"] = "fuel-id-renamed"
+    check["report"] = {
+        **check["report"],
+        "actual": "DOM đang có 0 control",
+        "diagnostics": {
+            "name": "fuel",
+            "selector": "#vehicleFuel",
+            "count": 0,
+            "mutation": "id changed from vehicleFuel to vehicleFuelRenamed",
+        },
+    }
+
+    await store.append(
+        check,
+        "http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline",
+    )
+    report = await store.list_reports("2026-03-02")
+    row = report["rows"][0]
+
+    assert row["status"] == "UI_DRIFT"
+    assert row["failure_type"] == "UI_DRIFT"
+    assert row["error_code"] == "UI_DRIFT_REQUIRED_CONTROL"
+    assert row["selector"] == "#vehicleFuel"
+    assert row["expected"] == "DOM phải có đúng 1 control"
+    assert row["actual"] == "DOM đang có 0 control"
+    assert '"mutation":"id changed from vehicleFuel to vehicleFuelRenamed"' in row["diagnostic_details"]

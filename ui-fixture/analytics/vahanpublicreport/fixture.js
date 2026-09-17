@@ -12,6 +12,7 @@
  * Query-string scenarios make UI drift reproducible:
  *   ?lang=en&ui=baseline
  *   ?lang=en&ui=missing-fuel
+ *   ?lang=en&ui=renamed-fuel
  *   ?lang=en&ui=wrong-wrapper
  *   ?lang=en&ui=visual-only
  */
@@ -124,8 +125,16 @@
 
     switch (mode) {
       case "missing-fuel":
-      case "renamed-fuel":
         fuel?.remove();
+        break;
+      case "renamed-fuel":
+        if (fuel) {
+          fuel.id = "vehicleFuelRenamed";
+          document.querySelector('label[for="vehicleFuel"]')?.setAttribute(
+            "for",
+            "vehicleFuelRenamed",
+          );
+        }
         break;
       case "wrong-type":
         category?.removeAttribute("multiple");
@@ -587,6 +596,20 @@
     log("Runtime drift: đã xóa #vehicleFuel khỏi DOM.");
   }
 
+  function renameFuelIdAtRuntime() {
+    const fuel = get("vehicleFuel");
+    if (!fuel) {
+      log("Không tìm thấy #vehicleFuel để đổi ID.");
+      return;
+    }
+    fuel.id = "vehicleFuelRenamed";
+    document.querySelector('label[for="vehicleFuel"]')?.setAttribute(
+      "for",
+      "vehicleFuelRenamed",
+    );
+    log("Runtime drift: đã đổi ID #vehicleFuel thành #vehicleFuelRenamed.");
+  }
+
   function removeCategoryLabelAtRuntime() {
     const changed = removeOption("vehicleCategoryGroup", "Two Wheeler");
     log(changed ? "Runtime drift: đã xóa option Two Wheeler." : "Không tìm thấy option Two Wheeler.");
@@ -622,6 +645,7 @@
       <div>Scenario: <strong>${uiMode}</strong></div>
       <div class="dev-actions">
         <button type="button" data-action="remove-fuel">Xóa Fuel runtime</button>
+        <button type="button" data-action="rename-fuel">Đổi ID Fuel runtime</button>
         <button type="button" data-action="remove-category">Xóa Two Wheeler</button>
         <button type="button" data-action="duplicate-wrapper">Duplicate wrapper</button>
         <button type="button" data-action="restore">Khôi phục</button>
@@ -630,6 +654,7 @@
     `;
     document.body.appendChild(panel);
     panel.querySelector('[data-action="remove-fuel"]')?.addEventListener("click", removeFuelAtRuntime);
+    panel.querySelector('[data-action="rename-fuel"]')?.addEventListener("click", renameFuelIdAtRuntime);
     panel.querySelector('[data-action="remove-category"]')?.addEventListener("click", removeCategoryLabelAtRuntime);
     panel.querySelector('[data-action="duplicate-wrapper"]')?.addEventListener("click", duplicateFuelWrapperAtRuntime);
     panel.querySelector('[data-action="restore"]')?.addEventListener("click", restoreFixture);
@@ -663,6 +688,7 @@
     applyReportType,
     populateXAxis,
     removeFuelAtRuntime,
+    renameFuelIdAtRuntime,
     removeCategoryLabelAtRuntime,
     duplicateFuelWrapperAtRuntime,
     restoreFixture,

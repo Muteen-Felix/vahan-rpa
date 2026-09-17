@@ -176,15 +176,15 @@ async function run() {
     {
       ok: false,
       uiDrift: {
-        code: "UI_DRIFT_REQUIRED_OPTION",
+        code: "UI_DRIFT_REQUIRED_CONTROL",
         step: "scheduled-health-check",
-        title: "Thiếu lựa chọn bắt buộc",
-        message: "Phát hiện thay đổi tại Fuel (#vehicleFuel).",
+        title: "Control bắt buộc bị thiếu hoặc bị trùng",
+        message: "Phát hiện thay đổi tại Fuel (#vehicleFuel): ID đã bị đổi.",
         target: "Fuel (#vehicleFuel)",
-        expected: "option 'Petrol' phải tồn tại",
-        actual: "option đã bị đổi tên",
-        diagnostics: { selector: "#vehicleFuel", expectedOption: "Petrol", optionCount: 0 },
-        action: "Dev cần kiểm tra option.",
+        expected: "DOM phải có đúng 1 control",
+        actual: "DOM đang có 0 control",
+        diagnostics: { selector: "#vehicleFuel", name: "fuel", count: 0 },
+        action: "Dev cần kiểm tra selector Fuel.",
       },
     },
   ]);
@@ -285,8 +285,8 @@ async function run() {
 
   const drift = await controller.run("alarm");
   assert.equal(drift.status, "UI_DRIFT");
-  assert.equal(drift.report.code, "UI_DRIFT_REQUIRED_OPTION");
-  assert.equal(drift.report.diagnostics.optionCount, 0);
+  assert.equal(drift.report.code, "UI_DRIFT_REQUIRED_CONTROL");
+  assert.equal(drift.report.diagnostics.count, 0);
   assert.deepEqual(harness.calls.createdTabs, []);
   assert.deepEqual(harness.calls.removedTabs, []);
 
@@ -296,6 +296,11 @@ async function run() {
   assert.deepEqual(state.vahanUiHealthPendingLogs, []);
   assert.equal(harness.calls.healthLogs.length, 3);
   assert.match(harness.calls.healthLogs[0].url, /\/api\/ui-health\/logs$/);
+  const driftPayload = JSON.parse(harness.calls.healthLogs[2].options.body);
+  assert.equal(driftPayload.healthCheck.status, "UI_DRIFT");
+  assert.equal(driftPayload.healthCheck.report.code, "UI_DRIFT_REQUIRED_CONTROL");
+  assert.equal(driftPayload.healthCheck.report.diagnostics.selector, "#vehicleFuel");
+  assert.equal(driftPayload.healthCheck.report.diagnostics.count, 0);
   const offlineHarness = createHarness([{ ok: true, contract: contract("offline") }]);
   offlineHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
   const offlineController = createUiHealthCheckController(offlineHarness.chrome, {

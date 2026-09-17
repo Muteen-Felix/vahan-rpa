@@ -33,8 +33,8 @@ Mở trang baseline:
 `http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline`
 
 Để bật bảng điều khiển dành cho developer, thêm `&dev=1`. Bảng này cho phép
-xóa `#vehicleFuel`, xóa option `Two Wheeler` hoặc tạo duplicate dropdown ngay
-trong lúc trang đang mở. Có thể đổi `reportType`, chọn Delhi trong State để
+xóa hoặc đổi ID `#vehicleFuel`, xóa option `Two Wheeler` hoặc tạo duplicate
+dropdown ngay trong lúc trang đang mở. Có thể đổi `reportType`, chọn Delhi trong State để
 kiểm tra 23 RTO Delhi, chọn Financial Year/1 Month Flexible và thử từng Y/X-Axis
 branch trực tiếp trên fixture.
 
@@ -43,7 +43,8 @@ branch trực tiếp trên fixture.
 Thay `ui=baseline` bằng một trong các giá trị sau:
 
 - `missing-fuel`: xóa control `#vehicleFuel`.
-- `renamed-fuel`: mô phỏng control Fuel bị đổi tên/ID.
+- `renamed-fuel`: đổi ID `vehicleFuel` thành `vehicleFuelRenamed` mà không
+  xóa control, đúng với mutation DevTools thường gặp.
 - `wrong-type`: Category không còn là multi-select.
 - `wrong-label`: mất option `Two Wheeler`.
 - `missing-yaxis-option`: mất option Y-Axis `Fuel`.
@@ -75,6 +76,7 @@ python3 test_ui_diagnostics.py
 python3 test_ui_fixture_contract.py
 python3 test_ui_fixture_extension.py
 python3 test_vahan_chrome_extension.py
+python3 test_ui_health_extension_e2e.py
 python3 test_ui_fixture_full_flow.py
 python3 test_ui_fixture_surface.py
 ```
@@ -83,5 +85,8 @@ Test tự mở Chromium với Extension, kiểm tra baseline, sau đó xóa Fuel
 để xác nhận cảnh báo developer + người dùng và trạng thái fail-closed.
 Test full-flow dùng CAPTCHA giả trong fixture để kiểm tra thêm Apply, reload,
 download và xác nhận hoàn tất của Extension.
+Test UI health end-to-end đổi ID control thật trong DOM, kiểm tra từng scenario
+drift qua content script và xác nhận service worker giữ log `UI_DRIFT` trong
+queue khi backend không sẵn sàng.
 Test surface kiểm tra đầy đủ số lượng control/option, form attributes, 13
 multiselect, toàn bộ 15 nhánh X-Axis, State -> RTO và bốn nhánh Year Type.

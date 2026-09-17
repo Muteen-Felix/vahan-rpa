@@ -1,6 +1,7 @@
 import { io } from "socket.io-client";
 import { normalizeJobFilters } from "./job-config.mjs";
 import {
+  isUiHealthCloneUrl,
   registerUiHealthCheck,
   UI_HEALTH_CLONE_TAB_MATCHES,
 } from "../ui-drift/health-check.mjs";
@@ -113,7 +114,9 @@ async function getVahanTab() {
 
 async function getOptionsTab() {
   const cloneTabs = await chrome.tabs.query({ url: UI_HEALTH_CLONE_TAB_MATCHES });
-  const cloneTab = cloneTabs.find((tab) => tab?.id !== undefined);
+  const cloneTab = cloneTabs.find(
+    (tab) => tab?.id !== undefined && isUiHealthCloneUrl(tab.url),
+  );
   if (cloneTab?.id) {
     await waitForTabComplete(cloneTab.id);
     return cloneTab.id;

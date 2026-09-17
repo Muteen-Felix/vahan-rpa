@@ -26,9 +26,9 @@ class QuietFixtureHandler(SimpleHTTPRequestHandler):
         return
 
 
-def start_fixture_server() -> tuple[ThreadingHTTPServer, threading.Thread]:
+def start_fixture_server(port: int = 0) -> tuple[ThreadingHTTPServer, threading.Thread]:
     handler = functools.partial(QuietFixtureHandler, directory=str(FIXTURE_DIR))
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread

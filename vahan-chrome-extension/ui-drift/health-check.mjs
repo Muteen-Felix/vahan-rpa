@@ -28,14 +28,10 @@ export const UI_HEALTH_CLONE_URL =
   "http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline";
 export const UI_HEALTH_CLONE_PORTS = Object.freeze(["8765", "5500"]);
 export const UI_HEALTH_CLONE_TAB_MATCHES = Object.freeze([
-  "http://127.0.0.1:8765/analytics/vahanpublicreport*",
-  "http://127.0.0.1:8765/*/analytics/vahanpublicreport*",
-  "http://127.0.0.1:5500/analytics/vahanpublicreport*",
-  "http://127.0.0.1:5500/*/analytics/vahanpublicreport*",
-  "http://localhost:8765/analytics/vahanpublicreport*",
-  "http://localhost:8765/*/analytics/vahanpublicreport*",
-  "http://localhost:5500/analytics/vahanpublicreport*",
-  "http://localhost:5500/*/analytics/vahanpublicreport*",
+  "http://127.0.0.1/analytics/vahanpublicreport*",
+  "http://127.0.0.1/*/analytics/vahanpublicreport*",
+  "http://localhost/analytics/vahanpublicreport*",
+  "http://localhost/*/analytics/vahanpublicreport*",
 ]);
 
 const DATA_CHANGED_STATUS = "DATA_CHANGED";

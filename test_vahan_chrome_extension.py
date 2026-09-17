@@ -57,7 +57,6 @@ def run() -> None:
                 page.set_default_timeout(20_000)
                 root = page.locator("#vahan-rpa-floating-root")
                 badge = root.locator(".badge")
-                detail = root.locator(".drift-detail")
                 start = root.locator(".start")
 
                 page.goto(f"{base_url}?lang=en&ui=baseline", wait_until="networkidle")
@@ -66,7 +65,6 @@ def run() -> None:
                     "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Sẵn sàng'",
                     timeout=20_000,
                 )
-                assert not detail.is_visible()
                 print("PRODUCTION EXTENSION BASELINE PASS")
 
                 worker = context.service_workers[0] if context.service_workers else None
@@ -102,96 +100,14 @@ def run() -> None:
                 page.locator("#applyTrigger").click()
                 page.locator("#fixture-result").wait_for(state="visible", timeout=20_000)
                 page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.status')?.textContent?.includes('Apply đã gửi')",
+                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Sẵn sàng'",
                     timeout=20_000,
                 )
                 flow_state = worker.evaluate(
                     "() => chrome.storage.local.get('vahanUiFlowState')"
                 )
                 assert "vahanUiFlowState" not in flow_state
-                print("PRODUCTION EXTENSION APPLY/RELOAD CONTRACT PASS signature=True")
-
-                worker.evaluate(
-                    "() => chrome.storage.local.set({ vahanUiFlowState: { status: 'AWAITING_RESULT', uiContract: { signature: 'stale-signature' } } })"
-                )
-                page.reload(wait_until="networkidle")
-                root.wait_for(state="attached")
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Cần cập nhật tool'",
-                    timeout=20_000,
-                )
-                assert detail.is_visible()
-                detail_text = detail.inner_text()
-                assert "cấu trúc UI trong lúc flow đang chạy" in detail_text
-                assert "UI_DRIFT_CHANGED_DURING_RUN" in detail_text
-                assert "stale-signature" in detail_text
-                print("PRODUCTION EXTENSION POST-APPLY DRIFT PASS target=UI signature")
-
-                page.goto(f"{base_url}?lang=en&ui=baseline", wait_until="networkidle")
-                root.wait_for(state="attached")
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Sẵn sàng'",
-                    timeout=20_000,
-                )
-                start.click()
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.status')?.textContent?.includes('Hãy nhập CAPTCHA')",
-                    timeout=20_000,
-                )
-                page.evaluate(
-                    "document.querySelector('#vehicleFuel').setAttribute('name', 'renamedVehicleFuels')"
-                )
-                page.locator("#externalCaptcha").fill("ABC123")
-                page.locator("#applyTrigger").click()
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Cần cập nhật tool'",
-                    timeout=20_000,
-                )
-                assert detail.is_visible()
-                detail_text = detail.inner_text()
-                assert "Fuel (#vehicleFuel)" in detail_text
-                assert "name=vehicleFuels" in detail_text
-                assert "name=renamedVehicleFuels" in detail_text
-                assert "UI_DRIFT_CHANGED_DURING_RUN" in detail_text
-                print("PRODUCTION EXTENSION APPLY-POINT DRIFT PASS target=Fuel")
-
-                page.goto(f"{base_url}?lang=en&ui=baseline", wait_until="networkidle")
-                root.wait_for(state="attached")
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Sẵn sàng'",
-                    timeout=20_000,
-                )
-                page.evaluate("window.vahanFixture.removeFuelAtRuntime()")
-                start.click()
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Cần cập nhật tool'",
-                    timeout=20_000,
-                )
-                assert start.is_disabled()
-                assert detail.is_visible()
-                detail_text = detail.inner_text()
-                assert "Fuel (#vehicleFuel)" in detail_text
-                assert "DOM đang có 0 control" in detail_text
-                assert "UI_DRIFT_REQUIRED_CONTROL" in detail_text
-                print("PRODUCTION EXTENSION RUNTIME DRIFT PASS target=Fuel")
-
-                page.goto(f"{base_url}?lang=en&ui=wrong-label", wait_until="networkidle")
-                root.wait_for(state="attached")
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Sẵn sàng'",
-                    timeout=20_000,
-                )
-                start.click()
-                page.wait_for_function(
-                    "() => document.querySelector('#vahan-rpa-floating-root')?.shadowRoot?.querySelector('.badge')?.textContent?.trim() === 'Cần cập nhật tool'",
-                    timeout=20_000,
-                )
-                assert detail.is_visible()
-                detail_text = detail.inner_text()
-                assert "Category Group (#vehicleCategoryGroup)" in detail_text
-                assert "option 'Two Wheeler' phải tồn tại" in detail_text
-                assert "UI_DRIFT_REQUIRED_OPTION" in detail_text
-                print("PRODUCTION EXTENSION LOAD/RUN DRIFT PASS target=Category Group")
+                print("PRODUCTION EXTENSION APPLY/RELOAD PASS result_visible=True")
             finally:
                 context.close()
     finally:

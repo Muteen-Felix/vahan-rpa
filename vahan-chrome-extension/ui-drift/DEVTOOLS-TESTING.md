@@ -47,8 +47,8 @@ Mở clone baseline:
 
 `http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline&dev=1`
 
-`dev=1` bật bảng điều khiển fixture với các nút xóa Fuel, xóa option
-`Two Wheeler`, duplicate wrapper và khôi phục trang.
+`dev=1` bật bảng điều khiển fixture với các nút xóa Fuel, đổi ID Fuel, xóa
+option `Two Wheeler`, duplicate wrapper và khôi phục trang.
 
 ### 2.2. Build và nạp extension
 
@@ -79,10 +79,11 @@ trang clone.
 
 ```js
 (async () => {
-  const tabs = await chrome.tabs.query({
-    url: "http://127.0.0.1:8765/analytics/vahanpublicreport*",
-  });
-  const tab = tabs.find((item) => Number.isInteger(item.id));
+  const tabs = await chrome.tabs.query({});
+  const tab = tabs.find((item) =>
+    Number.isInteger(item.id) &&
+    /^http:\/\/(127\.0\.0\.1|localhost):(8765|5500)\/analytics\/vahanpublicreport/.test(item.url || ""),
+  );
   if (!tab) throw new Error("Chưa mở tab clone baseline.");
 
   const result = await vahanUiHealthDebug.runOnTab(tab.id);
@@ -183,12 +184,13 @@ Không chạy đồng thời hai lệnh health-check. Controller dùng một pro
 | HC-07 | `ui=moved-wrapper` | `UI_DRIFT_MULTISELECT_WRAPPER`, wrapper không ở đúng field group |
 | HC-08 | `ui=missing-apply` | `UI_DRIFT_REQUIRED_CONTROL`, target nút Apply |
 | HC-09 | `ui=visual-only` | `PASS`; thay CSS đơn thuần chưa phải lỗi contract |
+| HC-02a | `ui=renamed-fuel` | `UI_DRIFT_REQUIRED_CONTROL`, Fuel có 0 kết quả cho selector `#vehicleFuel` |
 
 Ví dụ mở scenario:
 
 `http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=missing-fuel&dev=1`
 
-### 6.2. Thiếu hoặc duplicate control bắt buộc
+### 6.2. Thiếu, đổi ID hoặc duplicate control bắt buộc
 
 Chạy từng lệnh trên **Console của tab clone**, sau đó chạy `runOnTab`.
 
@@ -198,45 +200,52 @@ document.querySelector("#vehicleFuel")?.remove();
 ```
 
 ```js
-// HC-11: duplicate Fuel; querySelectorAll sẽ trả về 2 control
+// HC-11: đổi ID Fuel, nhưng không xóa element. Đây là case cần dùng khi
+// bạn chỉnh thuộc tính id trong Elements panel của DevTools.
+const fuelForIdTest = document.querySelector("#vehicleFuel");
+if (fuelForIdTest) fuelForIdTest.id = "vehicleFuelRenamed";
+```
+
+```js
+// HC-12: duplicate Fuel; querySelectorAll sẽ trả về 2 control
 const fuel = document.querySelector("#vehicleFuel");
 if (fuel) fuel.after(fuel.cloneNode(true));
 ```
 
 ```js
-// HC-12: thiếu Category
+// HC-13: thiếu Category
 document.querySelector("#vehicleCategoryGroup")?.remove();
 ```
 
 ```js
-// HC-13: duplicate Category
+// HC-14: duplicate Category
 const category = document.querySelector("#vehicleCategoryGroup");
 if (category) category.after(category.cloneNode(true));
 ```
 
 ```js
-// HC-14: thiếu form
+// HC-15: thiếu form
 document.querySelector("#vahanPublicForm")?.remove();
 ```
 
 ```js
-// HC-15: thiếu Y-Axis hoặc X-Axis
+// HC-16: thiếu Y-Axis hoặc X-Axis
 document.querySelector("#yAxis")?.remove();
 // Hoặc reload rồi chạy riêng:
 // document.querySelector("#xAxis")?.remove();
 ```
 
 ```js
-// HC-16: thiếu CAPTCHA input hoặc Apply button.
+// HC-17: thiếu CAPTCHA input hoặc Apply button.
 // Chỉ xóa để kiểm tra nhận diện; không nhập CAPTCHA và không bấm Apply.
 document.querySelector("#externalCaptcha")?.remove();
 // Hoặc reload rồi chạy riêng:
 // document.querySelector("#applyTrigger")?.remove();
 ```
 
-Các ca HC-10 đến HC-16 phải trả `UI_DRIFT_REQUIRED_CONTROL`. Diagnostic phải
+Các ca HC-10 đến HC-17 phải trả `UI_DRIFT_REQUIRED_CONTROL`. Diagnostic phải
 có `selector`, `count` và target tương ứng. Với duplicate, Actual phải thể hiện
-`DOM đang có 2 control`; với missing, Actual phải thể hiện `0 control`.
+`DOM đang có 2 control`; với missing hoặc đổi ID, Actual phải thể hiện `0 control`.
 
 ### 6.3. Sai loại control
 
@@ -413,9 +422,12 @@ path trước khi gọi `runOnTab`.
 
 ```js
 (async () => {
-  const [tab] = await chrome.tabs.query({
-    url: "http://127.0.0.1:8765/analytics/vahanpublicreport*",
-  });
+  const tabs = await chrome.tabs.query({});
+  const tab = tabs.find((item) =>
+    Number.isInteger(item.id) &&
+    /^http:\/\/(127\.0\.0\.1|localhost):(8765|5500)\/analytics\/vahanpublicreport/.test(item.url || ""),
+  );
+  if (!tab?.id) throw new Error("Chưa mở clone tại cổng 8765 hoặc 5500.");
   const result = await chrome.tabs.sendMessage(tab.id, {
     type: "RUN_SCHEDULED_UI_CHECK",
     requireOfficial: true,
@@ -703,6 +715,9 @@ cd /Users/mac/Desktop/vahan/vahan-rpa/vahan-chrome-extension
 npm run check
 npm run build
 npm run test:ui-drift
+
+cd /Users/mac/Desktop/vahan/vahan-rpa
+python3 test_ui_health_extension_e2e.py
 ```
 
 Backend:

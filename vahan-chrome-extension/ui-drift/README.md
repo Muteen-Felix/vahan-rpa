@@ -86,9 +86,11 @@ Sau khi reload extension ở `chrome://extensions`, mở DevTools của service 
 và chạy:
 
 ```js
-const [tab] = await chrome.tabs.query({
-  url: "http://127.0.0.1:8765/analytics/vahanpublicreport*",
-});
+const tabs = await chrome.tabs.query({});
+const tab = tabs.find((item) =>
+  /^http:\/\/(127\.0\.0\.1|localhost):(8765|5500)\/analytics\/vahanpublicreport/.test(item.url || ""),
+);
+if (!tab?.id) throw new Error("Chưa mở clone tại cổng 8765 hoặc 5500.");
 await vahanUiHealthDebug.runOnTab(tab.id);
 ```
 
@@ -100,6 +102,10 @@ thao tác thường dùng trong Console của tab clone:
 ```js
 // UI_DRIFT_REQUIRED_CONTROL: xóa control bắt buộc
 document.querySelector("#vehicleFuel")?.remove();
+
+// UI_DRIFT_REQUIRED_CONTROL: đổi ID control bắt buộc
+const fuelForIdTest = document.querySelector("#vehicleFuel");
+if (fuelForIdTest) fuelForIdTest.id = "vehicleFuelRenamed";
 
 // UI_DRIFT_REQUIRED_CONTROL: tạo duplicate control
 const original = document.querySelector("#vehicleFuel");
