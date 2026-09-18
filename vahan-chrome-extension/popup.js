@@ -36,8 +36,12 @@ const runnerServerUrl = document.querySelector("#runnerServerUrl");
 const runnerName = document.querySelector("#runnerName");
 const runnerToken = document.querySelector("#runnerToken");
 const saveRunnerConfigButton = document.querySelector("#saveRunnerConfig");
+const authGuard = document.querySelector("#authGuard");
+const authGuardMessage = document.querySelector("#authGuardMessage");
+const clearAuthHoldButton = document.querySelector("#clearAuthHold");
 let activeTabId;
 let activeTabUrl = "";
+let authHoldActive = false;
 
 function isSupportedReportUrl(value) {
   try {
@@ -66,6 +70,50 @@ function renderRunnerConnection(connection = {}) {
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "RUNNER_CONNECTION_CHANGED") {
     renderRunnerConnection(message.connection);
+  }
+  if (message?.type === "VAHAN_AUTH_REQUIRED") renderAuthHold(message.authHold);
+  if (message?.type === "VAHAN_AUTH_CLEARED") renderAuthHold(null);
+});
+
+function renderAuthHold(hold) {
+  authHoldActive = Boolean(hold?.code === "VAHAN_AUTH_REQUIRED");
+  authGuard.hidden = !authHoldActive;
+  fillButton.disabled = authHoldActive;
+  if (!authHoldActive) {
+    authGuardMessage.textContent = "";
+    return;
+  }
+  const retryAfter = hold.retryAfter ? new Date(hold.retryAfter).toLocaleString() : "sau khi xác nhận";
+  authGuardMessage.textContent = `Chrome đã nhận 401/HTTP Basic Auth từ analytics.parivahan.gov.in. `
+    + `Extension đã dừng retry. Hãy đóng hộp thoại đăng nhập, chờ đến ${retryAfter} `
+    + `và kiểm tra trang chính thức trước khi chạy lại.`;
+  status.className = "error";
+  status.textContent = "Đang tạm dừng để tránh gửi thêm request đến VAHAN.";
+}
+
+async function loadAuthHold() {
+  const response = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_VAHAN_AUTH_HOLD" }, resolve);
+  });
+  if (response?.ok) renderAuthHold(response.authHold);
+  return response?.authHold || null;
+}
+
+clearAuthHoldButton.addEventListener("click", async () => {
+  clearAuthHoldButton.disabled = true;
+  try {
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "CLEAR_VAHAN_AUTH_HOLD" }, resolve);
+    });
+    if (!response?.ok) throw new Error(response?.error || "Không thể xóa trạng thái tạm dừng.");
+    renderAuthHold(null);
+    status.className = "";
+    status.textContent = "Đã xóa tạm dừng. Hãy tải lại trang VAHAN thủ công rồi mới chạy test.";
+  } catch (error) {
+    status.className = "error";
+    status.textContent = error.message;
+  } finally {
+    clearAuthHoldButton.disabled = false;
   }
 });
 
@@ -406,6 +454,8 @@ function setupMakerAutocomplete(initialValue) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   await initializeRunnerConfig();
+  const authHold = await loadAuthHold();
+  if (authHold) return;
   chrome.runtime.sendMessage({ type: "GET_RUNNER_CONNECTION" }, (response) => {
     renderRunnerConnection(response?.connection);
   });
@@ -421,6 +471,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 fillButton.addEventListener("click", async () => {
+  if (authHoldActive) return;
   status.className = "";
   status.textContent = "Đang điền bộ lọc...";
   fillButton.disabled = true;

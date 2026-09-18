@@ -87,6 +87,23 @@ h1 {
   box-shadow: 0 0 0 3px rgba(203, 36, 49, .12);
 }
 
+.auth-guard {
+  margin: 0 0 12px;
+  padding: 10px 11px;
+  border: 1px solid #f1b7b7;
+  border-left: 3px solid #b42318;
+  border-radius: 6px;
+  background: #fff4f2;
+  color: #8f1d14;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.auth-guard strong { display: block; margin-bottom: 4px; font-size: 12px; }
+.auth-guard p { margin: 0; }
+.auth-guard .btn-secondary { margin-top: 9px; padding: 7px 8px; border-color: #b42318; color: #8f1d14; }
+.auth-guard .btn-secondary:hover { background: #ffe7e3; }
+
 .backend-settings {
   margin-bottom: 12px;
   overflow: hidden;

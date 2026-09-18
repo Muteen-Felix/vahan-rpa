@@ -16,6 +16,19 @@ Các dropdown trong popup được đọc trực tiếp từ option hiện có t
 
 Không tự động đọc, giải hoặc vượt CAPTCHA. Đây là attended RPA.
 
+## Bảo vệ khi VAHAN yêu cầu đăng nhập HTTP
+
+Nếu máy chủ VAHAN trả `401/HTTP Basic Auth` sau nhiều lần tải hoặc kiểm thử,
+extension sẽ không tự điền tài khoản/mật khẩu. Manifest dùng `webRequest` để
+hủy challenge, ghi trạng thái `VAHAN_AUTH_REQUIRED`, dừng retry/reload và hiện
+cảnh báo trong popup. Trạng thái tạm dừng kéo dài 15 phút để tránh tiếp tục
+gửi request vào máy chủ.
+
+Khi gặp trường hợp này: bấm **Cancel** trên hộp thoại Chrome, chờ máy chủ
+phục hồi, mở/tải lại đúng trang VAHAN chính thức rồi mở popup và chọn **Đã
+đóng hộp thoại, cho phép thử lại**. Không nhập credential vào extension nếu
+đây là trang VAHAN public thông thường.
+
 ## Kết nối backend MVP
 
 Extension bundle `socket.io-client` vào service worker. Sau khi sửa

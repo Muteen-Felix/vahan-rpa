@@ -23,6 +23,12 @@
         <span class="connection-text">Đang kết nối backend...</span>
       </div>
 
+      <section id="authGuard" class="auth-guard" hidden aria-live="assertive">
+        <strong>VAHAN đang yêu cầu xác thực</strong>
+        <p id="authGuardMessage"></p>
+        <button id="clearAuthHold" class="btn-secondary" type="button">Đã đóng hộp thoại, cho phép thử lại</button>
+      </section>
+
       <details class="backend-settings">
         <summary>Kết nối backend</summary>
         <div class="details-body">

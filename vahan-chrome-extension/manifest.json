@@ -4,7 +4,14 @@
   "version": "0.1.0",
   "description": "Fills VAHAN report filters and exports Excel after manual CAPTCHA completion.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "downloads", "alarms", "scripting"],
+  "permissions": [
+    "storage",
+    "downloads",
+    "alarms",
+    "scripting",
+    "webRequest",
+    "webRequestAuthProvider"
+  ],
   "host_permissions": [
     "https://analytics.parivahan.gov.in/*"
   ],

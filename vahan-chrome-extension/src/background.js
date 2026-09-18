@@ -3,6 +3,14 @@ import { normalizeJobFilters } from "./job-config.mjs";
 import {
   registerUiHealthCheck,
 } from "../ui-drift/health-check.mjs";
+import {
+  VAHAN_AUTH_HOLD_KEY,
+  VAHAN_AUTH_REQUIRED_CODE,
+  createVahanAuthHold,
+  isVahanAuthHoldActive,
+  isVahanRequestUrl,
+  vahanAuthHoldMessage,
+} from "./vahan-auth-guard.mjs";
 
 const DEFAULT_RUNNER_CONFIG = Object.freeze({
   serverUrl: "http://127.0.0.1:8000",
@@ -41,8 +49,117 @@ let activeConfig;
 let activeJobId;
 let cancelledJobIds = new Set();
 let uiHealthCheckController;
+let vahanAuthHold;
+let authHoldWrite = Promise.resolve();
+const authChallengeWaiters = new Set();
+const authFailureReportedJobs = new Set();
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+class VahanAuthRequiredError extends Error {
+  constructor(hold) {
+    super(vahanAuthHoldMessage(hold));
+    this.name = "VahanAuthRequiredError";
+    this.code = VAHAN_AUTH_REQUIRED_CODE;
+    this.hold = hold;
+  }
+}
+
+async function loadVahanAuthHold() {
+  const stored = await chrome.storage.local.get(VAHAN_AUTH_HOLD_KEY);
+  vahanAuthHold = stored?.[VAHAN_AUTH_HOLD_KEY] || undefined;
+  if (!isVahanAuthHoldActive(vahanAuthHold)) {
+    vahanAuthHold = undefined;
+    chrome.action.setBadgeText?.({ text: "" });
+  }
+  return vahanAuthHold;
+}
+
+function notifyAuthChallengeWaiters(hold) {
+  for (const waiter of authChallengeWaiters) {
+    if (waiter.tabId === undefined || hold.tabId === null || waiter.tabId === hold.tabId) {
+      waiter.reject(new VahanAuthRequiredError(hold));
+    }
+  }
+}
+
+function showAuthHoldBadge(hold) {
+  chrome.action.setBadgeText?.({ text: "!" });
+  chrome.action.setBadgeBackgroundColor?.({ color: "#b42318" });
+  chrome.action.setTitle?.({ title: "VAHAN đang yêu cầu xác thực — hệ thống đã tạm dừng" });
+  chrome.runtime.sendMessage({ type: "VAHAN_AUTH_REQUIRED", authHold: hold }).catch(() => {});
+}
+
+function recordVahanAuthChallenge(details) {
+  const hold = createVahanAuthHold(details, vahanAuthHold);
+  vahanAuthHold = hold;
+  notifyAuthChallengeWaiters(hold);
+  showAuthHoldBadge(hold);
+
+  // Serialize storage writes because the server may challenge several assets
+  // for the same page at almost the same time.
+  authHoldWrite = authHoldWrite
+    .catch(() => {})
+    .then(async () => {
+      await chrome.storage.local.set({ [VAHAN_AUTH_HOLD_KEY]: hold });
+      return hold;
+    });
+  return hold;
+}
+
+async function clearVahanAuthHold() {
+  vahanAuthHold = undefined;
+  await chrome.storage.local.remove(VAHAN_AUTH_HOLD_KEY);
+  chrome.action.setBadgeText?.({ text: "" });
+  chrome.action.setTitle?.({ title: "VAHAN RPA Assistant" });
+  chrome.runtime.sendMessage({ type: "VAHAN_AUTH_CLEARED" }).catch(() => {});
+}
+
+async function assertNoVahanAuthHold(tabId) {
+  const hold = vahanAuthHold || await loadVahanAuthHold();
+  if (isVahanAuthHoldActive(hold, Date.now(), tabId)) {
+    throw new VahanAuthRequiredError(hold);
+  }
+}
+
+function installVahanAuthGuard() {
+  if (!chrome.webRequest?.onAuthRequired?.addListener) return;
+
+  // The extension never guesses credentials. Cancel the challenge instead of
+  // allowing Chrome's native login dialog and stop all automation retries.
+  chrome.webRequest.onAuthRequired.addListener(
+    (details, respond) => {
+      if (details.isProxy) {
+        respond({});
+        return;
+      }
+      const hold = recordVahanAuthChallenge(details);
+      respond({ cancel: true });
+    },
+    { urls: ["https://analytics.parivahan.gov.in/*"] },
+    ["asyncBlocking"],
+  );
+
+  // A normal top-level page load is the only automatic signal that the hold
+  // can be cleared. It avoids retaining a stale lock after the user has
+  // manually waited/reloaded the official page.
+  chrome.webRequest.onCompleted?.addListener(
+    (details) => {
+      if (details.type !== "main_frame" || details.statusCode < 200 || details.statusCode >= 300) return;
+      if (!isVahanRequestUrl(details.url) || !vahanAuthHold) return;
+      if (vahanAuthHold.tabId !== null && vahanAuthHold.tabId !== details.tabId) return;
+      try {
+        const completed = new URL(details.url);
+        const challenged = new URL(vahanAuthHold.url);
+        if (`${completed.origin}${completed.pathname}` !== `${challenged.origin}${challenged.pathname}`) return;
+      } catch {
+        return;
+      }
+      clearVahanAuthHold().catch(() => {});
+    },
+    { urls: ["https://analytics.parivahan.gov.in/*"] },
+  );
+}
 
 async function reportJobStatus(jobId, status, error) {
   if (!socket?.connected) throw new Error("Backend is disconnected.");
@@ -85,28 +202,46 @@ function assertJobActive(jobId) {
 }
 
 async function waitForTabComplete(tabId, timeout = 30_000) {
+  await assertNoVahanAuthHold(tabId);
   const current = await chrome.tabs.get(tabId);
   if (current.status === "complete") return;
   await new Promise((resolve, reject) => {
+    let settled = false;
+    const authWaiter = {
+      tabId,
+      reject: (error) => finish(reject, error),
+    };
+    const authPoll = setInterval(() => {
+      assertNoVahanAuthHold(tabId).catch((error) => finish(reject, error));
+    }, 250);
     const timer = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(listener);
-      reject(new Error("VAHAN page did not finish loading in time."));
+      finish(reject, new Error("VAHAN page did not finish loading in time."));
     }, timeout);
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearInterval(authPoll);
+      chrome.tabs.onUpdated.removeListener(listener);
+      authChallengeWaiters.delete(authWaiter);
+      callback(value);
+    };
     const listener = (updatedId, changeInfo) => {
       if (updatedId !== tabId || changeInfo.status !== "complete") return;
-      clearTimeout(timer);
-      chrome.tabs.onUpdated.removeListener(listener);
-      resolve();
+      finish(resolve);
     };
+    authChallengeWaiters.add(authWaiter);
     chrome.tabs.onUpdated.addListener(listener);
   });
 }
 
 async function getVahanTab() {
+  await assertNoVahanAuthHold();
   const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*" });
   const tab = tabs[0] || await chrome.tabs.create({ url: VAHAN_URL, active: false });
   if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
   await waitForTabComplete(tab.id);
+  await assertNoVahanAuthHold(tab.id);
   return tab.id;
 }
 
@@ -115,15 +250,19 @@ async function getOptionsTab() {
 }
 
 async function sendToVahan(tabId, message) {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  let reloadAttempted = false;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
     try {
+      await assertNoVahanAuthHold(tabId);
       return await chrome.tabs.sendMessage(tabId, message);
     } catch (error) {
+      await assertNoVahanAuthHold(tabId);
       if (attempt === 0 && String(error?.message).includes("Receiving end")) {
+        reloadAttempted = true;
         await chrome.tabs.reload(tabId);
         await waitForTabComplete(tabId);
       }
-      if (attempt === 11) throw error;
+      if (attempt === 5 || reloadAttempted && attempt > 0) throw error;
       await delay(500);
     }
   }
@@ -179,9 +318,10 @@ async function executeJob(job) {
   await chrome.storage.local.set({ pendingServerJob: job });
   chrome.runtime.sendMessage({ type: "SERVER_JOB_ASSIGNED", job }).catch(() => {});
 
+  let tabId;
   try {
     await reportJobStatus(jobId, "OPENING_VAHAN");
-    const tabId = await getVahanTab();
+    tabId = await getVahanTab();
     assertJobActive(jobId);
 
     const config = normalizeJobFilters(job.filters);
@@ -205,7 +345,15 @@ async function executeJob(job) {
     await publishCaptcha(jobId, captcha);
   } catch (error) {
     if (!cancelledJobIds.has(jobId)) {
-      await reportJobStatus(jobId, "FAILED", error.message).catch(() => {});
+      const authHeld = isVahanAuthHoldActive(vahanAuthHold, Date.now(), tabId);
+      if (!(authHeld && authFailureReportedJobs.has(jobId))) {
+        await reportJobStatus(
+          jobId,
+          "FAILED",
+          authHeld ? `${VAHAN_AUTH_REQUIRED_CODE}: ${vahanAuthHoldMessage(vahanAuthHold)}` : error.message,
+        ).catch(() => {});
+        if (authHeld) authFailureReportedJobs.add(jobId);
+      }
     }
     activeJobId = undefined;
     await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
@@ -396,6 +544,18 @@ async function handlePageResult(message, sender) {
   if (sender.tab?.id !== activeServerJob.tabId) return;
   const jobId = activeServerJob.jobId;
 
+  if (message.result === "AUTH_REQUIRED") {
+    const hold = vahanAuthHold || await loadVahanAuthHold();
+    await reportJobStatus(
+      jobId,
+      "FAILED",
+      `${VAHAN_AUTH_REQUIRED_CODE}: ${vahanAuthHoldMessage(hold || {})}`,
+    ).catch(() => {});
+    activeJobId = undefined;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    return;
+  }
+
   if (message.result === "INVALID_CAPTCHA") {
     if ((activeServerJob.attempts || 0) >= 3) {
       await reportJobStatus(jobId, "FAILED", "CAPTCHA was invalid 3 consecutive times.").catch(() => {});
@@ -513,6 +673,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "GET_VAHAN_AUTH_HOLD") {
+    (async () => {
+      const hold = vahanAuthHold || await loadVahanAuthHold();
+      sendResponse({ ok: true, authHold: isVahanAuthHoldActive(hold) ? hold : null });
+    })().catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "CLEAR_VAHAN_AUTH_HOLD") {
+    clearVahanAuthHold()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "RECONNECT_RUNNER") {
     connectRunner()
       .then(() => sendResponse({ ok: true }))
@@ -525,4 +700,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // configured read-only health check, backend CSV delivery and pending Dev
 // alert; the MVP runner/job flow above remains unchanged.
 uiHealthCheckController = registerUiHealthCheck(chrome);
+installVahanAuthGuard();
+void loadVahanAuthHold();
 connectRunner();

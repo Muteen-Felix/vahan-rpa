@@ -1,6 +1,26 @@
 const splitValues = (value) => String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const VAHAN_AUTH_HOLD_KEY = "vahanAuthHold";
+
+async function getActiveVahanAuthHold() {
+  try {
+    const { [VAHAN_AUTH_HOLD_KEY]: hold } = await chrome.storage.local.get(VAHAN_AUTH_HOLD_KEY);
+    if (hold?.code !== "VAHAN_AUTH_REQUIRED") return null;
+    const retryAfter = Date.parse(hold.retryAfter || "");
+    return Number.isFinite(retryAfter) && retryAfter > Date.now() ? hold : null;
+  } catch {
+    return null;
+  }
+}
+
+function authHoldStatusMessage(hold) {
+  const retryAfter = hold?.retryAfter
+    ? new Date(hold.retryAfter).toLocaleString()
+    : "sau khi xác nhận";
+  return `VAHAN đang yêu cầu xác thực HTTP. Extension đã tạm dừng để không thử lại liên tục. `
+    + `Hãy đóng hộp thoại đăng nhập, chờ đến ${retryAfter} rồi tải lại trang.`;
+}
 
 function getOptionMap(select) {
   return [...select.options].map((option) => ({
@@ -398,6 +418,14 @@ async function resumeServerJobAfterApply() {
 
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
+    const authHold = await getActiveVahanAuthHold();
+    if (authHold) {
+      updateFloatingStep("export", "error");
+      setFloatingStatus("error", authHoldStatusMessage(authHold));
+      await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "AUTH_REQUIRED" });
+      return;
+    }
+
     if (hasInvalidCaptchaMessage()) {
       updateFloatingStep("captcha", "error");
       updateFloatingStep("export", "idle");
@@ -466,6 +494,8 @@ async function runFromFloatingWidget() {
   updateFloatingStep("time", "running");
 
   try {
+    const authHold = await getActiveVahanAuthHold();
+    if (authHold) throw new Error(authHoldStatusMessage(authHold));
     const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
     if (!vahanConfig) {
       throw new Error("Chưa có cấu hình. Hãy mở popup extension và chọn bộ lọc trước.");

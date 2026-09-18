@@ -1,3 +1,9 @@
+import {
+  VAHAN_AUTH_HOLD_KEY,
+  isVahanAuthHoldActive,
+  vahanAuthHoldMessage,
+} from "../src/vahan-auth-guard.mjs";
+
 export const UI_HEALTH_CHECK_ALARM = "vahan-ui-health-check";
 export const DEFAULT_UI_HEALTH_CHECK_INTERVAL_DAYS = 3;
 export const MIN_UI_HEALTH_CHECK_INTERVAL_DAYS = 1;
@@ -63,6 +69,14 @@ function errorMessage(error) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 300);
+}
+
+async function assertNoVahanAuthHold(chromeApi, tabId) {
+  const stored = await chromeApi.storage.local.get(VAHAN_AUTH_HOLD_KEY);
+  const hold = stored?.[VAHAN_AUTH_HOLD_KEY];
+  if (isVahanAuthHoldActive(hold, Date.now(), tabId)) {
+    throw new Error(`${hold.code}: ${vahanAuthHoldMessage(hold)}`);
+  }
 }
 
 function normalizeIntervalDays(value, fallback = DEFAULT_UI_HEALTH_CHECK_INTERVAL_DAYS) {
@@ -471,6 +485,7 @@ async function requestUiHealthCheck(
   let recoveryAttempted = false;
   for (let attempt = 0; attempt < UI_HEALTH_CHECK_MESSAGE_ATTEMPTS; attempt += 1) {
     try {
+      await assertNoVahanAuthHold(chromeApi, tabId);
       return await withTimeout(
         chromeApi.tabs.sendMessage(tabId, {
           type: UI_HEALTH_CHECK_MESSAGE,
@@ -481,6 +496,15 @@ async function requestUiHealthCheck(
       );
     } catch (error) {
       lastError = error;
+
+      // An HTTP authentication challenge is a hard stop. Do not reinject the
+      // content script or spend the remaining attempts while Chrome/server is
+      // waiting for credentials.
+      try {
+        await assertNoVahanAuthHold(chromeApi, tabId);
+      } catch (authError) {
+        throw authError;
+      }
 
       // A content script is not automatically re-injected into an already
       // open tab after chrome://extensions reloads the extension. Recover the
@@ -582,10 +606,12 @@ export function createUiHealthCheckController(chromeApi, options = {}) {
       pageUrl = healthCheckPageUrl(candidate);
       const tab = await getVerifiedUiHealthTab(chromeApi, tabId);
       pageUrl = healthCheckPageUrl(tab, pageUrl);
+      await assertNoVahanAuthHold(chromeApi, tabId);
 
       await waitForTabReady(chromeApi, tabId, tabReadyTimeoutMs);
       const readyTab = await getVerifiedUiHealthTab(chromeApi, tabId);
       pageUrl = healthCheckPageUrl(readyTab, pageUrl);
+      await assertNoVahanAuthHold(chromeApi, tabId);
       const response = await withTimeout(
         requestUiHealthCheck(chromeApi, tabId, retryDelayMs, true),
         checkTimeoutMs,
