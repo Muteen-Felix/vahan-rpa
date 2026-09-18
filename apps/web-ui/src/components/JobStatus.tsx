@@ -1,4 +1,5 @@
 import type { Job, JobStatus as Status } from "../contracts";
+import { api } from "../services/api-client";
 
 const labels: Record<Status, string> = {
   QUEUED: "Đang xếp hàng",
@@ -13,9 +14,16 @@ const labels: Record<Status, string> = {
   CANCELLED: "Đã hủy",
 };
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function JobStatus({ job, onCancel }: { job: Job | null; onCancel: () => void }) {
   if (!job) return null;
   const terminal = ["COMPLETED", "FAILED", "CANCELLED"].includes(job.status);
+  const hasExcel = job.status === "COMPLETED" && !!job.excelFileName;
 
   return (
     <section className="panel job-panel">
@@ -28,6 +36,21 @@ export function JobStatus({ job, onCancel }: { job: Job | null; onCancel: () => 
         <strong>{labels[job.status]}</strong>
       </div>
       {job.error && <p className="error-message">{job.error}</p>}
+      {hasExcel && (
+        <div className="job-excel-download">
+          <a
+            className="primary-button"
+            href={api.excelDownloadUrl(job.id)}
+            download={job.excelFileName || "report.xlsx"}
+          >
+            📥 Tải báo cáo Excel
+          </a>
+          <p className="job-excel-meta">
+            {job.excelFileName}
+            {job.excelFileSize != null && ` · ${formatSize(job.excelFileSize)}`}
+          </p>
+        </div>
+      )}
       {!terminal && <button className="secondary-button" onClick={onCancel}>Hủy job</button>}
     </section>
   );

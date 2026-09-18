@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "esbuild src/background.js --bundle --format=iife --platform=browser --target=chrome116 --outfile=background.js",
-    "check": "node --check background.js && node --check content.js && node --check popup.js && node --check ui-drift/guard.js && node --check ui-drift/health-check-content.js && node --check ui-drift/health-check.mjs && node scripts/test-job-config.mjs && node scripts/test-auth-guard.mjs && npm run test:ui-drift",
+    "check": "node --check background.js && node --check content.js && node --check interceptor-main.js && node --check popup.js && node --check ui-drift/guard.js && node --check ui-drift/health-check-content.js && node --check ui-drift/health-check.mjs && node scripts/test-job-config.mjs && node scripts/test-auth-guard.mjs && npm run test:ui-drift",
     "test:ui-drift": "node scripts/test-ui-health-check.mjs",
     "smoke:runner": "node scripts/smoke-runner.mjs"
   },

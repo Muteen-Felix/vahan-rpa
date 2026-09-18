@@ -48,6 +48,7 @@ let reconnectTimer;
 let activeConfig;
 let activeJobId;
 let cancelledJobIds = new Set();
+let pendingBlobResolver;
 let uiHealthCheckController;
 let vahanAuthHold;
 let authHoldWrite = Promise.resolve();
@@ -269,48 +270,80 @@ async function sendToVahan(tabId, message) {
 }
 
 async function triggerAndWaitForExcelDownload(tabId) {
-  return new Promise((resolve, reject) => {
-    let downloadId;
-    const cleanup = () => {
-      clearTimeout(timer);
-      chrome.downloads.onCreated.removeListener(onCreated);
-      chrome.downloads.onChanged.removeListener(onChanged);
-    };
-    const onCreated = (item) => {
-      if (downloadId !== undefined) return;
-      downloadId = item.id;
-      if (item.state === "complete") { cleanup(); resolve(item); }
-    };
-    const onChanged = (delta) => {
-      if (delta.id !== downloadId || !delta.state) return;
-      if (delta.state.current === "complete") { cleanup(); resolve(delta); }
-      if (delta.state.current === "interrupted") {
-        cleanup();
-        reject(new Error("Excel download was interrupted."));
-      }
-    };
+  // 1. Set up a promise that resolves when content.js sends EXCEL_BLOB_CAPTURED.
+  const blobPromise = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error("Excel download did not complete within 60 seconds."));
+      pendingBlobResolver = undefined;
+      reject(new Error("Excel blob was not captured within 60 seconds."));
     }, 60_000);
-    chrome.downloads.onCreated.addListener(onCreated);
-    chrome.downloads.onChanged.addListener(onChanged);
-    sendToVahan(tabId, { type: "CLICK_EXCEL_DOWNLOAD" }).then((response) => {
-      if (!response?.ok) {
-        cleanup();
-        reject(new Error(response?.error || "Could not click the Excel download button."));
-      }
-    }).catch((error) => { cleanup(); reject(error); });
+    pendingBlobResolver = (data) => {
+      clearTimeout(timer);
+      pendingBlobResolver = undefined;
+      resolve(data);
+    };
   });
+
+  // Secondary defense: cancel & erase any browser download that slipped through
+  const onCreated = (item) => {
+    try {
+      chrome.downloads.cancel(item.id, () => {
+        chrome.downloads.erase({ id: item.id }, () => {});
+      });
+    } catch (e) {}
+  };
+  chrome.downloads.onCreated.addListener(onCreated);
+
+  try {
+    // 2. Tell content.js to click the download button (interceptor captures the blob).
+    const response = await sendToVahan(tabId, { type: "CLICK_EXCEL_DOWNLOAD" });
+    if (!response?.ok) {
+      pendingBlobResolver = undefined;
+      throw new Error(response?.error || "Could not click the Excel download button.");
+    }
+
+    // 3. Wait for the blob data from content.js.
+    const { dataUrl, fileName } = await blobPromise;
+
+    // 4. Upload to API server.
+    const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+    const jobId = activeServerJob?.jobId;
+    if (!jobId) throw new Error("No active job to attach the Excel file to.");
+
+    const config = await loadRunnerConfig();
+    const serverUrl = config.serverUrl || "http://127.0.0.1:8000";
+
+    // Convert data URL to Blob for upload.
+    const blobResponse = await fetch(dataUrl);
+    const uploadFileName = activeServerJob?.scenarioName
+      ? `${activeServerJob.scenarioName.replace(/[\\/*?:"<>|\r\n\t]/g, "_").trim()}.xlsx`
+      : (fileName || "report.xlsx");
+    const formData = new FormData();
+    formData.append("file", blob, uploadFileName);
+
+    const uploadResponse = await fetch(`${serverUrl}/api/jobs/${jobId}/upload-excel`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!uploadResponse.ok) {
+      const body = await uploadResponse.json().catch(() => ({}));
+      throw new Error(body.detail || `Server upload failed (${uploadResponse.status}).`);
+    }
+    return await uploadResponse.json();
+  } finally {
+    chrome.downloads.onCreated.removeListener(onCreated);
+  }
 }
+
 
 async function executeJob(job) {
   const jobId = String(job?.jobId || "");
   if (!jobId) return;
   if (activeJobId === jobId) return;
   if (activeJobId) {
-    await reportJobStatus(jobId, "FAILED", `Runner is already processing job ${activeJobId}.`).catch(() => {});
-    return;
+    console.warn(`[VAHAN EXT] Preempting stale job ${activeJobId} with new job ${jobId}`);
+    cancelledJobIds.add(activeJobId);
+    activeJobId = undefined;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
   }
 
   activeJobId = jobId;
@@ -430,13 +463,10 @@ async function connectRunner() {
     startHeartbeat();
     const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
     if (activeServerJob?.jobId) {
-      activeJobId = activeServerJob.jobId;
-      if (!activeServerJob.stage) {
-        await reportJobStatus(activeJobId, "FAILED", "Extension restarted while preparing the VAHAN job.").catch(() => {});
-        activeJobId = undefined;
-        await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
-      }
+      await reportJobStatus(activeServerJob.jobId, "FAILED", "Extension reconnected or restarted.").catch(() => {});
     }
+    activeJobId = undefined;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
   });
 
   socket.on("disconnect", (reason) => {
@@ -648,6 +678,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
+  if (message?.type === "EXCEL_BLOB_CAPTURED") {
+    if (pendingBlobResolver) {
+      pendingBlobResolver({ dataUrl: message.dataUrl, fileName: message.fileName });
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (message?.type === "SERVER_JOB_PAGE_RESULT") {
     handlePageResult(message, _sender)
       .then(() => sendResponse({ ok: true }))

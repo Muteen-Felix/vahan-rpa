@@ -8,6 +8,8 @@ dependencies = [
   "python-socketio[asyncio-client]>=5.12,<6",
   "pydantic>=2.10,<3",
   "uvicorn[standard]>=0.34,<1",
+  "python-multipart>=0.0.18,<1",
+  "aiofiles>=24,<25",
 ]
 
 [project.optional-dependencies]
@@ -16,6 +18,15 @@ dev = [
   "pytest>=8,<10",
   "pytest-asyncio>=0.25,<2",
 ]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["runtime*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

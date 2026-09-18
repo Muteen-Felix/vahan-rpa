@@ -35,6 +35,12 @@
   "content_scripts": [
     {
       "matches": ["https://analytics.parivahan.gov.in/analytics/vahanpublicreport*"],
+      "js": ["interceptor-main.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://analytics.parivahan.gov.in/analytics/vahanpublicreport*"],
       "js": ["ui-drift/guard.js", "content.js", "ui-drift/health-check-content.js"],
       "run_at": "document_idle"
     }

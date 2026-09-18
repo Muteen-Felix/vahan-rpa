@@ -114,10 +114,22 @@ export interface Job {
   runnerId: string;
   status: JobStatus;
   filters: VahanFilters & Record<string, unknown>;
+  scenarioName?: string | null;
   captchaId?: string | null;
   error?: string | null;
+  excelFileName?: string | null;
+  excelFileSize?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExportedReportItem {
+  jobId: string;
+  scenarioName: string;
+  fileName: string;
+  fileSize: number;
+  createdAt: string;
+  downloadUrl: string;
 }
 
 export interface CaptchaChallenge {

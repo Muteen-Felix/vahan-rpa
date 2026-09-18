@@ -49,6 +49,7 @@ class CreateJobRequest(BaseModel):
 
     runner_id: str = Field(alias="runnerId", min_length=1, max_length=128)
     filters: VahanFilters
+    scenario_name: str | None = Field(default=None, alias="scenarioName")
 
 
 class Job(BaseModel):
@@ -58,9 +59,12 @@ class Job(BaseModel):
     runner_id: str = Field(alias="runnerId")
     status: JobStatus = JobStatus.QUEUED
     filters: VahanFilters
+    scenario_name: str | None = Field(default=None, alias="scenarioName")
     captcha_id: str | None = Field(default=None, alias="captchaId")
     captcha_image_data_url: str | None = Field(default=None, alias="captchaImageDataUrl", exclude=True)
     error: str | None = None
+    excel_file_name: str | None = Field(default=None, alias="excelFileName")
+    excel_file_size: int | None = Field(default=None, alias="excelFileSize")
     created_at: datetime = Field(default_factory=utc_now, alias="createdAt")
     updated_at: datetime = Field(default_factory=utc_now, alias="updatedAt")
 
