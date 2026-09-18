@@ -6,6 +6,14 @@ from pathlib import Path
 
 
 DEFAULT_UI_HEALTH_LOG_DIR = Path(__file__).resolve().parents[1] / "runtime" / "ui-health-logs"
+DEFAULT_WEB_CORS_ORIGINS = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
+# The unpacked extension ID is stable for this repository's current Chrome
+# installation. Other installations can override it with
+# VAHAN_API_EXTENSION_IDS without changing the web origins.
+DEFAULT_EXTENSION_IDS = ("ooplajjjjphdcaolokpaenmkjlbcmlhk",)
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -21,8 +29,8 @@ class Settings:
     port: int = 8000
     debug: bool = False
     cors_origins: tuple[str, ...] = (
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        *DEFAULT_WEB_CORS_ORIGINS,
+        *(f"chrome-extension://{extension_id}" for extension_id in DEFAULT_EXTENSION_IDS),
     )
     socketio_cors_origins: str | tuple[str, ...] = "*"
     runner_token: str = "change-me"
@@ -31,14 +39,25 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        origins = tuple(
+        web_origins = tuple(
             origin.strip()
             for origin in os.getenv(
                 "VAHAN_API_CORS_ORIGINS",
-                "http://localhost:5173,http://127.0.0.1:5173",
+                ",".join(DEFAULT_WEB_CORS_ORIGINS),
             ).split(",")
             if origin.strip()
         )
+        extension_ids = tuple(
+            extension_id.strip()
+            for extension_id in os.getenv(
+                "VAHAN_API_EXTENSION_IDS",
+                ",".join(DEFAULT_EXTENSION_IDS),
+            ).split(",")
+            if extension_id.strip()
+        )
+        origins = tuple(dict.fromkeys(
+            (*web_origins, *(f"chrome-extension://{extension_id}" for extension_id in extension_ids))
+        ))
         socketio_origins_value = os.getenv("VAHAN_API_SOCKETIO_CORS_ORIGINS", "*").strip()
         socketio_origins: str | tuple[str, ...] = (
             "*"

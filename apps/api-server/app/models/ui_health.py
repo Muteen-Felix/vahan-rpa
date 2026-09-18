@@ -95,7 +95,9 @@ class UiHealthDaySummary(BaseModel):
     total: int = 0
     passed: int = Field(default=0, alias="pass")
     data_changed: int = Field(default=0, alias="dataChanged")
+    data_changed_errors: int = Field(default=0, alias="dataChangedErrors")
     ui_drift: int = Field(default=0, alias="uiDrift")
+    ui_drift_errors: int = Field(default=0, alias="uiDriftErrors")
     check_error: int = Field(default=0, alias="checkError")
     latest_checked_at: str = Field(default="", alias="latestCheckedAt")
 

@@ -47,6 +47,8 @@ file after 10 calendar days or 512 KiB.
 cd apps/api-server
 python -m pip install -e ".[dev]"
 $env:VAHAN_API_RUNNER_TOKEN = "change-me"
+# ID extension xem tại chrome://extensions; mặc định đã có ID của workspace này.
+$env:VAHAN_API_EXTENSION_IDS = "ooplajjjjphdcaolokpaenmkjlbcmlhk"
 python -m uvicorn app.main:application --host 127.0.0.1 --port 8000 --reload
 ```
 

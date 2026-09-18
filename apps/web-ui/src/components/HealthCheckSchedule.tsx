@@ -1,18 +1,30 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import type { UiHealthSchedule } from "../contracts";
+import type { PendingUiHealthCheck, UiHealthCheckNowResponse, UiHealthSchedule } from "../contracts";
 import { api } from "../services/api-client";
 
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
   }).format(date);
 }
 
-export function HealthCheckSchedule() {
+interface HealthCheckScheduleProps {
+  pendingManualCheck?: PendingUiHealthCheck | null;
+  onCheckRequested?: (request: UiHealthCheckNowResponse) => void;
+}
+
+export function HealthCheckSchedule({
+  pendingManualCheck = null,
+  onCheckRequested,
+}: HealthCheckScheduleProps) {
   const [schedule, setSchedule] = useState<UiHealthSchedule | null>(null);
   const [days, setDays] = useState("");
   const [loading, setLoading] = useState(true);
@@ -69,8 +81,9 @@ export function HealthCheckSchedule() {
     setNotice("");
     try {
       const result = await api.runUiHealthCheckNow();
+      onCheckRequested?.(result);
       setNotice(
-        `Đã gửi yêu cầu kiểm tra tab VAHAN chính thức đang mở tới ${result.runnerName}. Kết quả sẽ xuất hiện trong báo cáo sau khi extension hoàn tất.`,
+        `Đã gửi yêu cầu kiểm tra tab VAHAN chính thức đang mở tới ${result.runnerName}. Đang chờ kết quả để cập nhật thống kê và lịch sử.`,
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể yêu cầu kiểm tra ngay.");
@@ -101,7 +114,7 @@ export function HealthCheckSchedule() {
               max="365"
               step="1"
               value={days}
-              disabled={loading || saving || checkingNow}
+              disabled={loading || saving || checkingNow || Boolean(pendingManualCheck)}
               onChange={(event) => setDays(event.currentTarget.value)}
               placeholder="3"
             />
@@ -116,7 +129,7 @@ export function HealthCheckSchedule() {
             className="secondary-button health-check-now-button"
             type="button"
             onClick={runCheckNow}
-            disabled={loading || saving || checkingNow}
+            disabled={loading || saving || checkingNow || Boolean(pendingManualCheck)}
             title="Yêu cầu extension kiểm tra đúng tab VAHAN chính thức đang mở"
           >
             {checkingNow ? "Đang yêu cầu..." : "Kiểm tra ngay"}

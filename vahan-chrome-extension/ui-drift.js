@@ -241,7 +241,7 @@
 
     const message = `Phát hiện thay đổi tại ${target}: ${title}. Tool đã dừng để tránh thao tác sai dữ liệu.`;
     const action =
-      "Dev cần kiểm tra đúng vùng này, cập nhật selector/adapter và chạy lại fixture; " +
+      "Dev cần kiểm tra đúng vùng này, cập nhật selector/adapter và chạy lại kiểm thử UI; " +
       "người dùng không cần nhập lại dữ liệu cho đến khi tool được cập nhật.";
     return {
       code,

@@ -26,12 +26,19 @@ export interface UiHealthCheckNowResponse {
   status: "REQUESTED";
 }
 
+export interface PendingUiHealthCheck {
+  requestId: string;
+  requestedAt: string;
+}
+
 export interface UiHealthDaySummary {
   date: string;
   total: number;
   pass: number;
   dataChanged: number;
+  dataChangedErrors: number;
   uiDrift: number;
+  uiDriftErrors: number;
   checkError: number;
   latestCheckedAt: string;
 }

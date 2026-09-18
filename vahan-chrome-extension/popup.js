@@ -42,15 +42,9 @@ let activeTabUrl = "";
 function isSupportedReportUrl(value) {
   try {
     const url = new URL(String(value || ""));
-    const reportPath = url.pathname.includes("/analytics/vahanpublicreport");
-    const officialPage = url.protocol === "https:"
+    return url.protocol === "https:"
       && url.hostname === "analytics.parivahan.gov.in"
-      && reportPath;
-    const clonePage = url.protocol === "http:"
-      && (url.hostname === "127.0.0.1" || url.hostname === "localhost")
-      && ["8765", "5500"].includes(url.port)
-      && reportPath;
-    return officialPage || clonePage;
+      && url.pathname.includes("/analytics/vahanpublicreport");
   } catch {
     return false;
   }
@@ -245,10 +239,10 @@ function replaceWithSelect(id, definition, labels, selectedValue) {
 }
 
 async function message(payload) {
-  if (!activeTabId) throw new Error("Không tìm thấy tab VAHAN hoặc clone local.");
+  if (!activeTabId) throw new Error("Không tìm thấy tab VAHAN chính thức.");
   if (activeTabUrl && !isSupportedReportUrl(activeTabUrl)) {
     throw new Error(
-      "Hãy chuyển sang tab VAHAN hoặc clone local tại /analytics/vahanpublicreport rồi mở lại extension.",
+      "Hãy chuyển sang tab VAHAN chính thức tại /analytics/vahanpublicreport rồi mở lại extension.",
     );
   }
   return chrome.tabs.sendMessage(activeTabId, payload);
@@ -260,7 +254,7 @@ async function initializeDynamicFields() {
   activeTabUrl = tab?.url || "";
   if (!isSupportedReportUrl(activeTabUrl)) {
     throw new Error(
-      "Extension chỉ hoạt động trên trang VAHAN hoặc clone local /analytics/vahanpublicreport.",
+      "Extension chỉ hoạt động trên trang VAHAN chính thức /analytics/vahanpublicreport.",
     );
   }
   const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
@@ -421,7 +415,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (error) {
     status.className = "error";
     status.textContent = error.message.includes("Receiving end")
-      ? "Tab chưa có content script. Hãy tải lại tab VAHAN/clone local, sau đó Reload extension nếu vừa đổi manifest."
+      ? "Tab chưa có content script. Hãy tải lại trang VAHAN, sau đó Reload extension nếu vừa đổi manifest."
       : error.message;
   }
 });

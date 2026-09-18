@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 
-import type { UiHealthReportsResponse } from "../contracts";
+import type { PendingUiHealthCheck, UiHealthReportsResponse } from "../contracts";
 import { API_URL, api } from "../services/api-client";
+
+const MANUAL_REPORT_POLL_INTERVAL_MS = 2_000;
+const MANUAL_REPORT_POLL_TIMEOUT_MS = 90_000;
 
 const statusLabels: Record<string, string> = {
   PASS: "Bình thường",
@@ -14,8 +17,12 @@ function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
   }).format(date);
 }
 
@@ -32,6 +39,38 @@ function diagnosticText(value: string) {
   }
 }
 
+function diagnosticObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function diagnosticReports(value: string): Array<Record<string, unknown>> {
+  const parsed = diagnosticObject(value);
+  return Array.isArray(parsed?.errors)
+    ? parsed.errors.filter(
+      (item): item is Record<string, unknown> => Boolean(item && typeof item === "object"),
+    )
+    : [];
+}
+
+function isResultForPendingManualCheck(row: Record<string, string>, pending: PendingUiHealthCheck) {
+  if (row.trigger !== "manual-web") return false;
+  const checkedAt = Date.parse(row.checked_at || "");
+  const requestedAt = Date.parse(pending.requestedAt);
+  return Number.isFinite(checkedAt) && Number.isFinite(requestedAt) && checkedAt >= requestedAt;
+}
+
+function reportValue(report: Record<string, unknown>, key: string) {
+  const value = report[key];
+  return value === undefined || value === null || value === "" ? "—" : String(value);
+}
+
 function HealthReportTable({ rows }: { rows: Array<Record<string, string>> }) {
   return (
     <table className="health-report-table">
@@ -46,7 +85,13 @@ function HealthReportTable({ rows }: { rows: Array<Record<string, string>> }) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const reports = diagnosticReports(row.diagnostic_details);
+          const declaredErrorCount = Number(row.error_count);
+          const errorCount = Number.isFinite(declaredErrorCount) && declaredErrorCount > 0
+            ? declaredErrorCount
+            : reports.length || (row.status === "PASS" ? 0 : 1);
+          return (
           <tr key={row.log_id}>
             <td className="report-nowrap">{formatDateTime(row.checked_at)}</td>
             <td>
@@ -55,7 +100,10 @@ function HealthReportTable({ rows }: { rows: Array<Record<string, string>> }) {
               </span>
             </td>
             <td>
-              <strong>{row.error_code || "—"}</strong>
+              <strong>
+                {row.error_code || "—"}
+                {errorCount > 1 && <span className="health-report-error-count"> · {errorCount} lỗi</span>}
+              </strong>
               <small>{row.error_title || (row.status === "PASS" ? "Kiểm tra giao diện thành công" : "Không có lỗi")}</small>
             </td>
             <td>
@@ -68,7 +116,19 @@ function HealthReportTable({ rows }: { rows: Array<Record<string, string>> }) {
             </td>
             <td>
               <details>
-                <summary>Xem diagnostic</summary>
+                <summary>{errorCount > 1 ? `Xem ${errorCount} diagnostic` : "Xem diagnostic"}</summary>
+                {reports.length > 1 && (
+                  <ol className="health-report-errors">
+                    {reports.map((report, index) => (
+                      <li key={`${row.log_id}-error-${index}`}>
+                        <strong>{reportValue(report, "code")}</strong>
+                        <span>{reportValue(report, "target")}</span>
+                        <small><b>Expected:</b> {reportValue(report, "expected")}</small>
+                        <small><b>Actual:</b> {reportValue(report, "actual")}</small>
+                      </li>
+                    ))}
+                  </ol>
+                )}
                 <pre>{diagnosticText(row.diagnostic_details)}</pre>
                 <small><b>Log ID:</b> {row.log_id || "—"}</small>
                 <small><b>Trigger:</b> {row.trigger || "—"} · <b>Failure:</b> {row.failure_type || "—"}</small>
@@ -77,13 +137,24 @@ function HealthReportTable({ rows }: { rows: Array<Record<string, string>> }) {
               </details>
             </td>
           </tr>
-        ))}
+          );
+        })}
       </tbody>
     </table>
   );
 }
 
-export function HealthCheckReports({ refreshToken = 0 }: { refreshToken?: number }) {
+interface HealthCheckReportsProps {
+  refreshToken?: number;
+  pendingManualCheck?: PendingUiHealthCheck | null;
+  onManualCheckSettled?: () => void;
+}
+
+export function HealthCheckReports({
+  refreshToken = 0,
+  pendingManualCheck = null,
+  onManualCheckSettled,
+}: HealthCheckReportsProps) {
   const [data, setData] = useState<UiHealthReportsResponse | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [showAllHistory, setShowAllHistory] = useState(false);
@@ -92,24 +163,54 @@ export function HealthCheckReports({ refreshToken = 0 }: { refreshToken?: number
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError("");
-    api.uiHealthReports(selectedDate || undefined)
-      .then((value) => {
+    let pollTimer: number | undefined;
+    const pollingStartedAt = Date.now();
+
+    async function loadReports(showLoading: boolean) {
+      if (showLoading) {
+        setLoading(true);
+        setError("");
+      }
+      try {
+        const value = await api.uiHealthReports(selectedDate || undefined);
         if (cancelled) return;
         setData(value);
         if (value.selectedDate && value.selectedDate !== selectedDate) {
           setSelectedDate(value.selectedDate);
         }
-      })
-      .catch((reason) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "Không tải được báo cáo UI health.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [selectedDate, refreshToken]);
+        if (
+          pendingManualCheck
+          && value.rows.some((row) => isResultForPendingManualCheck(row, pendingManualCheck))
+        ) {
+          onManualCheckSettled?.();
+        }
+      } catch (reason) {
+        // A transient polling failure must not replace the existing report with
+        // an error while the extension is still finishing its check.
+        if (!cancelled && showLoading) {
+          setError(reason instanceof Error ? reason.message : "Không tải được báo cáo UI health.");
+        }
+      } finally {
+        if (!cancelled && showLoading) setLoading(false);
+      }
+    }
+
+    void loadReports(true);
+    if (pendingManualCheck) {
+      pollTimer = window.setInterval(() => {
+        if (Date.now() - pollingStartedAt >= MANUAL_REPORT_POLL_TIMEOUT_MS) {
+          if (pollTimer !== undefined) window.clearInterval(pollTimer);
+          return;
+        }
+        void loadReports(false);
+      }, MANUAL_REPORT_POLL_INTERVAL_MS);
+    }
+
+    return () => {
+      cancelled = true;
+      if (pollTimer !== undefined) window.clearInterval(pollTimer);
+    };
+  }, [selectedDate, refreshToken, pendingManualCheck, onManualCheckSettled]);
 
   useEffect(() => {
     setShowAllHistory(false);
@@ -134,6 +235,11 @@ export function HealthCheckReports({ refreshToken = 0 }: { refreshToken?: number
 
       {loading && !data && <p className="health-reports-loading">Đang tải lịch sử kiểm tra...</p>}
       {error && <p className="health-schedule-status error-message" role="alert">{error}</p>}
+      {pendingManualCheck && (
+        <p className="health-reports-pending" role="status">
+          Đang chờ extension trả kết quả kiểm tra ngay. Thống kê và lịch sử sẽ tự cập nhật khi log được ghi nhận.
+        </p>
+      )}
 
       {data && data.availableDates.length === 0 && !loading && (
         <p className="health-reports-empty">Chưa có log kiểm tra nào từ extension.</p>
@@ -160,8 +266,13 @@ export function HealthCheckReports({ refreshToken = 0 }: { refreshToken?: number
             <div className="health-report-summary" aria-label="Tóm tắt ngày được chọn">
               <span><strong>{data.rows.length}</strong> bản ghi</span>
               <span className="report-count-pass">{selectedSummary?.pass || 0} bình thường</span>
-              <span className="report-count-warning">{selectedSummary?.dataChanged || 0} dữ liệu thay đổi</span>
-              <span className="report-count-error">{selectedSummary?.uiDrift || 0} UI drift</span>
+              <span className="report-count-warning">
+                {selectedSummary?.dataChanged || 0} lượt dữ liệu thay đổi
+                {selectedSummary?.dataChangedErrors ? ` · ${selectedSummary.dataChangedErrors} lỗi` : ""}
+              </span>
+              <span className="report-count-error">
+                {selectedSummary?.uiDrift || 0} lượt UI drift · {selectedSummary?.uiDriftErrors || 0} lỗi UI
+              </span>
               <span className="report-count-error">{selectedSummary?.checkError || 0} lỗi kiểm tra</span>
             </div>
           </div>

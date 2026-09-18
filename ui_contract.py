@@ -220,7 +220,7 @@ def format_ui_drift(error: UIDriftError) -> dict[str, str]:
         "Tool đã dừng để tránh thao tác sai dữ liệu."
     )
     action = (
-        "Dev cần kiểm tra đúng vùng này, cập nhật selector/adapter và chạy lại fixture; "
+        "Dev cần kiểm tra đúng vùng này, cập nhật selector/adapter và chạy lại kiểm thử UI; "
         "người dùng không cần nhập lại dữ liệu cho đến khi tool được cập nhật."
     )
     return {

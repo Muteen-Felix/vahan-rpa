@@ -23,8 +23,7 @@ không thay thế controller điền filter/CAPTCHA hiện tại.
    kiểm tra kế tiếp.
 
 Health check production chạy trên trang VAHAN chính thức. Nó không điền filter,
-không đọc/giải CAPTCHA, không bấm Apply và không tải báo cáo. Kiểm tra clone local
-chỉ dành cho lệnh DevTools `runOnTab` được gọi thủ công.
+không đọc/giải CAPTCHA, không bấm Apply và không tải báo cáo.
 
 ## Các điểm tích hợp
 
@@ -46,9 +45,9 @@ alarm hiện tại hoặc dùng mặc định 3 ngày cho lần cài mới.
 Nút **Kiểm tra ngay** trên Web UI gọi `POST /api/ui-health/run-now`. Backend chọn
 một runner đang kết nối và phát `ui-health:run-now`; extension tìm một tab VAHAN
 chính thức đã mở đúng URL và có content script phản hồi. Việc Web UI đang là tab
-active không làm health-check kiểm tra nhầm Web UI; extension không tự mở tab và
-không dùng clone local cho production. Nếu chưa có tab official, hoặc tab đổi URL
-trước khi kiểm tra, lần chạy được ghi là `CHECK_ERROR` kèm URL thực tế nếu có.
+active không làm health-check kiểm tra nhầm Web UI; extension không tự mở tab.
+Nếu chưa có tab official, hoặc tab đổi URL trước khi kiểm tra, lần chạy được ghi
+là `CHECK_ERROR` kèm URL thực tế nếu có.
 
 Web UI gọi `GET /api/ui-health/reports?date=YYYY-MM-DD` để xem các bản ghi của
 một ngày và dùng `GET /api/ui-health/reports/{fileName}/download` để tải đúng
@@ -66,77 +65,18 @@ Hiện tại alert Dev vẫn chưa gửi ra ngoài; connector website/webhook/em
 của extension không chạy; cần scheduler backend riêng nếu muốn kiểm tra khi máy
 và Chrome đều tắt.
 
-## Test bằng DevTools trên clone local (bản unpacked)
-
-Health check production luôn kiểm tra trang chính thức. Để kiểm tra một DOM đã bị
-sửa trực tiếp trong DevTools mà không ảnh hưởng production, dùng lệnh `runOnTab`
-thủ công trên fixture clone:
-
-```bash
-python3 -m http.server 8765 --directory /path/to/vahan-rpa-ui-fixture
-```
-
-Mở trang clone baseline (fixture mặc định chạy cổng `8765`; Live Server có thể
-dùng cổng `5500`):
-
-`http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=baseline&dev=1`
-
-Sau khi reload extension ở `chrome://extensions`, mở DevTools của service worker
-và chạy:
-
-```js
-const tabs = await chrome.tabs.query({});
-const tab = tabs.find((item) =>
-  /^http:\/\/(127\.0\.0\.1|localhost):(8765|5500)\/analytics\/vahanpublicreport/.test(item.url || ""),
-);
-if (!tab?.id) throw new Error("Chưa mở clone tại cổng 8765 hoặc 5500.");
-await vahanUiHealthDebug.runOnTab(tab.id);
-```
-
-`runOnTab` không đóng tab và vẫn ghi CSV với `trigger=devtools`; đây là ngoại lệ
-chỉ dành cho kiểm thử local có chủ đích. Hãy chạy một lần ở trạng thái bình thường
-để tạo baseline, sửa DOM của clone, rồi chạy lại. Các
-thao tác thường dùng trong Console của tab clone:
-
-```js
-// UI_DRIFT_REQUIRED_CONTROL: xóa control bắt buộc
-document.querySelector("#vehicleFuel")?.remove();
-
-// UI_DRIFT_REQUIRED_CONTROL: đổi ID control bắt buộc
-const fuelForIdTest = document.querySelector("#vehicleFuel");
-if (fuelForIdTest) fuelForIdTest.id = "vehicleFuelRenamed";
-
-// UI_DRIFT_REQUIRED_CONTROL: tạo duplicate control
-const original = document.querySelector("#vehicleFuel");
-if (original) original.after(original.cloneNode(true));
-
-// UI_DRIFT_REQUIRED_OPTION: đổi tên option bắt buộc
-const option = [...document.querySelectorAll("#vehicleCategoryGroup option")]
-  .find((item) => item.textContent.trim() === "Two Wheeler");
-if (option) option.textContent = "Two Wheeler (test)";
-
-// UI_DRIFT_EMPTY_OPTIONS: làm rỗng danh sách Fuel
-const fuel = document.querySelector("#vehicleFuel");
-if (fuel) fuel.replaceChildren();
-
-// Khôi phục nhanh bằng reload clone
-location.reload();
-```
-
-Các URL scenario dựng sẵn cũng chỉ chạy trên clone, ví dụ:
-
-`http://127.0.0.1:8765/analytics/vahanpublicreport?lang=en&ui=missing-fuel&dev=1`
-
-Sau mỗi lần chạy, xem mục **Báo cáo kiểm tra theo ngày** trên Web UI. Không dùng
-DevTools để bấm Apply hoặc gửi CAPTCHA; health check chỉ nên đọc DOM.
-
 ## Kiểm tra
 
 ```bash
 npm run test:ui-drift
 node --check ui-drift/guard.js
 node --check ui-drift/health-check-content.js
+node --check ui-drift/health-check.mjs
 ```
 
-Ma trận test DevTools đầy đủ, gồm mutation trên clone local, kiểm tra URL/tab,
-queue backend, CSV và các mã lỗi flow nâng cao: [DEVTOOLS-TESTING.md](./DEVTOOLS-TESTING.md).
+Các test controller kiểm tra việc giữ lỗi đầu tiên để tương thích và lưu toàn bộ
+`reports[]`/`errorCount` qua state, queue và backend payload.
+
+Bộ test trực tiếp trên tab VAHAN chính thức nằm ở
+[`official-devtools-test.js`](./official-devtools-test.js), hướng dẫn chạy ở
+[`OFFICIAL-DEVTOOLS-TESTING.md`](./OFFICIAL-DEVTOOLS-TESTING.md).

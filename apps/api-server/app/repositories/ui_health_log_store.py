@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-LOG_SCHEMA_VERSION = "v2"
+LOG_SCHEMA_VERSION = "v3"
 MAX_DAYS_PER_FILE = 10
 MAX_BYTES_PER_FILE = 512 * 1024
 STATE_FILE_NAME = ".ui-health-state.json"
@@ -32,6 +32,7 @@ COLUMNS = (
     "form_action",
     "checked_controls",
     "error_code",
+    "error_count",
     "error_title",
     "error",
     "step",
@@ -115,6 +116,42 @@ def _checked_controls(contract: dict[str, Any]) -> list[dict[str, Any]]:
     return [_normalize_control(control) for control in controls if isinstance(control, dict)]
 
 
+def _health_reports(
+    health_check: dict[str, Any],
+    primary_report: dict[str, Any],
+) -> list[dict[str, Any]]:
+    reports = health_check.get("reports")
+    if isinstance(reports, list):
+        normalized = [item for item in reports if isinstance(item, dict)]
+        if normalized:
+            return normalized
+    return [primary_report] if primary_report else []
+
+
+def _error_count(
+    status: str,
+    health_check: dict[str, Any],
+    reports: list[dict[str, Any]],
+) -> int:
+    if status == "PASS":
+        return 0
+    try:
+        declared = int(health_check.get("errorCount") or 0)
+    except (TypeError, ValueError):
+        declared = 0
+    return max(1, declared, len(reports))
+
+
+def _row_error_count(row: dict[str, str]) -> int:
+    try:
+        declared = int(row.get("error_count") or 0)
+    except (TypeError, ValueError):
+        declared = 0
+    if declared > 0:
+        return declared
+    return 0 if row.get("status") == "PASS" else 1
+
+
 def _diagnostic_details(
     status: str,
     health_check: dict[str, Any],
@@ -123,7 +160,11 @@ def _diagnostic_details(
     page_path: str,
 ) -> dict[str, Any]:
     diagnostics = report.get("diagnostics")
-    if isinstance(diagnostics, dict):
+    diagnostics = dict(diagnostics) if isinstance(diagnostics, dict) else {}
+    reports = _health_reports(health_check, report)
+    if reports:
+        diagnostics["errorCount"] = _error_count(status, health_check, reports)
+        diagnostics["errors"] = reports
         return diagnostics
     if status == "PASS":
         controls = _checked_controls(contract)
@@ -151,6 +192,8 @@ def row_from_health_check(health_check: dict[str, Any], page_url: str = "") -> d
     status = _text(health_check.get("status")).strip().upper() or "CHECK_ERROR"
     contract = health_check.get("contract")
     contract = contract if isinstance(contract, dict) else {}
+    reports = _health_reports(health_check, report)
+    error_count = _error_count(status, health_check, reports)
     logged_page_url = _text(page_url or health_check.get("pageUrl"))
     diagnostics = report.get("diagnostics") if isinstance(report.get("diagnostics"), dict) else {}
     page_path = _text(
@@ -163,6 +206,9 @@ def row_from_health_check(health_check: dict[str, Any], page_url: str = "") -> d
     error_code = _text(report.get("code"))
     error_title = _text(report.get("title"))
     error = _text(health_check.get("error") or report.get("message") or report.get("title"))
+
+    if error_count > 1 and error:
+        error = f"Phát hiện {error_count} lỗi UI. Lỗi đầu tiên: {error}"
 
     if status == "CHECK_ERROR" and not error_code:
         error_code = "CHECK_ERROR"
@@ -193,6 +239,7 @@ def row_from_health_check(health_check: dict[str, Any], page_url: str = "") -> d
         "form_action": _text(contract.get("formAction")),
         "checked_controls": _json_text(controls, "[]"),
         "error_code": error_code,
+        "error_count": error_count,
         "error_title": error_title,
         "error": error,
         "step": _text(report.get("step")),
@@ -488,7 +535,9 @@ class UiHealthLogStore:
                         "total": 0,
                         "pass": 0,
                         "dataChanged": 0,
+                        "dataChangedErrors": 0,
                         "uiDrift": 0,
+                        "uiDriftErrors": 0,
                         "checkError": 0,
                         "latestCheckedAt": "",
                     },
@@ -502,6 +551,10 @@ class UiHealthLogStore:
                 }.get(row.get("status"))
                 if status_key:
                     summary[status_key] += 1
+                if row.get("status") == "DATA_CHANGED":
+                    summary["dataChangedErrors"] += _row_error_count(row)
+                elif row.get("status") == "UI_DRIFT":
+                    summary["uiDriftErrors"] += _row_error_count(row)
                 summary["latestCheckedAt"] = max(
                     summary["latestCheckedAt"], row.get("checked_at", "")
                 )

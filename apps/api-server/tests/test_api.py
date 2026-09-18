@@ -18,6 +18,21 @@ async def test_ui_health_schedule_defaults_to_three_days() -> None:
     assert body["nextCheckAt"]
 
 
+async def test_ui_health_schedule_allows_the_loaded_extension_origin() -> None:
+    extension_origin = "chrome-extension://ooplajjjjphdcaolokpaenmkjlbcmlhk"
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/api/ui-health/schedule",
+            headers={"Origin": extension_origin},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == extension_origin
+
+
 async def test_ui_health_schedule_can_be_updated() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=application),

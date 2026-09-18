@@ -57,6 +57,7 @@ VAHAN_API_HOST=127.0.0.1
 VAHAN_API_PORT=8000
 VAHAN_API_DEBUG=false
 VAHAN_API_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+VAHAN_API_EXTENSION_IDS=ooplajjjjphdcaolokpaenmkjlbcmlhk
 VAHAN_API_SOCKETIO_CORS_ORIGINS=*
 VAHAN_API_RUNNER_TOKEN=change-me
 VAHAN_API_RUNNER_DISCONNECT_GRACE_SECONDS=30
@@ -69,6 +70,10 @@ muốn dùng giá trị khác mặc định, đặt biến trong cùng PowerShel
 ```powershell
 $env:VAHAN_API_RUNNER_TOKEN = "your-secret-token"
 ```
+
+Backend mặc định cho phép Web UI và extension unpacked hiện tại gọi REST API.
+Nếu Chrome tạo extension ID khác, đặt `VAHAN_API_EXTENSION_IDS` bằng một hoặc
+nhiều ID cách nhau bằng dấu phẩy rồi khởi động lại backend.
 
 ## 2. Chạy Backend
 
@@ -108,7 +113,7 @@ Cài extension:
 2. Bật **Developer mode**.
 3. Chọn **Load unpacked**.
 4. Chọn thư mục `vahan-chrome-extension`.
-5. Chấp nhận quyền `storage`, `downloads` và truy cập VAHAN/localhost.
+5. Chấp nhận quyền `storage`, `downloads` và truy cập trang VAHAN chính thức.
 
 Không chọn thư mục `src`. Chrome phải load toàn bộ thư mục
 `vahan-chrome-extension` chứa `manifest.json`.

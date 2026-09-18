@@ -320,20 +320,32 @@
       .toString(16);
   }
 
-  function getUiContract(step = "preflight", additionalControls = {}, multiSelectNames = []) {
+  function collectUiContractErrors(step = "preflight", additionalControls = {}, multiSelectNames = []) {
     if (!window.location.pathname.includes(REPORT_PATH_FRAGMENT)) {
-      throw new UiDriftError(
-        "UI_DRIFT_WRONG_PAGE",
-        "Trang hiện tại không phải VAHAN Public Report.",
-        step,
-        { url: window.location.href }
-      );
+      return {
+        contract: null,
+        errors: [new UiDriftError(
+          "UI_DRIFT_WRONG_PAGE",
+          "Trang hiện tại không phải VAHAN Public Report.",
+          step,
+          { url: window.location.href },
+        )],
+      };
     }
 
     const controls = { ...BASE_REQUIRED_CONTROLS, ...additionalControls };
     const fingerprint = [];
+    const elements = new Map();
+    const errors = [];
     for (const [name, selector] of Object.entries(controls)) {
-      const element = requireOne(selector, name, step);
+      let element;
+      try {
+        element = requireOne(selector, name, step);
+      } catch (error) {
+        errors.push(error);
+        continue;
+      }
+      elements.set(name, element);
       fingerprint.push({
         name,
         selector,
@@ -348,9 +360,10 @@
     for (const name of multiNames) {
       const selector = controls[name];
       if (!selector) continue;
-      const element = document.querySelector(selector);
+      const element = elements.get(name);
+      if (!element) continue;
       if (!element?.hasAttribute("multiple")) {
-        throw new UiDriftError(
+        errors.push(new UiDriftError(
           "UI_DRIFT_CONTROL_TYPE",
           `Control ${name} không còn là multi-select như contract ${UI_CONTRACT_VERSION}.`,
           step,
@@ -359,18 +372,32 @@
             expected: "multiple select",
             actual: "control không còn thuộc tính multiple",
           }
-        );
+        ));
+        continue;
       }
-      getDropdownContainer(element.id, step);
+      try {
+        getDropdownContainer(element.id, step);
+      } catch (error) {
+        errors.push(error);
+      }
     }
 
     return {
-      contractVersion: UI_CONTRACT_VERSION,
-      signature: stableSignature(fingerprint),
-      path: window.location.pathname,
-      formAction: document.querySelector(BASE_REQUIRED_CONTROLS.form)?.getAttribute("action") || "",
-      controls: fingerprint,
+      contract: {
+        contractVersion: UI_CONTRACT_VERSION,
+        signature: stableSignature(fingerprint),
+        path: window.location.pathname,
+        formAction: elements.get("form")?.getAttribute("action") || "",
+        controls: fingerprint,
+      },
+      errors,
     };
+  }
+
+  function getUiContract(step = "preflight", additionalControls = {}, multiSelectNames = []) {
+    const validation = collectUiContractErrors(step, additionalControls, multiSelectNames);
+    if (validation.errors.length > 0) throw validation.errors[0];
+    return validation.contract;
   }
 
   function assertUiContract(
@@ -678,6 +705,7 @@
     UiDriftError,
     assertUiContract,
     createSafeContractGuard,
+    collectUiContractErrors,
     formatUiDrift,
     getDropdownContainer,
     getUiContract,

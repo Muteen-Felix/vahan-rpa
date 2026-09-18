@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   MAX_UI_HEALTH_CHECK_INTERVAL_DAYS,
   UI_HEALTH_CHECK_ALARM,
-  UI_HEALTH_CLONE_URL,
   UI_HEALTH_CHECK_INTERVAL_MINUTES,
   UI_HEALTH_OFFICIAL_URL,
   isUiHealthOfficialUrl,
@@ -31,7 +30,6 @@ function createHarness(
   {
     officialTabs = [{ id: 1, status: "complete", url: UI_HEALTH_OFFICIAL_URL, active: true }],
     activeTabs = officialTabs,
-    cloneTabs = [{ id: 2, status: "complete", url: UI_HEALTH_CLONE_URL }],
     tabUrl = UI_HEALTH_OFFICIAL_URL,
   } = {},
 ) {
@@ -41,6 +39,7 @@ function createHarness(
     createdTabs: [],
     removedTabs: [],
     downloads: [],
+    injectedScripts: [],
     healthLogs: [],
     healthMessages: [],
   };
@@ -96,9 +95,7 @@ function createHarness(
         onUpdated: tabsOnUpdated,
         async query(queryInfo = {}) {
           if (queryInfo.active) return activeTabs;
-          return String(queryInfo.url || "").startsWith("https://analytics.parivahan.gov.in/")
-            ? officialTabs
-            : cloneTabs;
+          return officialTabs;
         },
         async create(options) {
           calls.createdTabs.push(options);
@@ -113,6 +110,11 @@ function createHarness(
         },
         async remove(tabId) {
           calls.removedTabs.push(tabId);
+        },
+      },
+      scripting: {
+        async executeScript(details) {
+          calls.injectedScripts.push(details);
         },
       },
       downloads: {
@@ -248,36 +250,6 @@ async function run() {
     false,
   );
 
-  const cloneDevtoolsHarness = createHarness(
-    [{ ok: true, contract: contract("devtools") }],
-    { officialTabs: [], tabUrl: UI_HEALTH_CLONE_URL },
-  );
-  cloneDevtoolsHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
-  const devtoolsController = createUiHealthCheckController(cloneDevtoolsHarness.chrome, {
-    retryDelayMs: 1,
-    fetch: cloneDevtoolsHarness.chrome.fetch,
-  });
-  const devtoolsRun = await devtoolsController.runOnTab(42);
-  assert.equal(devtoolsRun.status, "PASS");
-  assert.equal(devtoolsRun.pageUrl, UI_HEALTH_CLONE_URL);
-  assert.deepEqual(cloneDevtoolsHarness.calls.createdTabs, []);
-  assert.deepEqual(cloneDevtoolsHarness.calls.removedTabs, []);
-
-  const officialHarness = createHarness(
-    [{ ok: true, contract: contract("official") }],
-    { tabUrl: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en" },
-  );
-  officialHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
-  const officialController = createUiHealthCheckController(officialHarness.chrome, {
-    retryDelayMs: 1,
-    fetch: officialHarness.chrome.fetch,
-  });
-  const officialRun = await officialController.runOnTab(42);
-  assert.equal(officialRun.status, "PASS");
-  assert.equal(officialRun.pageUrl, UI_HEALTH_OFFICIAL_URL);
-  assert.deepEqual(officialHarness.calls.createdTabs, []);
-  assert.deepEqual(officialHarness.calls.removedTabs, []);
-
   const changed = await controller.run("alarm");
   assert.equal(changed.status, "DATA_CHANGED");
   assert.equal(changed.report.code, "UI_DRIFT_OPTION_DATA_CHANGED");
@@ -303,6 +275,54 @@ async function run() {
   assert.equal(driftPayload.healthCheck.report.code, "UI_DRIFT_REQUIRED_CONTROL");
   assert.equal(driftPayload.healthCheck.report.diagnostics.selector, "#vehicleFuel");
   assert.equal(driftPayload.healthCheck.report.diagnostics.count, 0);
+
+  const multiReports = [
+    ["#vehicleCategoryGroup", "category"],
+    ["#vehicleFuel", "fuel"],
+    ["#yAxis", "yaxis"],
+    ["#xAxis", "xaxis"],
+    ["#externalCaptcha", "captcha"],
+    ["#applyTrigger", "apply"],
+    ["#archivedFlags", "archivedFlags"],
+    ["#reportType", "reportType"],
+    ["#financialYearSelect", "financialYearSelect"],
+    ["#reportYear", "reportYear"],
+  ].map(([selector, name]) => ({
+    code: "UI_DRIFT_REQUIRED_CONTROL",
+    step: "scheduled-health-check",
+    title: "Control bắt buộc bị thiếu hoặc bị trùng",
+    message: `Phát hiện thay đổi tại ${selector}.`,
+    target: selector,
+    expected: "DOM phải có đúng 1 control",
+    actual: "DOM đang có 0 control",
+    diagnostics: { selector, name, count: 0 },
+    action: "Dev cần kiểm tra selector.",
+  }));
+  const multiHarness = createHarness([
+    {
+      ok: false,
+      uiDrift: multiReports[0],
+      uiDrifts: multiReports,
+      errorCount: multiReports.length,
+    },
+  ]);
+  multiHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
+  const multiController = createUiHealthCheckController(multiHarness.chrome, {
+    retryDelayMs: 1,
+    fetch: multiHarness.chrome.fetch,
+  });
+  const multi = await multiController.run("manual");
+  assert.equal(multi.status, "UI_DRIFT");
+  assert.equal(multi.errorCount, 10);
+  assert.equal(multi.reports.length, 10);
+  assert.equal(multi.report.code, "UI_DRIFT_REQUIRED_CONTROL");
+  assert.equal(multi.reports[1].diagnostics.selector, "#vehicleFuel");
+  assert.equal(multi.backendLog.ok, true);
+  assert.equal(multiHarness.storage.vahanUiPendingDevNotification.errorCount, 10);
+  const multiPayload = JSON.parse(multiHarness.calls.healthLogs[0].options.body);
+  assert.equal(multiPayload.healthCheck.errorCount, 10);
+  assert.equal(multiPayload.healthCheck.reports.length, 10);
+
   const offlineHarness = createHarness([{ ok: true, contract: contract("offline") }]);
   offlineHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
   const offlineController = createUiHealthCheckController(offlineHarness.chrome, {
@@ -313,21 +333,6 @@ async function run() {
   assert.equal(queued.backendLog.ok, false);
   assert.equal(queued.backendLog.queued, true);
   assert.equal(offlineHarness.storage.vahanUiHealthPendingLogs.length, 1);
-
-  const wrongPageHarness = createHarness([], {
-    officialTabs: [],
-    cloneTabs: [],
-    tabUrl: "https://analytics.parivahan.gov.in/analytics/not-public-report",
-  });
-  wrongPageHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
-  const wrongPageController = createUiHealthCheckController(wrongPageHarness.chrome, {
-    retryDelayMs: 1,
-    fetch: wrongPageHarness.chrome.fetch,
-  });
-  const wrongPage = await wrongPageController.runOnTab(42);
-  assert.equal(wrongPage.status, "CHECK_ERROR");
-  assert.match(wrongPage.error, /đúng trang VAHAN chính thức/);
-  assert.match(wrongPage.pageUrl, /not-public-report/);
 
   const noOfficialHarness = createHarness([], { officialTabs: [] });
   noOfficialHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
@@ -367,7 +372,32 @@ async function run() {
   assert.deepEqual(backgroundOfficialHarness.calls.createdTabs, []);
   assert.equal(backgroundOfficialHarness.calls.healthLogs.length, 1);
 
-  console.log("SCHEDULED HEALTH PASS official_tab_verified=True manual_web_prefers_official_tab=True exact_url_guard=True no_official_tab_logged=True data_change_detected=True backend_csv=True offline_queue=True");
+  const recoveryHarness = createHarness([
+    { ok: true, contract: contract("recovered-after-injection") },
+  ]);
+  recoveryHarness.storage.runnerConfig = { serverUrl: "http://127.0.0.1:8000" };
+  let recovered = false;
+  const originalSendMessage = recoveryHarness.chrome.tabs.sendMessage;
+  recoveryHarness.chrome.tabs.sendMessage = async (...args) => {
+    if (!recovered) throw new Error("Could not establish connection. Receiving end does not exist.");
+    return originalSendMessage(...args);
+  };
+  recoveryHarness.chrome.scripting.executeScript = async (details) => {
+    recoveryHarness.calls.injectedScripts.push(details);
+    recovered = true;
+  };
+  const recoveryController = createUiHealthCheckController(recoveryHarness.chrome, {
+    retryDelayMs: 1,
+    fetch: recoveryHarness.chrome.fetch,
+  });
+  const recoveredCheck = await recoveryController.run("manual");
+  assert.equal(recoveredCheck.status, "PASS");
+  assert.deepEqual(recoveryHarness.calls.injectedScripts, [{
+    target: { tabId: 1 },
+    files: ["ui-drift/guard.js", "ui-drift/health-check-content.js"],
+  }]);
+
+  console.log("SCHEDULED HEALTH PASS official_tab_verified=True manual_web_prefers_official_tab=True exact_url_guard=True no_official_tab_logged=True data_change_detected=True multi_error_reports=True backend_csv=True offline_queue=True health_content_recovery=True");
 }
 
 run().catch((error) => {

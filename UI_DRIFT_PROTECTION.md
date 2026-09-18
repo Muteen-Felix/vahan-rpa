@@ -23,11 +23,10 @@ contract đã được kiểm thử.
    ghi nó vào `ui_drift_notification` và trường `user_notification` của file
    diagnostic.
 
-Fixture local tại `ui-fixture/analytics/vahanpublicreport` mô phỏng đầy đủ
-surface hiện tại của trang: 20 nhóm control, 13 multiselect, State -> RTO với
-snapshot của toàn bộ 36 bang, bốn Year Type, kiểm tra khoảng ngày/năm và 15
-nhánh Y-Axis/X-Axis. Fixture chỉ dùng dữ liệu snapshot và CAPTCHA giả; không
-gọi backend hoặc CAPTCHA của VAHAN.
+Health check production chỉ đọc DOM của tab VAHAN chính thức và không xử lý
+CAPTCHA thật. Khi có nhiều thay đổi trong cùng một
+lượt, extension giữ lỗi đầu tiên ở `report`, đồng thời lưu toàn bộ lỗi trong
+`reports[]` và `errorCount`.
 
 Chrome Extension sử dụng cùng nguyên tắc trong `content.js`. Service worker
 `background.js` xác nhận Browser thực sự tạo download trước khi hiển thị thành
@@ -44,11 +43,8 @@ python3 test_ui_diagnostics.py
 python3 -m py_compile *.py
 node --check extension-spike/content.js
 node --check extension-spike/background.js
-python3 test_ui_fixture_contract.py
-python3 test_ui_fixture_extension.py
-python3 test_vahan_chrome_extension.py
-python3 test_ui_fixture_full_flow.py
-python3 test_ui_fixture_surface.py
+npm --prefix vahan-chrome-extension run check
+PYTHONPATH=apps/api-server apps/api-server/.venv/bin/pytest -q
 ```
 
 `test_ui_contract.py` chỉ đọc DOM và dừng trước CAPTCHA/Apply, phù hợp làm smoke
@@ -64,8 +60,5 @@ check định kỳ. Tuyệt đối không tự động giải hoặc bypass CAPT
   có 0 control`, cùng mã `UI_DRIFT_REQUIRED_CONTROL`. Khi option bị đổi tên,
   thông báo chỉ rõ `Category Group (#vehicleCategoryGroup)` và option
   `Two Wheeler` bị thiếu.
-- Fixture `visual-only` cố ý chứng minh giới hạn hiện tại: detector cấu trúc
-  không phát hiện thay đổi hình ảnh thuần túy. Nếu cần chặn cả thay đổi pixel,
-  bổ sung visual-regression snapshot theo viewport trước khi bật trong CI.
 - Maintainer cập nhật adapter/contract sau khi kiểm thử live; không tự động chọn
    selector mơ hồ trong production.

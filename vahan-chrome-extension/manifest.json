@@ -4,11 +4,9 @@
   "version": "0.1.0",
   "description": "Fills VAHAN report filters and exports Excel after manual CAPTCHA completion.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "downloads", "alarms"],
+  "permissions": ["storage", "downloads", "alarms", "scripting"],
   "host_permissions": [
-    "https://analytics.parivahan.gov.in/*",
-    "http://127.0.0.1/*",
-    "http://localhost/*"
+    "https://analytics.parivahan.gov.in/*"
   ],
   "icons": {
     "16": "icons/icon-16.png",
@@ -30,16 +28,6 @@
   "content_scripts": [
     {
       "matches": ["https://analytics.parivahan.gov.in/analytics/vahanpublicreport*"],
-      "js": ["ui-drift/guard.js", "content.js", "ui-drift/health-check-content.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "http://127.0.0.1/analytics/vahanpublicreport*",
-        "http://127.0.0.1/*/analytics/vahanpublicreport*",
-        "http://localhost/analytics/vahanpublicreport*",
-        "http://localhost/*/analytics/vahanpublicreport*"
-      ],
       "js": ["ui-drift/guard.js", "content.js", "ui-drift/health-check-content.js"],
       "run_at": "document_idle"
     }

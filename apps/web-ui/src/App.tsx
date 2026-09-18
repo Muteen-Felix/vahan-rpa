@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CaptchaPanel } from "./components/CaptchaPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
@@ -7,13 +7,33 @@ import { HealthCheckReports } from "./components/HealthCheckReports";
 import { HealthCheckSchedule } from "./components/HealthCheckSchedule";
 import { JobStatus } from "./components/JobStatus";
 import { ScenarioImport } from "./components/ScenarioImport";
-import type { Acknowledgement, CaptchaChallenge, ConnectionState, Job, Runner, Scenario, VahanFilters } from "./contracts";
+import type {
+  Acknowledgement,
+  CaptchaChallenge,
+  ConnectionState,
+  Job,
+  PendingUiHealthCheck,
+  Runner,
+  Scenario,
+  UiHealthCheckNowResponse,
+  VahanFilters,
+} from "./contracts";
 import { api } from "./services/api-client";
 import { uiSocket } from "./services/socket-client";
 
 const ACTIVE_JOB_STORAGE_KEY = "vahanActiveJobId";
+type AppSection = "configure" | "activity" | "settings";
+
+function sectionFromHash(): AppSection {
+  const hash = window.location.hash.replace(/^#/, "").split("?")[0];
+  if (hash === "settings") return "settings";
+  if (hash === "activity") return "activity";
+  return "configure";
+}
 
 export default function App() {
+  const [activeSection, setActiveSection] = useState<AppSection>(() => sectionFromHash());
+  const view = activeSection === "settings" ? "settings" : "configure";
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [runners, setRunners] = useState<Runner[]>([]);
   const [job, setJob] = useState<Job | null>(null);
@@ -26,11 +46,40 @@ export default function App() {
   const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0, current: "" });
   const [batchLog, setBatchLog] = useState<{ name: string; status: "ok" | "empty" | "error"; detail: string }[]>([]);
   const [healthReportsRefreshToken, setHealthReportsRefreshToken] = useState(0);
+  const [pendingManualCheck, setPendingManualCheck] = useState<PendingUiHealthCheck | null>(null);
 
   const runnersRef = useRef<Runner[]>([]);
   useEffect(() => { runnersRef.current = runners; }, [runners]);
   const terminalResolverRef = useRef<((job: Job) => void) | null>(null);
   const batchStopRef = useRef(false);
+  const pendingManualCheckRef = useRef<PendingUiHealthCheck | null>(null);
+
+  useEffect(() => {
+    const onHashChange = () => setActiveSection(sectionFromHash());
+    window.addEventListener("hashchange", onHashChange);
+    onHashChange();
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  useEffect(() => {
+    document.title = view === "settings"
+      ? "VAHAN · Cài đặt"
+      : "VAHAN · Report Automation";
+  }, [view]);
+
+  const onHealthCheckRequested = useCallback((request: UiHealthCheckNowResponse) => {
+    const pending = {
+      requestId: request.requestId,
+      requestedAt: request.requestedAt,
+    };
+    pendingManualCheckRef.current = pending;
+    setPendingManualCheck(pending);
+  }, []);
+
+  const onManualCheckSettled = useCallback(() => {
+    pendingManualCheckRef.current = null;
+    setPendingManualCheck(null);
+  }, []);
 
   async function refreshRunners() {
     try {
@@ -90,7 +139,16 @@ export default function App() {
     const onCaptcha = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: false });
     const onCaptchaInvalid = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: true });
     const onCaptchaRefreshed = (challenge: CaptchaChallenge) => setCaptcha({ ...challenge, invalid: false, refreshed: true });
-    const onUiHealthLogReceived = () => setHealthReportsRefreshToken((value) => value + 1);
+    const onUiHealthLogReceived = (payload: { trigger?: string; checkedAt?: string }) => {
+      setHealthReportsRefreshToken((value) => value + 1);
+      const pending = pendingManualCheckRef.current;
+      if (!pending || payload.trigger !== "manual-web") return;
+      const checkedAt = Date.parse(payload.checkedAt || "");
+      const requestedAt = Date.parse(pending.requestedAt);
+      if (Number.isFinite(checkedAt) && Number.isFinite(requestedAt) && checkedAt >= requestedAt) {
+        onManualCheckSettled();
+      }
+    };
 
     uiSocket.on("connect", onConnect);
     uiSocket.on("disconnect", onDisconnect);
@@ -263,57 +321,79 @@ export default function App() {
           <span className="brand-copy"><strong>VAHAN</strong><small>REPORT AUTOMATION</small></span>
         </a>
         <nav className="main-nav" aria-label="Điều hướng chính">
-          <a href="#configure">Cấu hình</a>
-          <a href="#activity">Tiến trình</a>
+          <a href="#configure">Bảng điều khiển</a>
+          <a href="#settings">Cài đặt</a>
           <span className="attended-badge">ATTENDED RPA</span>
         </nav>
       </header>
 
-      <section className="hero" id="top">
-        <div className="hero-glow" aria-hidden="true" />
-        <div className="hero-content">
-          <p className="eyebrow">VAHAN DATA OPERATIONS</p>
-          <h1>Report automation.<br /><span>Human verified.</span></h1>
-          <p className="hero-description">Điều phối bộ lọc, CAPTCHA và báo cáo VAHAN trong một không gian vận hành tập trung.</p>
-          <div className="hero-meta">
-            <ConnectionBanner backend={connection} runners={runners.length} />
-            <span className="secure-note">Manual CAPTCHA · Secure by design</span>
-          </div>
+      <div className="app-layout">
+        <div className="app-main">
+          {view === "settings" ? (
+            <main className="page-content settings-page" id="settings">
+              <div className="section-intro settings-intro">
+                <div><p className="eyebrow dark">SETTINGS</p><h2>Cài đặt hệ thống</h2></div>
+                <p>Quản lý lịch health-check, theo dõi thay đổi giao diện VAHAN và xem toàn bộ lịch sử kiểm tra tại một nơi.</p>
+              </div>
+
+              <HealthCheckSchedule
+                pendingManualCheck={pendingManualCheck}
+                onCheckRequested={onHealthCheckRequested}
+              />
+              <HealthCheckReports
+                refreshToken={healthReportsRefreshToken}
+                pendingManualCheck={pendingManualCheck}
+                onManualCheckSettled={onManualCheckSettled}
+              />
+            </main>
+          ) : (
+            <>
+              <section className="hero" id="top">
+                <div className="hero-glow" aria-hidden="true" />
+                <div className="hero-content">
+                  <p className="eyebrow">VAHAN DATA OPERATIONS</p>
+                  <h1>Report automation.<br /><span>Human verified.</span></h1>
+                  <p className="hero-description">Điều phối bộ lọc, CAPTCHA và báo cáo VAHAN trong một không gian vận hành tập trung.</p>
+                  <div className="hero-meta">
+                    <ConnectionBanner backend={connection} runners={runners.length} />
+                    <span className="secure-note">Manual CAPTCHA · Secure by design</span>
+                  </div>
+                </div>
+                <div className="hero-visual" aria-hidden="true"><span>V</span><i /></div>
+              </section>
+
+              <main className="page-content">
+                <div className="section-intro" id="configure">
+                  <div><p className="eyebrow dark">CONTROL CENTER</p><h2>Tạo báo cáo mới</h2></div>
+                  <p>Chọn dữ liệu trực tiếp từ phiên VAHAN đang kết nối, sau đó theo dõi toàn bộ tiến trình theo thời gian thực.</p>
+                </div>
+
+                {error && <div className="global-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
+
+                <div className="workspace">
+                  <div className="left-column">
+                    <ScenarioImport
+                      onImport={setScenarios}
+                      onRunAll={runScenarioQueue}
+                      onStop={stopBatch}
+                      running={batchRunning}
+                      progress={batchProgress}
+                      log={batchLog}
+                      disabled={busy}
+                    />
+                    <FilterForm runners={runners} busy={busy} onSubmit={createJob} />
+                  </div>
+                  <div className="right-column" id="activity">
+                    <JobStatus job={job} onCancel={cancelJob} />
+                    <CaptchaPanel challenge={captcha} submitting={submittingCaptcha} autoApply={job?.filters.autoApply ?? false} onSubmit={submitCaptcha} />
+                    {!job && <section className="empty-state"><span>01</span><h2>Sẵn sàng khởi tạo</h2><p>Chọn extension và cấu hình bộ lọc để bắt đầu quy trình báo cáo.</p></section>}
+                  </div>
+                </div>
+              </main>
+            </>
+          )}
         </div>
-        <div className="hero-visual" aria-hidden="true"><span>V</span><i /></div>
-      </section>
-
-      <main className="page-content">
-        <div className="section-intro" id="configure">
-          <div><p className="eyebrow dark">CONTROL CENTER</p><h2>Tạo báo cáo mới</h2></div>
-          <p>Chọn dữ liệu trực tiếp từ phiên VAHAN đang kết nối, sau đó theo dõi toàn bộ tiến trình theo thời gian thực.</p>
-        </div>
-
-        {error && <div className="global-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
-
-        <HealthCheckSchedule />
-        <HealthCheckReports refreshToken={healthReportsRefreshToken} />
-
-        <div className="workspace">
-          <div className="left-column">
-            <ScenarioImport
-              onImport={setScenarios}
-              onRunAll={runScenarioQueue}
-              onStop={stopBatch}
-              running={batchRunning}
-              progress={batchProgress}
-              log={batchLog}
-              disabled={busy}
-            />
-            <FilterForm runners={runners} busy={busy} onSubmit={createJob} />
-          </div>
-          <div className="right-column" id="activity">
-            <JobStatus job={job} onCancel={cancelJob} />
-            <CaptchaPanel challenge={captcha} submitting={submittingCaptcha} autoApply={job?.filters.autoApply ?? false} onSubmit={submitCaptcha} />
-            {!job && <section className="empty-state"><span>01</span><h2>Sẵn sàng khởi tạo</h2><p>Chọn extension và cấu hình bộ lọc để bắt đầu quy trình báo cáo.</p></section>}
-          </div>
-        </div>
-      </main>
+      </div>
 
       <footer><span>VAHAN REPORT AUTOMATION</span><span>Attended workflow · 2026</span></footer>
     </div>

@@ -1,5 +1,7 @@
 (function installVahanUiHealthCheckContent(global) {
   "use strict";
+  if (global.__vahanUiHealthCheckContentInstalled) return;
+  global.__vahanUiHealthCheckContentInstalled = true;
 
   const HEALTH_CHECK_STEP = "scheduled-health-check";
   const DATA_CONTRACT_VERSION = "v1";
@@ -94,12 +96,18 @@
     );
   }
 
-  function inspect({ requireOfficial = false } = {}) {
+  function collectUiDriftReports(errors, api) {
+    return errors
+      .map((error) => reportFor(error, api))
+      .filter(Boolean);
+  }
+
+  function inspectAll({ requireOfficial = false } = {}) {
     const api = global.VahanUiDrift;
     if (!api) throw new Error("VAHAN UI drift contract is not available.");
 
     if (requireOfficial && !isOfficialReportPage()) {
-      throw new api.UiDriftError(
+      const error = new api.UiDriftError(
         "UI_DRIFT_WRONG_PAGE",
         "Tab hiện tại không phải đúng trang VAHAN Public Report chính thức.",
         HEALTH_CHECK_STEP,
@@ -108,17 +116,82 @@
           url: global.location?.href || "",
         },
       );
+      const uiDrift = reportFor(error, api);
+      return {
+        ok: false,
+        uiDrift,
+        uiDrifts: uiDrift ? [uiDrift] : [],
+        errorCount: uiDrift ? 1 : 0,
+      };
     }
 
-    const contract = api.getUiContract(HEALTH_CHECK_STEP);
-    requireOption(api, DATA_CONTROLS.category, "category", "Two Wheeler");
-    requireOptions(api, DATA_CONTROLS.fuel, "fuel");
-    requireOption(api, DATA_CONTROLS.yAxis, "yaxis", "Fuel");
+    const validation = typeof api.collectUiContractErrors === "function"
+      ? api.collectUiContractErrors(HEALTH_CHECK_STEP)
+      : { contract: null, errors: [] };
+    const errors = [...validation.errors];
 
-    return {
-      ...contract,
+    if (errors.some((error) => error?.code === "UI_DRIFT_WRONG_PAGE")) {
+      const reports = collectUiDriftReports(errors, api);
+      return {
+        ok: false,
+        uiDrift: reports[0],
+        uiDrifts: reports,
+        errorCount: reports.length,
+      };
+    }
+
+    const collectOptionError = (check, selector) => {
+      if (!document.querySelector(selector)) return;
+      try {
+        check();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+
+    collectOptionError(
+      () => requireOption(api, DATA_CONTROLS.category, "category", "Two Wheeler"),
+      DATA_CONTROLS.category,
+    );
+    collectOptionError(
+      () => requireOptions(api, DATA_CONTROLS.fuel, "fuel"),
+      DATA_CONTROLS.fuel,
+    );
+    collectOptionError(
+      () => requireOption(api, DATA_CONTROLS.yAxis, "yaxis", "Fuel"),
+      DATA_CONTROLS.yAxis,
+    );
+
+    const reports = collectUiDriftReports(errors, api);
+    if (reports.length > 0) {
+      return {
+        ok: false,
+        uiDrift: reports[0],
+        uiDrifts: reports,
+        errorCount: reports.length,
+      };
+    }
+
+    const contract = {
+      ...(validation.contract || {}),
       dataSnapshot: dataSnapshot(),
     };
+    return { ok: true, contract };
+  }
+
+  function inspect(options = {}) {
+    const result = inspectAll(options);
+    if (!result.ok) {
+      const first = result.uiDrift;
+      const api = global.VahanUiDrift;
+      throw new api.UiDriftError(
+        first?.code || "UI_DRIFT",
+        first?.message || "Phát hiện thay đổi trên trang VAHAN Public Report.",
+        first?.step || HEALTH_CHECK_STEP,
+        first?.diagnostics || {},
+      );
+    }
+    return result.contract;
   }
 
   function errorText(error) {
@@ -128,8 +201,7 @@
       .slice(0, 300);
   }
 
-  function reportFor(error) {
-    const api = global.VahanUiDrift;
+  function reportFor(error, api = global.VahanUiDrift) {
     if (!api?.isUiDriftError(error)) return null;
     return {
       ...api.formatUiDrift(error),
@@ -139,16 +211,16 @@
 
   function inspectForBackground(requireOfficial) {
     try {
-      return Promise.resolve({ ok: true, contract: inspect({ requireOfficial }) });
+      return Promise.resolve(inspectAll({ requireOfficial }));
     } catch (error) {
       const uiDrift = reportFor(error);
       return Promise.resolve(uiDrift
-        ? { ok: false, uiDrift }
+        ? { ok: false, uiDrift, uiDrifts: [uiDrift], errorCount: 1 }
         : { ok: false, error: errorText(error) });
     }
   }
 
-  global.VahanUiHealthCheckContent = Object.freeze({ inspect });
+  global.VahanUiHealthCheckContent = Object.freeze({ inspect, inspectAll });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "RUN_SCHEDULED_UI_CHECK") return;

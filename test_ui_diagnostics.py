@@ -23,7 +23,7 @@ def run() -> None:
             UIDriftError(
                 "UI_DRIFT_REQUIRED_OPTION",
                 "Two Wheeler missing",
-                step="fixture-wrong-label",
+                step="ui-wrong-label",
                 details={"control": "category", "expected_option": "Two Wheeler"},
             ),
             "Category Group (#vehicleCategoryGroup)",

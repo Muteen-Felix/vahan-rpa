@@ -1,3 +1,0 @@
-Fixture report
-Fuel	Two Wheeler	Total
-ALL	0	0
