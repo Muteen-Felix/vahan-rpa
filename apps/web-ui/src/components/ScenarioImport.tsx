@@ -17,6 +17,7 @@ interface Props {
   onStop: () => void;
   running: boolean;
   progress: { done: number; total: number; current: string };
+  batchStatus: "idle" | "running" | "completed" | "stopped" | "error";
   log: BatchLogEntry[];
   disabled: boolean;
 }
@@ -62,7 +63,7 @@ function parseScenarioFile(raw: string): Scenario[] {
   });
 }
 
-export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, log, disabled }: Props) {
+export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, batchStatus, log, disabled }: Props) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
@@ -82,6 +83,13 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
       onImport([]);
       setError(reason instanceof Error ? reason.message : "Không đọc được file scenario.");
     }
+  }
+
+  function clearScenarioFile() {
+    setScenarios([]);
+    setFileName("");
+    setError("");
+    onImport([]);
   }
 
   return (
@@ -114,7 +122,18 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
           Đã nạp <strong>{fileName}</strong> — {scenarios.length} scenario.
         </p>
       )}
+      {scenarios.length > 0 && !error && (
+        <p className="option-note" role="status">
+          Đang chạy theo cấu hình trong JSON. Phần “Cấu hình báo cáo” bên dưới đã được bỏ qua.
+        </p>
+      )}
       {error && <p className="error-message">{error}</p>}
+
+      {fileName && !running && !error && (
+        <button className="secondary-button" type="button" onClick={clearScenarioFile}>
+          Bỏ JSON, dùng cấu hình thủ công
+        </button>
+      )}
 
       {scenarios.length > 0 && !error && (
         <ol className="scenario-list">
@@ -154,7 +173,13 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
         <p className="option-note">
           {running
             ? `Đang chạy ${progress.done + 1}/${progress.total}: ${progress.current}`
-            : `Đã dừng ở ${progress.done}/${progress.total}.`}
+            : batchStatus === "completed"
+              ? `Đã hoàn tất ${progress.done}/${progress.total}.`
+              : batchStatus === "stopped"
+                ? `Đã dừng ở ${progress.done}/${progress.total}.`
+                : batchStatus === "error"
+                  ? `Đã dừng do lỗi ở ${progress.done}/${progress.total}.`
+                  : `Sẵn sàng chạy ${progress.total} scenario.`}
         </p>
       )}
 

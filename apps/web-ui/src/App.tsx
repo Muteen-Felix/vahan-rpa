@@ -24,6 +24,7 @@ import { uiSocket } from "./services/socket-client";
 
 const ACTIVE_JOB_STORAGE_KEY = "vahanActiveJobId";
 type AppSection = "configure" | "activity" | "settings";
+type BatchStatus = "idle" | "running" | "completed" | "stopped" | "error";
 
 function sectionFromHash(): AppSection {
   const hash = window.location.hash.replace(/^#/, "").split("?")[0];
@@ -44,6 +45,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [batchStatus, setBatchStatus] = useState<BatchStatus>("idle");
   const [reportsTrigger, setReportsTrigger] = useState(0);
   const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0, current: "" });
   const [batchLog, setBatchLog] = useState<{
@@ -88,6 +90,17 @@ export default function App() {
     pendingManualCheckRef.current = null;
     setPendingManualCheck(null);
   }, []);
+
+  function handleScenarioImport(nextScenarios: Scenario[]) {
+    setScenarios(nextScenarios);
+    setBatchLog([]);
+    setBatchStatus("idle");
+    setBatchProgress({
+      done: 0,
+      total: nextScenarios.length,
+      current: nextScenarios[0]?.name || "",
+    });
+  }
 
   async function refreshRunners() {
     try {
@@ -258,11 +271,18 @@ export default function App() {
     if (!queue.length || batchRunning) return;
     batchStopRef.current = false;
     setBatchRunning(true);
+    setBatchStatus("running");
     setBatchLog([]);
     setBatchProgress({ done: 0, total: queue.length, current: queue[0].name });
 
+    let outcome: BatchStatus = "completed";
+    let processed = 0;
+
     for (let i = 0; i < queue.length; i++) {
-      if (batchStopRef.current) break;
+      if (batchStopRef.current) {
+        outcome = "stopped";
+        break;
+      }
       const scenario = queue[i];
       setBatchProgress({ done: i, total: queue.length, current: scenario.name });
 
@@ -272,12 +292,22 @@ export default function App() {
           name: scenario.name, status: "error",
           detail: "Dừng batch: không còn extension runner nào ONLINE và rảnh.",
         }]);
+        outcome = "error";
         break;
       }
 
       try {
         const result = await runOneScenarioJob(runnerId, scenario.filters, scenario.name);
-        if (result.status === "COMPLETED") {
+        processed = i + 1;
+        setBatchProgress({ done: processed, total: queue.length, current: scenario.name });
+        if ((result.error || "").startsWith("NO_RECORD_FOUND")) {
+          // Filter hợp lệ nhưng VAHAN không có dữ liệu khớp — không phải lỗi hệ thống,
+          // không dừng batch, chạy tiếp kịch bản kế tiếp.
+          setBatchLog((log) => [...log, {
+            name: scenario.name, status: "empty",
+            detail: "Không có dữ liệu khớp bộ lọc (No record found) — bỏ qua, chạy tiếp.",
+          }]);
+        } else if (result.status === "COMPLETED") {
           setBatchLog((log) => [...log, {
             name: scenario.name,
             status: "ok",
@@ -285,18 +315,12 @@ export default function App() {
             jobId: result.id,
             excelFileName: result.excelFileName,
           }]);
-        } else if ((result.error || "").startsWith("NO_RECORD_FOUND")) {
-          // Filter hợp lệ nhưng VAHAN không có dữ liệu khớp — không phải lỗi hệ thống,
-          // không dừng batch, chạy tiếp kịch bản kế tiếp.
-          setBatchLog((log) => [...log, {
-            name: scenario.name, status: "empty",
-            detail: "Không có dữ liệu khớp bộ lọc (No record found) — bỏ qua, chạy tiếp.",
-          }]);
         } else {
           setBatchLog((log) => [...log, {
             name: scenario.name, status: "error",
             detail: result.error || `Job kết thúc ở trạng thái ${result.status} — dừng batch.`,
           }]);
+          outcome = "error";
           break;
         }
       } catch (reason) {
@@ -304,11 +328,16 @@ export default function App() {
           name: scenario.name, status: "error",
           detail: reason instanceof Error ? reason.message : "Lỗi không rõ khi tạo job.",
         }]);
+        outcome = "error";
         break;
       }
     }
 
-    setBatchProgress((current) => ({ ...current, done: current.total }));
+    if (outcome === "completed" && batchStopRef.current && processed < queue.length) {
+      outcome = "stopped";
+    }
+    setBatchProgress((current) => ({ ...current, done: processed }));
+    setBatchStatus(outcome);
     setBatchRunning(false);
   }
 
@@ -392,15 +421,18 @@ export default function App() {
                 <div className="workspace">
                   <div className="left-column">
                     <ScenarioImport
-                      onImport={setScenarios}
+                      onImport={handleScenarioImport}
                       onRunAll={runScenarioQueue}
                       onStop={stopBatch}
                       running={batchRunning}
                       progress={batchProgress}
+                      batchStatus={batchStatus}
                       log={batchLog}
                       disabled={busy}
                     />
-                    <FilterForm runners={runners} busy={busy} onSubmit={createJob} />
+                    {scenarios.length === 0 && (
+                      <FilterForm runners={runners} busy={busy} onSubmit={createJob} />
+                    )}
                   </div>
                   <div className="right-column" id="activity">
                     <JobStatus job={job} onCancel={cancelJob} />
