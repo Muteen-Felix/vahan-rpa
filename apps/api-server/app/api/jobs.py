@@ -28,6 +28,7 @@ async def create_job(command: CreateJobRequest) -> Job:
     job = Job(
         runnerId=command.runner_id,
         filters=command.filters,
+        scenarioName=command.scenario_name,
         status=JobStatus.ASSIGNED,
     )
     job = await services.jobs.create(job)
@@ -38,6 +39,7 @@ async def create_job(command: CreateJobRequest) -> Job:
         {
             "jobId": str(job.id),
             "filters": job.filters.extension_payload(),
+            "scenarioName": job.scenario_name,
         },
         room=f"runner:{command.runner_id}",
         namespace="/runner",

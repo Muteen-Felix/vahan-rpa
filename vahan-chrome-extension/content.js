@@ -1,6 +1,68 @@
+// ── Excel blob interceptor ──────────────────────────────────────────
+// VAHAN's SheetJS builds the Excel file client-side and triggers a
+// download by creating an <a download href="blob:..."> then calling
+// .click(). We intercept this to capture the blob, send it to the
+// background script for server upload, and suppress the browser download.
+function handleExcelAnchor(anchor, event) {
+  const href = anchor.getAttribute("href") || anchor.href;
+  const fileName = anchor.getAttribute("download") || "report.xlsx";
+  if (href && (href.startsWith("blob:") || href.includes("report") || href.endsWith(".xlsx") || href.endsWith(".csv"))) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    }
+    fetch(href)
+      .then((r) => r.blob())
+      .then((blob) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          chrome.runtime.sendMessage({
+            type: "EXCEL_BLOB_CAPTURED",
+            dataUrl: reader.result,
+            fileName,
+          }).catch((err) => console.error("[VAHAN EXT] Send blob error:", err));
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch((error) => {
+        console.error("[VAHAN EXT] Failed to capture Excel blob:", error);
+      });
+    return true;
+  }
+  return false;
+}
+
+(function installDownloadInterceptor() {
+  const clickCapture = (event) => {
+    const target = event.target?.closest ? event.target.closest("a") : event.target;
+    if (target && target.tagName === "A" && target.hasAttribute("download")) {
+      handleExcelAnchor(target, event);
+    }
+  };
+  window.addEventListener("click", clickCapture, true);
+  document.addEventListener("click", clickCapture, true);
+
+  const originalClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function patchedClick() {
+    if (this.hasAttribute("download") && handleExcelAnchor(this)) {
+      return;
+    }
+    return originalClick.call(this);
+  };
+
+  window.addEventListener("__VAHAN_EXCEL_EXPORT__", (e) => {
+    const { href, fileName } = e.detail || {};
+    if (href) {
+      handleExcelAnchor({ getAttribute: () => fileName, href });
+    }
+  });
+})();
+
 const splitValues = (value) => String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 
 function getOptionMap(select) {
   return [...select.options].map((option) => ({
@@ -593,7 +655,7 @@ function injectFloatingWidget() {
           <div class="step" data-step="axes" data-state="idle"><span class="step-icon">○</span><span>3. Thiết lập trục báo cáo</span></div>
           <div class="step" data-step="captcha" data-state="idle"><span class="step-icon">○</span><span>4. Bạn nhập CAPTCHA thủ công</span></div>
           <div class="step" data-step="apply" data-state="idle"><span class="step-icon">○</span><span data-role="apply-label">5. Bấm Apply trên VAHAN</span></div>
-          <div class="step" data-step="export" data-state="idle"><span class="step-icon">○</span><span>6. Tự động tải file Excel</span></div>
+          <div class="step" data-step="export" data-state="idle"><span class="step-icon">○</span><span>6. Gửi file Excel về server</span></div>
         </div>
         <div class="preferences" aria-label="Tùy chọn tự động">
           <label class="preference"><input data-setting="autoApply" type="checkbox"><span>Tự động bấm Apply sau khi nhập CAPTCHA</span></label>

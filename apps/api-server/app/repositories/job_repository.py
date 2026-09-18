@@ -41,6 +41,26 @@ class InMemoryJobRepository:
             job.touch()
             return job.model_copy(deep=True)
 
+    async def set_excel_file(
+        self,
+        job_id: UUID,
+        *,
+        file_name: str,
+        file_size: int,
+    ) -> Job | None:
+        async with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return None
+            job.excel_file_name = file_name
+            job.excel_file_size = file_size
+            job.touch()
+            return job.model_copy(deep=True)
+
+    async def list_all(self) -> list[Job]:
+        async with self._lock:
+            return [job.model_copy(deep=True) for job in self._jobs.values()]
+
     async def clear(self) -> None:
         async with self._lock:
             self._jobs.clear()

@@ -1,4 +1,5 @@
 import type {
+  ExportedReportItem,
   Job,
   Runner,
   UiHealthReportsResponse,
@@ -35,11 +36,13 @@ export const api = {
   uiHealthReports: (date?: string) => request<UiHealthReportsResponse>(
     `/api/ui-health/reports${date ? `?date=${encodeURIComponent(date)}` : ""}`,
   ),
-  createJob: (runnerId: string, filters: VahanFilters) =>
+  createJob: (runnerId: string, filters: VahanFilters, scenarioName?: string) =>
     request<Job>("/api/jobs", {
       method: "POST",
-      body: JSON.stringify({ runnerId, filters }),
+      body: JSON.stringify({ runnerId, filters, scenarioName }),
     }),
   getJob: (jobId: string) => request<Job>(`/api/jobs/${jobId}`),
   cancelJob: (jobId: string) => request<Job>(`/api/jobs/${jobId}/cancel`, { method: "POST" }),
+  excelDownloadUrl: (jobId: string) => `${API_URL}/api/jobs/${jobId}/excel`,
+  exportedReports: () => request<ExportedReportItem[]>("/api/jobs/reports"),
 };

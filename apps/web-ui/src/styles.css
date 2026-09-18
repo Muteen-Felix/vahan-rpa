@@ -156,6 +156,11 @@ input:focus,select:focus { border-color:var(--blue); box-shadow:inset 3px 0 var(
 .empty-state p { max-width:280px; margin:0; font-size:12px; line-height:1.6; }
 .option-note { color:var(--blue); font-size:11px; }
 footer { display:flex; justify-content:space-between; gap:20px; padding:28px max(28px,calc((100vw - 1280px)/2)); background:#031027; color:rgba(255,255,255,.52); font-size:9px; letter-spacing:.14em; }
+.job-excel-download { margin-top:18px; padding:18px; border-left:3px solid #16a34a; background:#ecfdf3; }
+.job-excel-download .primary-button { display:inline-flex; align-items:center; gap:8px; width:auto; min-height:42px; text-decoration:none; text-align:center; justify-content:center; }
+.job-excel-meta { margin:10px 0 0; color:#137a37; font-size:11px; }
+.batch-excel-link { display:inline-block; margin-top:4px; color:var(--blue); font-weight:600; text-decoration:none; font-size:11px; }
+.batch-excel-link:hover { text-decoration:underline; }
 
 @media (max-width:900px) { .workspace{grid-template-columns:1fr}.right-column{position:static}.hero-visual{opacity:.5}.section-intro{align-items:start;flex-direction:column}.main-nav a{display:none}.health-schedule-form{grid-template-columns:1fr}.health-schedule-form .primary-button{width:100%}.health-reports-toolbar{grid-template-columns:1fr}.health-reports-downloads{align-items:flex-start;flex-direction:column}.health-report-links{justify-content:flex-start} }
 @media (max-width:560px) { .site-header{height:64px;padding:0 18px}.brand-copy small{display:none}.hero-content,.page-content{width:calc(100% - 32px)}.hero{min-height:390px}.hero-content{padding:58px 0}.hero h1{font-size:42px}.hero-meta{align-items:flex-start;flex-direction:column;gap:12px}.form-grid{grid-template-columns:1fr}.panel,.empty-state{padding:19px}.page-content{padding:48px 0}.main-nav{gap:8px}.attended-badge{padding:8px;font-size:8px}.health-schedule-input{max-width:none}.health-reports-downloads{padding:12px}.health-report-links{display:grid;width:100%}.health-report-download{width:100%;justify-content:center}footer{padding:24px 18px;flex-direction:column} }

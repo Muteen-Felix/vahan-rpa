@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CaptchaPanel } from "./components/CaptchaPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { ExportedReportsList } from "./components/ExportedReportsList";
 import { FilterForm } from "./components/FilterForm";
 import { HealthCheckReports } from "./components/HealthCheckReports";
 import { HealthCheckSchedule } from "./components/HealthCheckSchedule";
@@ -23,8 +24,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [reportsTrigger, setReportsTrigger] = useState(0);
   const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0, current: "" });
-  const [batchLog, setBatchLog] = useState<{ name: string; status: "ok" | "empty" | "error"; detail: string }[]>([]);
+  const [batchLog, setBatchLog] = useState<{ name: string; status: "ok" | "empty" | "error"; detail: string; jobId?: string; excelFileName?: string | null }[]>([]);
 
   const runnersRef = useRef<Runner[]>([]);
   useEffect(() => { runnersRef.current = runners; }, [runners]);
@@ -79,6 +81,9 @@ export default function App() {
       if (["COMPLETED", "FAILED", "CANCELLED"].includes(updated.status)) {
         localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
         setCaptcha(null);
+        if (updated.status === "COMPLETED") {
+          setReportsTrigger((c) => c + 1);
+        }
         // Đợi danh sách runner cập nhật xong TRƯỚC KHI resolve — nếu không, batch runner
         // (runScenarioQueue) sẽ đọc runnersRef.current lúc còn stale (runner vẫn hiện "đang
         // bận") và báo nhầm "không còn runner rảnh" ngay sau job đầu tiên.
@@ -115,12 +120,12 @@ export default function App() {
     };
   }, []);
 
-  async function createJob(runnerId: string, filters: VahanFilters) {
+  async function createJob(runnerId: string, filters: VahanFilters, scenarioName?: string) {
     setCreating(true);
     setError("");
     setCaptcha(null);
     try {
-      const created = await api.createJob(runnerId, filters);
+      const created = await api.createJob(runnerId, filters, scenarioName);
       setJob(created);
       localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, created.id);
       await subscribeJob(created.id);
@@ -175,9 +180,9 @@ export default function App() {
     return null;
   }
 
-  async function runOneScenarioJob(runnerId: string, filters: VahanFilters): Promise<Job> {
+  async function runOneScenarioJob(runnerId: string, filters: VahanFilters, scenarioName?: string): Promise<Job> {
     const terminal = new Promise<Job>((resolve) => { terminalResolverRef.current = resolve; });
-    await createJob(runnerId, filters);
+    await createJob(runnerId, filters, scenarioName);
     return terminal;
   }
 
@@ -203,9 +208,15 @@ export default function App() {
       }
 
       try {
-        const result = await runOneScenarioJob(runnerId, scenario.filters);
+        const result = await runOneScenarioJob(runnerId, scenario.filters, scenario.name);
         if (result.status === "COMPLETED") {
-          setBatchLog((log) => [...log, { name: scenario.name, status: "ok", detail: `Job ${result.id} hoàn tất.` }]);
+          setBatchLog((log) => [...log, {
+            name: scenario.name,
+            status: "ok",
+            detail: `Job ${result.id} hoàn tất.`,
+            jobId: result.id,
+            excelFileName: result.excelFileName,
+          }]);
         } else if ((result.error || "").startsWith("NO_RECORD_FOUND")) {
           // Filter hợp lệ nhưng VAHAN không có dữ liệu khớp — không phải lỗi hệ thống,
           // không dừng batch, chạy tiếp kịch bản kế tiếp.
@@ -261,6 +272,7 @@ export default function App() {
         <nav className="main-nav" aria-label="Điều hướng chính">
           <a href="#configure">Cấu hình</a>
           <a href="#activity">Tiến trình</a>
+          <a href="#reports">Báo cáo đã xuất</a>
           <span className="attended-badge">ATTENDED RPA</span>
         </nav>
       </header>
@@ -301,13 +313,17 @@ export default function App() {
               log={batchLog}
               disabled={busy}
             />
-            <FilterForm runners={runners} busy={busy} onSubmit={createJob} />
+            {/* <FilterForm runners={runners} busy={busy} onSubmit={createJob} /> */}
           </div>
           <div className="right-column" id="activity">
             <JobStatus job={job} onCancel={cancelJob} />
             <CaptchaPanel challenge={captcha} submitting={submittingCaptcha} autoApply={job?.filters.autoApply ?? false} onSubmit={submitCaptcha} />
             {!job && <section className="empty-state"><span>01</span><h2>Sẵn sàng khởi tạo</h2><p>Chọn extension và cấu hình bộ lọc để bắt đầu quy trình báo cáo.</p></section>}
           </div>
+        </div>
+
+        <div id="reports" style={{ marginTop: "32px" }}>
+          <ExportedReportsList refreshTrigger={reportsTrigger} />
         </div>
       </main>
 

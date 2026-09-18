@@ -8,6 +8,8 @@ dependencies = [
   "python-socketio[asyncio-client]>=5.12,<6",
   "pydantic>=2.10,<3",
   "uvicorn[standard]>=0.34,<1",
+  "python-multipart>=0.0.18,<1",
+  "aiofiles>=24,<25",
 ]
 
 [project.optional-dependencies]

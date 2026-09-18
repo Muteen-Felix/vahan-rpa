@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 DEFAULT_UI_HEALTH_LOG_DIR = Path(__file__).resolve().parents[1] / "runtime" / "ui-health-logs"
+DEFAULT_EXCEL_REPORT_DIR = Path(__file__).resolve().parents[1] / "runtime" / "excel-reports"
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -28,6 +29,8 @@ class Settings:
     runner_token: str = "change-me"
     runner_disconnect_grace_seconds: float = 30.0
     ui_health_log_dir: str = str(DEFAULT_UI_HEALTH_LOG_DIR)
+    excel_report_dir: str = str(DEFAULT_EXCEL_REPORT_DIR)
+    max_excel_upload_bytes: int = 50 * 1024 * 1024  # 50 MB
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -58,6 +61,7 @@ class Settings:
             runner_token=os.getenv("VAHAN_API_RUNNER_TOKEN", "change-me"),
             runner_disconnect_grace_seconds=float(os.getenv("VAHAN_API_RUNNER_DISCONNECT_GRACE_SECONDS", "30")),
             ui_health_log_dir=os.getenv("VAHAN_UI_HEALTH_LOG_DIR", str(DEFAULT_UI_HEALTH_LOG_DIR)),
+            excel_report_dir=os.getenv("VAHAN_EXCEL_REPORT_DIR", str(DEFAULT_EXCEL_REPORT_DIR)),
         )
 
 
