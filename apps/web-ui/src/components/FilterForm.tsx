@@ -29,6 +29,14 @@ const matching = (options: string[], wanted: string) =>
 const matchingMany = (options: string[], wanted: string[]) =>
   wanted.map((item) => matching(options, item)).filter(Boolean);
 
+function optionErrorMessage(reason: unknown): string {
+  const message = reason instanceof Error ? reason.message : String(reason || "");
+  if (/operation has timed out|timed out|timeout/i.test(message)) {
+    return "VAHAN đang phản hồi chậm. Hệ thống sẽ thử đọc lại lựa chọn khi extension sẵn sàng.";
+  }
+  return message || "Không đọc được lựa chọn từ VAHAN.";
+}
+
 function DynamicSelect({ label, name, options, value, multiple = false, disabled = false, onChange }: {
   label: string; name: string; options: string[]; value: string | string[]; multiple?: boolean;
   disabled?: boolean; onChange: (name: string, value: string | string[]) => void;
@@ -151,7 +159,7 @@ export function FilterForm({ runners, busy, onSubmit }: Props) {
         setOptions((current) => ({ ...current, states: values, rtos: [] }));
         setForm((current) => ({ ...current, states: matchingMany(values, current.states as string[]) }));
       })
-      .catch((error) => setOptionError(error.message));
+      .catch((error) => setOptionError(optionErrorMessage(error)));
   }, [selectedRunner, form.delhiNcr]);
 
   useEffect(() => {
@@ -166,7 +174,7 @@ export function FilterForm({ runners, busy, onSubmit }: Props) {
         setOptions((current) => ({ ...current, rtos: values }));
         setForm((current) => ({ ...current, rtos: matchingMany(values, current.rtos as string[]) }));
       })
-      .catch((error) => setOptionError(error.message));
+      .catch((error) => setOptionError(optionErrorMessage(error)));
   }, [selectedRunner, form.states]);
 
   useEffect(() => {
@@ -177,7 +185,7 @@ export function FilterForm({ runners, busy, onSubmit }: Props) {
         setOptions((current) => ({ ...current, xAxis: values }));
         setForm((current) => ({ ...current, xAxis: matching(values, String(current.xAxis)) }));
       })
-      .catch((error) => setOptionError(error.message));
+      .catch((error) => setOptionError(optionErrorMessage(error)));
   }, [selectedRunner, form.yAxis]);
 
   useEffect(() => {
@@ -186,7 +194,7 @@ export function FilterForm({ runners, busy, onSubmit }: Props) {
     setMakersLoading(true);
     const timer = window.setTimeout(() => runnerRequest({ type: "SEARCH_MAKERS", search })
       .then((response) => setMakerOptions(response.options as string[]))
-      .catch((error) => setOptionError(error.message))
+      .catch((error) => setOptionError(optionErrorMessage(error)))
       .finally(() => setMakersLoading(false)), 300);
     return () => window.clearTimeout(timer);
   }, [selectedRunner, makerSearch]);

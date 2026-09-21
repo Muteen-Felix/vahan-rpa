@@ -7,6 +7,70 @@ from app.realtime.server import sio
 from app.services import services
 
 
+CAPTCHA_FORWARD_TIMEOUT_SECONDS = 45
+CAPTCHA_REFRESH_TIMEOUT_SECONDS = 20
+
+
+async def _fail_captcha_submission(job_id: UUID, runner_id: str, error: str) -> None:
+    """Record a runner-side CAPTCHA failure without overwriting a newer state."""
+    current = await services.jobs.get(job_id)
+    if not current or current.status != JobStatus.SUBMITTING:
+        return
+    if not can_transition(current.status, JobStatus.FAILED):
+        return
+    failed = await services.jobs.update_status(job_id, JobStatus.FAILED, error=error)
+    if not failed:
+        return
+    await services.runners.set_job(runner_id, None)
+    await sio.emit(
+        "job:status",
+        failed.model_dump(mode="json", by_alias=True),
+        room=f"job:{job_id}",
+        namespace="/ui",
+    )
+
+
+async def _forward_captcha_submission(
+    job_id: UUID,
+    runner_id: str,
+    runner_socket_id: str,
+    captcha_id: str,
+    value: str,
+) -> None:
+    """Forward the slow, browser-facing part outside the UI ACK request."""
+    try:
+        acknowledgement = await sio.call(
+            "captcha:submit",
+            {
+                "jobId": str(job_id),
+                "captchaId": captcha_id,
+                "value": value,
+            },
+            to=runner_socket_id,
+            namespace="/runner",
+            timeout=CAPTCHA_FORWARD_TIMEOUT_SECONDS,
+        )
+    except SocketIOTimeoutError:
+        await _fail_captcha_submission(
+            job_id,
+            runner_id,
+            "Extension không hoàn tất thao tác CAPTCHA trong thời gian cho phép.",
+        )
+        return
+    except Exception as error:  # pragma: no cover - defensive boundary for a background task
+        await _fail_captcha_submission(
+            job_id,
+            runner_id,
+            f"Không thể gửi CAPTCHA tới extension: {error}",
+        )
+        return
+
+    if acknowledgement and acknowledgement.get("ok"):
+        return
+    error = (acknowledgement or {}).get("error", "Extension từ chối xử lý CAPTCHA.")
+    await _fail_captcha_submission(job_id, runner_id, error)
+
+
 @sio.event(namespace="/ui")
 async def connect(_sid: str, _environ: dict, _auth: dict | None) -> bool:
     # Authentication is deliberately deferred for the single-user MVP.
@@ -89,24 +153,67 @@ async def submit_captcha(_sid: str, payload: dict) -> dict:
 
     updated = await services.jobs.update_status(job_id, JobStatus.SUBMITTING)
     await sio.emit("job:status", updated.model_dump(mode="json", by_alias=True), room=f"job:{job_id}", namespace="/ui")
+    # Filling the official form and verifying that VAHAN did not refresh the
+    # CAPTCHA can take longer than a browser Socket.IO ACK timeout. Return the
+    # UI ACK now; the background task will publish a real FAILED state if the
+    # extension rejects or times out.
+    sio.start_background_task(
+        _forward_captcha_submission,
+        job_id,
+        job.runner_id,
+        runner.socket_id,
+        captcha_id,
+        value,
+    )
+    return {"ok": True, "accepted": True}
+
+
+@sio.on("captcha:refresh", namespace="/ui")
+async def refresh_captcha(_sid: str, payload: dict) -> dict:
+    """Ask the extension to click VAHAN's official CAPTCHA refresh control."""
+    try:
+        job_id = UUID(str(payload["jobId"]))
+        captcha_id = str(payload["captchaId"])
+    except (KeyError, TypeError, ValueError):
+        return {"ok": False, "error": "Invalid CAPTCHA refresh request."}
+
+    job = await services.jobs.get(job_id)
+    if not job:
+        return {"ok": False, "error": "Job not found."}
+    if job.status != JobStatus.WAITING_CAPTCHA:
+        return {"ok": False, "error": "Job is not waiting for CAPTCHA."}
+    if job.captcha_id != captcha_id:
+        return {"ok": False, "error": "CAPTCHA has changed or expired."}
+
+    runner = await services.runners.get(job.runner_id)
+    if not runner:
+        return {"ok": False, "error": "Runner is offline."}
     try:
         acknowledgement = await sio.call(
-            "captcha:submit",
-            {
-            "jobId": str(job_id),
-            "captchaId": captcha_id,
-            "value": value,
-            },
+            "captcha:refresh",
+            {"jobId": str(job_id), "captchaId": captcha_id},
             to=runner.socket_id,
             namespace="/runner",
-            timeout=15,
+            timeout=CAPTCHA_REFRESH_TIMEOUT_SECONDS,
         )
     except SocketIOTimeoutError:
-        acknowledgement = {"ok": False, "error": "Runner did not acknowledge CAPTCHA submission."}
+        return {"ok": False, "error": "Extension did not refresh CAPTCHA in time."}
+    except Exception as error:  # pragma: no cover - runner transport boundary
+        return {"ok": False, "error": f"Could not refresh CAPTCHA through extension: {error}"}
+
     if not acknowledgement or not acknowledgement.get("ok"):
-        error = (acknowledgement or {}).get("error", "Runner rejected CAPTCHA submission.")
-        failed = await services.jobs.update_status(job_id, JobStatus.FAILED, error=error)
-        await services.runners.set_job(job.runner_id, None)
-        await sio.emit("job:status", failed.model_dump(mode="json", by_alias=True), room=f"job:{job_id}", namespace="/ui")
-        return {"ok": False, "error": error}
-    return {"ok": True}
+        return {"ok": False, "error": (acknowledgement or {}).get("error", "Extension rejected CAPTCHA refresh.")}
+
+    refreshed = await services.jobs.get(job_id)
+    if not refreshed or refreshed.status != JobStatus.WAITING_CAPTCHA:
+        return {"ok": False, "error": "CAPTCHA refresh did not complete."}
+    if not refreshed.captcha_id or not refreshed.captcha_image_data_url:
+        return {"ok": False, "error": "VAHAN did not return a CAPTCHA image."}
+    return {
+        "ok": True,
+        "captcha": {
+            "jobId": str(job_id),
+            "captchaId": refreshed.captcha_id,
+            "imageDataUrl": refreshed.captcha_image_data_url,
+        },
+    }

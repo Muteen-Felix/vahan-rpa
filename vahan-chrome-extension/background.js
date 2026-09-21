@@ -3436,6 +3436,7 @@
   var VAHAN_AUTH_HOLD_KEY = "vahanAuthHold";
   var VAHAN_AUTH_REQUIRED_CODE = "VAHAN_AUTH_REQUIRED";
   var VAHAN_AUTH_HOLD_MS = 15 * 60 * 1e3;
+  var VAHAN_AUTH_GUARD_VERSION = 2;
   var VAHAN_HOST = "analytics.parivahan.gov.in";
   function isVahanRequestUrl(value2) {
     try {
@@ -3444,6 +3445,9 @@
     } catch {
       return false;
     }
+  }
+  function isVahanMainFrameAuthChallenge(details = {}) {
+    return details.isProxy !== true && details.type === "main_frame" && isVahanRequestUrl(details.url);
   }
   function safeUrl(value2) {
     try {
@@ -3460,9 +3464,11 @@
     const tabId = Number.isInteger(details.tabId) && details.tabId >= 0 ? details.tabId : null;
     const sameChallenge = previous && previous.tabId === tabId && previous.code === VAHAN_AUTH_REQUIRED_CODE && Date.parse(previous.lastDetectedAt || "") > now2 - VAHAN_AUTH_HOLD_MS;
     return {
+      guardVersion: VAHAN_AUTH_GUARD_VERSION,
       code: VAHAN_AUTH_REQUIRED_CODE,
       status: "AUTH_REQUIRED",
       host: VAHAN_HOST,
+      resourceType: String(details.type || "unknown"),
       tabId,
       url: safeUrl(details.url),
       scheme: String(details.scheme || "Basic"),
@@ -3475,7 +3481,7 @@
     };
   }
   function isVahanAuthHoldActive(hold, now2 = Date.now(), tabId) {
-    if (!hold || hold.code !== VAHAN_AUTH_REQUIRED_CODE) return false;
+    if (!hold || hold.guardVersion !== VAHAN_AUTH_GUARD_VERSION || hold.code !== VAHAN_AUTH_REQUIRED_CODE) return false;
     if (tabId !== void 0 && hold.tabId !== null && hold.tabId !== tabId) return false;
     const retryAfter = Date.parse(hold.retryAfter || "");
     return Number.isFinite(retryAfter) && retryAfter > now2;
@@ -4186,6 +4192,9 @@
     const stored = await chrome.storage.local.get(VAHAN_AUTH_HOLD_KEY);
     vahanAuthHold = stored?.[VAHAN_AUTH_HOLD_KEY] || void 0;
     if (!isVahanAuthHoldActive(vahanAuthHold)) {
+      if (vahanAuthHold?.code === VAHAN_AUTH_REQUIRED_CODE && vahanAuthHold.guardVersion !== VAHAN_AUTH_GUARD_VERSION) {
+        await chrome.storage.local.remove(VAHAN_AUTH_HOLD_KEY);
+      }
       vahanAuthHold = void 0;
       chrome.action.setBadgeText?.({ text: "" });
     }
@@ -4239,6 +4248,10 @@
           respond({});
           return;
         }
+        if (!isVahanMainFrameAuthChallenge(details)) {
+          respond({ cancel: true });
+          return;
+        }
         const hold = recordVahanAuthChallenge(details);
         respond({ cancel: true });
       },
@@ -4280,6 +4293,34 @@
       imageDataUrl: captcha.imageDataUrl
     });
     if (!response?.ok) throw new Error(response?.error || "Could not publish CAPTCHA.");
+  }
+  async function publishCaptchaChange(activeServerJob, captcha, event) {
+    if (!captcha?.captchaId || !captcha?.imageDataUrl) {
+      throw new Error("VAHAN did not return a valid fresh CAPTCHA.");
+    }
+    if (captcha.captchaId === activeServerJob.captchaId) {
+      throw new Error("VAHAN returned the previous CAPTCHA image. Please try again.");
+    }
+    const updatedJob = {
+      ...activeServerJob,
+      captchaId: captcha.captchaId,
+      stage: "WAITING_CAPTCHA"
+    };
+    await chrome.storage.local.set({ activeServerJob: updatedJob });
+    await emitWithRetry(event, {
+      jobId: activeServerJob.jobId,
+      captchaId: captcha.captchaId,
+      imageDataUrl: captcha.imageDataUrl
+    });
+    return captcha;
+  }
+  async function requestFreshCaptcha(activeServerJob) {
+    const captcha = await sendToVahan(activeServerJob.tabId, {
+      type: "REFRESH_CAPTCHA",
+      previousCaptchaId: activeServerJob.captchaId
+    });
+    if (!captcha?.ok) throw new Error(captcha?.error || "Could not refresh the official VAHAN CAPTCHA.");
+    return captcha;
   }
   async function emitWithRetry(event, payload, attempts = 3) {
     let lastError;
@@ -4362,41 +4403,106 @@
       }
     }
   }
+  function isLikelyExcelDownload(item, tabId) {
+    if (!item || item.id === void 0) return false;
+    if (Number.isInteger(item.tabId) && item.tabId === tabId) return true;
+    const url2 = String(item.url || "").toLocaleLowerCase();
+    if (url2.startsWith("blob:") || url2.startsWith("data:")) return true;
+    const source = `${url2} ${item.filename || ""}`;
+    return /(?:\.xlsx?(?:$|[?#])|\.xlsm(?:$|[?#])|excel|spreadsheet|export)/i.test(source);
+  }
   async function triggerAndWaitForExcelDownload(tabId) {
-    const blobPromise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        pendingBlobResolver = void 0;
-        reject(new Error("Excel blob was not captured within 60 seconds."));
+    let downloadId;
+    let resolveDownload;
+    let rejectDownload;
+    let downloadTimer;
+    let resolveBlob;
+    let rejectBlob;
+    let blobTimer;
+    const downloadPromise = new Promise((resolve, reject) => {
+      resolveDownload = resolve;
+      rejectDownload = reject;
+      downloadTimer = setTimeout(() => {
+        reject(new Error("Excel download did not complete within 60 seconds."));
       }, 6e4);
-      pendingBlobResolver = (data) => {
-        clearTimeout(timer);
-        pendingBlobResolver = void 0;
-        resolve(data);
-      };
     });
+    const blobPromise = new Promise((resolve, reject) => {
+      resolveBlob = resolve;
+      rejectBlob = reject;
+      blobTimer = setTimeout(() => {
+        reject(new Error("Excel file bytes were not captured within 60 seconds."));
+      }, 6e4);
+    });
+    const finishDownload = (value2) => {
+      if (downloadId === void 0) return;
+      clearTimeout(downloadTimer);
+      resolveDownload(value2);
+      resolveDownload = () => {
+      };
+    };
+    const failDownload = (error) => {
+      clearTimeout(downloadTimer);
+      rejectDownload(error);
+      rejectDownload = () => {
+      };
+    };
     const onCreated = (item) => {
-      try {
-        chrome.downloads.cancel(item.id, () => {
-          chrome.downloads.erase({ id: item.id }, () => {
-          });
+      if (downloadId !== void 0 || !isLikelyExcelDownload(item, tabId)) return;
+      downloadId = item.id;
+      if (item.url) {
+        sendToVahan(tabId, {
+          type: "CAPTURE_EXCEL_DOWNLOAD",
+          href: item.url,
+          fileName: item.filename?.split(/[\\/]/).pop() || "report.xlsx"
+        }).catch(() => {
         });
-      } catch (e) {
+      }
+      if (item.state === "complete") finishDownload(item);
+    };
+    const onChanged = (delta) => {
+      if (delta.id !== downloadId || !delta.state) return;
+      if (delta.state.current === "complete") finishDownload(delta);
+      if (delta.state.current === "interrupted") {
+        failDownload(new Error("Excel download was interrupted."));
       }
     };
+    const blobResolver = (data) => {
+      clearTimeout(blobTimer);
+      if (!data?.dataUrl || !String(data.dataUrl).startsWith("data:")) {
+        rejectBlob(new Error("Excel file bytes were not captured correctly."));
+      } else {
+        resolveBlob(data);
+      }
+      if (pendingBlobResolver === blobResolver) pendingBlobResolver = void 0;
+      resolveBlob = () => {
+      };
+      rejectBlob = () => {
+      };
+    };
+    pendingBlobResolver = blobResolver;
     chrome.downloads.onCreated.addListener(onCreated);
+    chrome.downloads.onChanged.addListener(onChanged);
     try {
       const response = await sendToVahan(tabId, { type: "CLICK_EXCEL_DOWNLOAD" });
       if (!response?.ok) {
-        pendingBlobResolver = void 0;
-        throw new Error(response?.error || "Could not click the Excel download button.");
+        rejectBlob(new Error(response?.error || "Could not click the Excel download button."));
+        failDownload(new Error(response?.error || "Could not click the Excel download button."));
       }
-      const { dataUrl, fileName } = await blobPromise;
+      const [{}, { dataUrl, fileName }] = await Promise.all([downloadPromise, blobPromise]);
       const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
       const jobId = activeServerJob?.jobId;
       if (!jobId) throw new Error("No active job to attach the Excel file to.");
+      await chrome.storage.local.set({
+        activeServerJob: { ...activeServerJob, stage: "UPLOADING_REPORT" }
+      });
       const config = await loadRunnerConfig();
       const serverUrl = config.serverUrl || "http://127.0.0.1:8000";
       const blobResponse = await fetch(dataUrl);
+      if (!blobResponse.ok) {
+        throw new Error(`Could not decode the captured Excel file (${blobResponse.status}).`);
+      }
+      const blob = await blobResponse.blob();
+      if (!blob.size) throw new Error("The captured Excel file is empty.");
       const uploadFileName = activeServerJob?.scenarioName ? `${activeServerJob.scenarioName.replace(/[\\/*?:"<>|\r\n\t]/g, "_").trim()}.xlsx` : fileName || "report.xlsx";
       const formData = new FormData();
       formData.append("file", blob, uploadFileName);
@@ -4410,7 +4516,11 @@
       }
       return await uploadResponse.json();
     } finally {
+      clearTimeout(downloadTimer);
+      clearTimeout(blobTimer);
       chrome.downloads.onCreated.removeListener(onCreated);
+      chrome.downloads.onChanged.removeListener(onChanged);
+      if (pendingBlobResolver === blobResolver) pendingBlobResolver = void 0;
     }
   }
   async function executeJob(job) {
@@ -4434,15 +4544,10 @@
       tabId = await getVahanTab();
       assertJobActive(jobId);
       const config = normalizeJobFilters(job.filters);
-      const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
       await chrome.storage.local.set({
-        vahanConfig: { ...vahanConfig, ...config },
-        activeServerJob: { ...job, tabId, config }
+        activeServerJob: { ...job, tabId, config, stage: "CAPTURING_CAPTCHA" }
       });
-      await reportJobStatus(jobId, "FILLING_FILTERS");
-      const response = await sendToVahan(tabId, { type: "FILL_VAHAN", config });
-      if (!response?.ok) throw new Error(response?.error || "VAHAN did not accept the filters.");
-      assertJobActive(jobId);
+      await reportJobStatus(jobId, "CAPTURING_CAPTCHA");
       const captcha = await sendToVahan(tabId, { type: "CAPTURE_CAPTCHA" });
       if (!captcha?.ok) throw new Error(captcha?.error || "Could not capture the CAPTCHA.");
       assertJobActive(jobId);
@@ -4589,24 +4694,84 @@
           throw new Error("The CAPTCHA has changed or expired.");
         }
         assertJobActive(jobId);
+        const attempts = (activeServerJob.attempts || 0) + 1;
         await chrome.storage.local.set({
           activeServerJob: {
             ...activeServerJob,
-            stage: "WAITING_RESULT",
-            attempts: (activeServerJob.attempts || 0) + 1
+            stage: "SUBMITTING",
+            attempts
           }
         });
+        const fillResponse = await sendToVahan(activeServerJob.tabId, {
+          type: "FILL_VAHAN",
+          config: activeServerJob.config
+        });
+        if (!fillResponse?.ok) {
+          throw new Error(fillResponse?.error || "VAHAN did not accept the filters.");
+        }
+        assertJobActive(jobId);
+        const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
+        await chrome.storage.local.set({
+          vahanConfig: { ...vahanConfig, ...activeServerJob.config }
+        });
+        const currentCaptcha = await sendToVahan(activeServerJob.tabId, { type: "CAPTURE_CAPTCHA" });
+        if (!currentCaptcha?.ok) {
+          throw new Error(currentCaptcha?.error || "Could not verify the current CAPTCHA.");
+        }
+        if (currentCaptcha.captchaId !== activeServerJob.captchaId) {
+          await chrome.storage.local.set({
+            activeServerJob: {
+              ...activeServerJob,
+              captchaId: currentCaptcha.captchaId,
+              stage: "WAITING_CAPTCHA",
+              attempts: attempts - 1
+            }
+          });
+          await reportJobStatus(jobId, "WAITING_CAPTCHA");
+          await publishCaptcha(jobId, currentCaptcha);
+          acknowledge({ ok: true, refreshed: true });
+          return;
+        }
         const response = await sendToVahan(activeServerJob.tabId, {
           type: "SUBMIT_REMOTE_CAPTCHA",
           value: String(payload.value || ""),
           autoApply: activeServerJob.config.autoApply ?? false
         });
         if (!response?.ok) throw new Error(response?.error || "Could not fill the CAPTCHA on VAHAN.");
+        await chrome.storage.local.set({
+          activeServerJob: {
+            ...activeServerJob,
+            stage: "WAITING_RESULT",
+            attempts
+          }
+        });
         await reportJobStatus(jobId, "WAITING_RESULT");
         acknowledge({ ok: true });
       } catch (error) {
         if (activeJobId === jobId) activeJobId = void 0;
         await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+        acknowledge({ ok: false, error: error.message });
+      }
+    });
+    socket.on("captcha:refresh", async (payload, acknowledge) => {
+      const jobId = String(payload?.jobId || "");
+      try {
+        const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+        if (!activeServerJob || activeServerJob.jobId !== jobId || activeServerJob.stage !== "WAITING_CAPTCHA") {
+          throw new Error("The job is not waiting for a CAPTCHA refresh.");
+        }
+        if (activeServerJob.captchaId !== payload?.captchaId) {
+          throw new Error("The CAPTCHA has changed or expired.");
+        }
+        assertJobActive(jobId);
+        const captcha = await requestFreshCaptcha(activeServerJob);
+        await publishCaptchaChange(activeServerJob, captcha, "captcha:refreshed");
+        acknowledge({ ok: true, captcha: {
+          jobId,
+          captchaId: captcha.captchaId,
+          imageDataUrl: captcha.imageDataUrl
+        } });
+      } catch (error) {
         acknowledge({ ok: false, error: error.message });
       }
     });
@@ -4657,20 +4822,18 @@
         await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
         return;
       }
-      const captcha = message.captcha;
-      if (!captcha?.captchaId || !captcha?.imageDataUrl) return;
-      await emitWithRetry("captcha:invalid", {
-        jobId,
-        captchaId: captcha.captchaId,
-        imageDataUrl: captcha.imageDataUrl
-      });
-      await chrome.storage.local.set({
-        activeServerJob: { ...activeServerJob, captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA" }
-      });
+      let captcha = message.captcha;
+      if (!captcha?.captchaId || !captcha?.imageDataUrl || captcha.captchaId === activeServerJob.captchaId) {
+        captcha = await requestFreshCaptcha(activeServerJob);
+      }
+      await publishCaptchaChange(activeServerJob, captcha, "captcha:invalid");
       return;
     }
     if (message.result === "DOWNLOAD_READY") {
       try {
+        await chrome.storage.local.set({
+          activeServerJob: { ...activeServerJob, stage: "DOWNLOADING_REPORT" }
+        });
         await triggerAndWaitForExcelDownload(activeServerJob.tabId);
         await reportJobStatus(jobId, "COMPLETED");
       } catch (error) {
@@ -4707,14 +4870,7 @@
     if (sender.tab?.id !== activeServerJob.tabId) return;
     const captcha = message.captcha;
     if (!captcha?.captchaId || !captcha?.imageDataUrl || captcha.captchaId === activeServerJob.captchaId) return;
-    await emitWithRetry("captcha:refreshed", {
-      jobId: activeServerJob.jobId,
-      captchaId: captcha.captchaId,
-      imageDataUrl: captcha.imageDataUrl
-    });
-    await chrome.storage.local.set({
-      activeServerJob: { ...activeServerJob, captchaId: captcha.captchaId }
-    });
+    await publishCaptchaChange(activeServerJob, captcha, "captcha:refreshed");
   }
   chrome.runtime.onInstalled.addListener(() => connectRunner());
   chrome.runtime.onStartup.addListener(() => connectRunner());

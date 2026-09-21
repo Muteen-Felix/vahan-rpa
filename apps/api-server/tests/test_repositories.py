@@ -54,6 +54,9 @@ async def test_runner_registry_preserves_job_on_reconnect() -> None:
 
 def test_job_state_machine_rejects_stale_terminal_updates() -> None:
     assert can_transition(JobStatus.ASSIGNED, JobStatus.OPENING_VAHAN)
+    assert can_transition(JobStatus.OPENING_VAHAN, JobStatus.CAPTURING_CAPTCHA)
+    assert can_transition(JobStatus.CAPTURING_CAPTCHA, JobStatus.WAITING_CAPTCHA)
+    assert can_transition(JobStatus.SUBMITTING, JobStatus.WAITING_CAPTCHA)
     assert can_transition(JobStatus.WAITING_RESULT, JobStatus.COMPLETED)
     assert not can_transition(JobStatus.CANCELLED, JobStatus.WAITING_RESULT)
     assert not can_transition(JobStatus.COMPLETED, JobStatus.FAILED)

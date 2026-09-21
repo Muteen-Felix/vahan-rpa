@@ -17,6 +17,7 @@ class JobStatus(StrEnum):
     QUEUED = "QUEUED"
     ASSIGNED = "ASSIGNED"
     OPENING_VAHAN = "OPENING_VAHAN"
+    CAPTURING_CAPTCHA = "CAPTURING_CAPTCHA"
     FILLING_FILTERS = "FILLING_FILTERS"
     WAITING_CAPTCHA = "WAITING_CAPTCHA"
     SUBMITTING = "SUBMITTING"
@@ -29,7 +30,13 @@ class JobStatus(StrEnum):
 ALLOWED_JOB_TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
     JobStatus.QUEUED: {JobStatus.ASSIGNED, JobStatus.FAILED, JobStatus.CANCELLED},
     JobStatus.ASSIGNED: {JobStatus.OPENING_VAHAN, JobStatus.FAILED, JobStatus.CANCELLED},
-    JobStatus.OPENING_VAHAN: {JobStatus.FILLING_FILTERS, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.OPENING_VAHAN: {
+        JobStatus.CAPTURING_CAPTCHA,
+        JobStatus.FILLING_FILTERS,
+        JobStatus.FAILED,
+        JobStatus.CANCELLED,
+    },
+    JobStatus.CAPTURING_CAPTCHA: {JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},
     JobStatus.FILLING_FILTERS: {JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},
     JobStatus.WAITING_CAPTCHA: {JobStatus.SUBMITTING, JobStatus.FAILED, JobStatus.CANCELLED},
     JobStatus.SUBMITTING: {JobStatus.WAITING_RESULT, JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},

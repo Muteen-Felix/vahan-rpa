@@ -23,8 +23,15 @@ import { api } from "./services/api-client";
 import { uiSocket } from "./services/socket-client";
 
 const ACTIVE_JOB_STORAGE_KEY = "vahanActiveJobId";
+const UI_SOCKET_ACK_TIMEOUT_MS = 15_000;
+const CAPTCHA_REFRESH_ACK_TIMEOUT_MS = 25_000;
 type AppSection = "configure" | "activity" | "settings";
 type BatchStatus = "idle" | "running" | "completed" | "stopped" | "error";
+
+function isSocketTimeout(reason: unknown): boolean {
+  const message = reason instanceof Error ? reason.message : String(reason || "");
+  return /operation has timed out|timed out|timeout/i.test(message);
+}
 
 function sectionFromHash(): AppSection {
   const hash = window.location.hash.replace(/^#/, "").split("?")[0];
@@ -42,7 +49,9 @@ export default function App() {
   const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
   const [creating, setCreating] = useState(false);
   const [submittingCaptcha, setSubmittingCaptcha] = useState(false);
+  const [refreshingCaptcha, setRefreshingCaptcha] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchStatus, setBatchStatus] = useState<BatchStatus>("idle");
@@ -118,7 +127,7 @@ export default function App() {
   }
 
   async function subscribeJob(jobId: string) {
-    const acknowledgement = await uiSocket.timeout(5_000).emitWithAck(
+    const acknowledgement = await uiSocket.timeout(UI_SOCKET_ACK_TIMEOUT_MS).emitWithAck(
       "ui:subscribe-job", { jobId },
     ) as Acknowledgement;
     if (!acknowledgement.ok) throw new Error(acknowledgement.error || "Không subscribe được job.");
@@ -139,7 +148,11 @@ export default function App() {
       refreshRunners();
       const activeJobId = localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
       if (activeJobId) subscribeJob(activeJobId).catch((reason) => {
-        setError(reason instanceof Error ? reason.message : "Không thể khôi phục job.");
+        if (isSocketTimeout(reason)) {
+          setNotice("Kết nối đang chậm; hệ thống sẽ tiếp tục đồng bộ trạng thái job với extension.");
+        } else {
+          setError(reason instanceof Error ? reason.message : "Không thể khôi phục job.");
+        }
       });
     };
     const onDisconnect = () => setConnection("disconnected");
@@ -147,6 +160,10 @@ export default function App() {
     const onRunnerChange = () => refreshRunners();
     const onJobStatus = async (updated: Job) => {
       setJob(updated);
+      if (updated.status === "SUBMITTING" || updated.status === "WAITING_RESULT") {
+        setCaptcha(null);
+        setNotice("");
+      }
       if (["COMPLETED", "FAILED", "CANCELLED"].includes(updated.status)) {
         localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
         setCaptcha(null);
@@ -204,6 +221,7 @@ export default function App() {
   async function createJob(runnerId: string, filters: VahanFilters, scenarioName?: string) {
     setCreating(true);
     setError("");
+    setNotice("");
     setCaptcha(null);
     try {
       const created = await api.createJob(runnerId, filters, scenarioName);
@@ -212,6 +230,11 @@ export default function App() {
       await subscribeJob(created.id);
       await refreshRunners();
     } catch (reason) {
+      if (isSocketTimeout(reason)) {
+        const message = "Kết nối phản hồi chậm; job đã được tạo và extension vẫn đang được theo dõi.";
+        setNotice(message);
+        throw new Error(message);
+      }
       const message = reason instanceof Error ? reason.message : "Không tạo được job.";
       setError(message);
       throw new Error(message);
@@ -224,17 +247,46 @@ export default function App() {
     if (!job || !captcha) return;
     setSubmittingCaptcha(true);
     setError("");
+    setNotice("");
     try {
-      const acknowledgement = await uiSocket.timeout(5_000).emitWithAck(
+      const acknowledgement = await uiSocket.timeout(UI_SOCKET_ACK_TIMEOUT_MS).emitWithAck(
         "captcha:submitted",
         { jobId: job.id, captchaId: captcha.captchaId, value },
       ) as Acknowledgement;
       if (!acknowledgement.ok) throw new Error(acknowledgement.error || "Không gửi được CAPTCHA.");
       setCaptcha(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không gửi được CAPTCHA.");
+      if (isSocketTimeout(reason)) {
+        // The server accepts this command before the extension performs the
+        // slow DOM work. Keep this as a non-blocking notice for old servers or
+        // a temporarily slow socket; a real job failure is shown by JobStatus.
+        setNotice("Đã nhận mã CAPTCHA. Extension đang tiếp tục điền bộ lọc trên VAHAN.");
+      } else {
+        setError(reason instanceof Error ? reason.message : "Không gửi được CAPTCHA.");
+      }
     } finally {
       setSubmittingCaptcha(false);
+    }
+  }
+
+  async function refreshCaptcha() {
+    if (!job || !captcha) return;
+    setRefreshingCaptcha(true);
+    setError("");
+    setNotice("");
+    try {
+      const acknowledgement = await uiSocket.timeout(CAPTCHA_REFRESH_ACK_TIMEOUT_MS).emitWithAck(
+        "captcha:refresh",
+        { jobId: job.id, captchaId: captcha.captchaId },
+      ) as Acknowledgement & { captcha?: CaptchaChallenge };
+      if (!acknowledgement.ok) throw new Error(acknowledgement.error || "Không tải được CAPTCHA mới.");
+      if (acknowledgement.captcha) {
+        setCaptcha({ ...acknowledgement.captcha, invalid: false, refreshed: true });
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không tải được CAPTCHA mới.");
+    } finally {
+      setRefreshingCaptcha(false);
     }
   }
 
@@ -305,7 +357,7 @@ export default function App() {
           // không dừng batch, chạy tiếp kịch bản kế tiếp.
           setBatchLog((log) => [...log, {
             name: scenario.name, status: "empty",
-            detail: "Không có dữ liệu khớp bộ lọc (No record found) — bỏ qua, chạy tiếp.",
+            detail: "VAHAN xác nhận không có báo cáo sau thời gian chờ (No record found) — bỏ qua, chạy tiếp.",
           }]);
         } else if (result.status === "COMPLETED") {
           setBatchLog((log) => [...log, {
@@ -417,6 +469,7 @@ export default function App() {
                 </div>
 
                 {error && <div className="global-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
+                {notice && <div className="global-notice" role="status">{notice}<button onClick={() => setNotice("")}>×</button></div>}
 
                 <div className="workspace">
                   <div className="left-column">
@@ -436,7 +489,14 @@ export default function App() {
                   </div>
                   <div className="right-column" id="activity">
                     <JobStatus job={job} onCancel={cancelJob} />
-                    <CaptchaPanel challenge={captcha} submitting={submittingCaptcha} autoApply={job?.filters.autoApply ?? false} onSubmit={submitCaptcha} />
+                    <CaptchaPanel
+                      challenge={captcha}
+                      submitting={submittingCaptcha}
+                      refreshing={refreshingCaptcha}
+                      autoApply={job?.filters.autoApply ?? false}
+                      onSubmit={submitCaptcha}
+                      onRefresh={refreshCaptcha}
+                    />
                     {!job && <section className="empty-state"><span>01</span><h2>Sẵn sàng khởi tạo</h2><p>Chọn extension và cấu hình bộ lọc để bắt đầu quy trình báo cáo.</p></section>}
                   </div>
                 </div>

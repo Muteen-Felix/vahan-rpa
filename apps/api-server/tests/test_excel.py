@@ -83,6 +83,28 @@ async def test_upload_excel_non_existent_job() -> None:
         assert resp.status_code == 404
 
 
+async def test_upload_excel_rejects_empty_file() -> None:
+    job = Job(
+        id=uuid4(),
+        runnerId="test-runner",
+        status=JobStatus.WAITING_RESULT,
+        filters=VahanFilters(yAxis="State Name"),
+    )
+    await services.jobs.create(job)
+    file_payload = {
+        "file": ("empty.xlsx", BytesIO(b""), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        resp = await client.post(f"/api/jobs/{job.id}/upload-excel", files=file_payload)
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Excel file is empty."
+
+
 async def test_download_excel_not_found() -> None:
     job = Job(
         id=uuid4(),

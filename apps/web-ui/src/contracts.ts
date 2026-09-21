@@ -66,6 +66,7 @@ export type JobStatus =
   | "QUEUED"
   | "ASSIGNED"
   | "OPENING_VAHAN"
+  | "CAPTURING_CAPTCHA"
   | "FILLING_FILTERS"
   | "WAITING_CAPTCHA"
   | "SUBMITTING"

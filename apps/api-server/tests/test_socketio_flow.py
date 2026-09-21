@@ -47,9 +47,12 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
     assigned = asyncio.Event()
     captcha_visible = asyncio.Event()
     captcha_forwarded = asyncio.Event()
+    captcha_refresh_forwarded = asyncio.Event()
     captcha_invalid_visible = asyncio.Event()
     captcha_refreshed_visible = asyncio.Event()
+    captcha_failed_visible = asyncio.Event()
     assigned_payload: dict = {}
+    failed_payload: dict = {}
 
     @runner.on("job:assigned", namespace="/runner")
     async def on_assigned(payload: dict) -> None:
@@ -65,6 +68,23 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         captcha_forwarded.set()
         return {"ok": True}
 
+    @runner.on("captcha:refresh", namespace="/runner")
+    async def on_captcha_refresh(payload: dict) -> dict:
+        assert payload["captchaId"] == "captcha-sequence-refreshed"
+        captcha_refresh_forwarded.set()
+        acknowledgement = await runner.call(
+            "captcha:refreshed",
+            {
+                "jobId": payload["jobId"],
+                "captchaId": "captcha-sequence-manual-refresh",
+                "imageDataUrl": "data:image/png;base64,iVBORw0KGgo=",
+            },
+            namespace="/runner",
+            timeout=2,
+        )
+        assert acknowledgement["ok"] is True
+        return {"ok": True}
+
     @runner.on("runner:options", namespace="/runner")
     async def on_runner_options(payload: dict) -> dict:
         assert payload["type"] == "GET_ALL_OPTIONS"
@@ -77,6 +97,12 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
     @ui.on("captcha:refreshed", namespace="/ui")
     async def on_captcha_refreshed(_payload: dict) -> None:
         captcha_refreshed_visible.set()
+
+    @ui.on("job:status", namespace="/ui")
+    async def on_job_status(payload: dict) -> None:
+        if payload.get("status") == "FAILED":
+            failed_payload.update(payload)
+            captcha_failed_visible.set()
 
     try:
         await runner.connect(
@@ -125,7 +151,7 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         )
         assert subscription["ok"] is True
 
-        for status in ("OPENING_VAHAN", "FILLING_FILTERS"):
+        for status in ("OPENING_VAHAN", "CAPTURING_CAPTCHA"):
             acknowledgement = await runner.call(
                 "job:status", {"jobId": job_id, "status": status},
                 namespace="/runner", timeout=2,
@@ -166,6 +192,17 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
         assert recovered["captcha"]["captchaId"] == captcha_id
         assert recovered["captcha"]["imageDataUrl"].startswith("data:image/")
 
+        refreshed = await ui.call(
+            "captcha:refresh",
+            {"jobId": job_id, "captchaId": captcha_id},
+            namespace="/ui",
+            timeout=2,
+        )
+        assert refreshed["ok"] is True
+        assert refreshed["captcha"]["captchaId"] == "captcha-sequence-manual-refresh"
+        await asyncio.wait_for(captcha_refresh_forwarded.wait(), timeout=2)
+        captcha_id = "captcha-sequence-manual-refresh"
+
         acknowledgement = await ui.call(
             "captcha:submitted",
             {
@@ -201,7 +238,9 @@ async def test_runner_job_and_captcha_round_trip(live_server_url: str) -> None:
             {"jobId": job_id, "captchaId": "captcha-sequence-2", "value": "Z9Y8X7"},
             namespace="/ui", timeout=2,
         )
-        assert rejected == {"ok": False, "error": "VAHAN tab was closed."}
+        assert rejected == {"ok": True, "accepted": True}
+        await asyncio.wait_for(captcha_failed_visible.wait(), timeout=2)
+        assert failed_payload["error"] == "VAHAN tab was closed."
     finally:
         if ui.connected:
             await ui.disconnect()

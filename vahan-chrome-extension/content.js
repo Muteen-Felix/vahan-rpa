@@ -1,61 +1,58 @@
-// ── Excel blob interceptor ──────────────────────────────────────────
-// VAHAN's SheetJS builds the Excel file client-side and triggers a
-// download by creating an <a download href="blob:..."> then calling
-// .click(). We intercept this to capture the blob, send it to the
-// background script for server upload, and suppress the browser download.
-function handleExcelAnchor(anchor, event) {
-  const href = anchor.getAttribute("href") || anchor.href;
-  const fileName = anchor.getAttribute("download") || "report.xlsx";
-  if (href && (href.startsWith("blob:") || href.includes("report") || href.endsWith(".xlsx") || href.endsWith(".csv"))) {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-    }
-    fetch(href)
-      .then((r) => r.blob())
-      .then((blob) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          chrome.runtime.sendMessage({
-            type: "EXCEL_BLOB_CAPTURED",
-            dataUrl: reader.result,
-            fileName,
-          }).catch((err) => console.error("[VAHAN EXT] Send blob error:", err));
-        };
-        reader.readAsDataURL(blob);
-      })
-      .catch((error) => {
-        console.error("[VAHAN EXT] Failed to capture Excel blob:", error);
-      });
-    return true;
+// ── Excel byte bridge ───────────────────────────────────────────────
+// interceptor-main.js observes the page's export in the MAIN world. This
+// isolated-world handler forwards the non-empty bytes to the service worker.
+// The native browser download is intentionally left enabled; the bridge is
+// only for attaching the same file to the server-side exported-report list.
+function sendExcelDataUrl(dataUrl, fileName) {
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+    console.error("[VAHAN EXT] Invalid Excel data URL.");
+    return;
   }
-  return false;
+  chrome.runtime.sendMessage({
+    type: "EXCEL_BLOB_CAPTURED",
+    dataUrl,
+    fileName: fileName || "report.xlsx",
+  }).catch((error) => console.error("[VAHAN EXT] Send blob error:", error));
+}
+
+async function blobToDataUrl(blob, fileName) {
+  if (!blob?.size) throw new Error("Excel blob was empty.");
+  await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error("Could not read the Excel blob."));
+    reader.onload = () => {
+      sendExcelDataUrl(reader.result, fileName);
+      resolve();
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function captureExcelDownload(href, fileName = "report.xlsx") {
+  if (typeof href !== "string" || !href) throw new Error("Excel download URL is missing.");
+  let lastError;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const response = await fetch(href, { credentials: "include" });
+      if (!response.ok) throw new Error(`Excel download fetch failed (${response.status}).`);
+      const blob = await response.blob();
+      await blobToDataUrl(blob, fileName);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await delay(100 * (attempt + 1));
+    }
+  }
+  throw lastError || new Error("Excel file could not be captured.");
 }
 
 (function installDownloadInterceptor() {
-  const clickCapture = (event) => {
-    const target = event.target?.closest ? event.target.closest("a") : event.target;
-    if (target && target.tagName === "A" && target.hasAttribute("download")) {
-      handleExcelAnchor(target, event);
-    }
-  };
-  window.addEventListener("click", clickCapture, true);
-  document.addEventListener("click", clickCapture, true);
-
-  const originalClick = HTMLAnchorElement.prototype.click;
-  HTMLAnchorElement.prototype.click = function patchedClick() {
-    if (this.hasAttribute("download") && handleExcelAnchor(this)) {
-      return;
-    }
-    return originalClick.call(this);
-  };
-
   window.addEventListener("__VAHAN_EXCEL_EXPORT__", (e) => {
-    const { href, fileName } = e.detail || {};
-    if (href) {
-      handleExcelAnchor({ getAttribute: () => fileName, href });
-    }
+    const { dataUrl, href, fileName } = e.detail || {};
+    if (dataUrl) sendExcelDataUrl(dataUrl, fileName);
+    else if (href) captureExcelDownload(href, fileName).catch((error) => {
+      console.error("[VAHAN EXT] Failed to capture Excel download:", error);
+    });
   });
 })();
 
@@ -63,11 +60,12 @@ const splitValues = (value) => String(value || "").split(",").map((item) => item
 const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const VAHAN_AUTH_HOLD_KEY = "vahanAuthHold";
+const VAHAN_AUTH_GUARD_VERSION = 2;
 
 async function getActiveVahanAuthHold() {
   try {
     const { [VAHAN_AUTH_HOLD_KEY]: hold } = await chrome.storage.local.get(VAHAN_AUTH_HOLD_KEY);
-    if (hold?.code !== "VAHAN_AUTH_REQUIRED") return null;
+    if (hold?.code !== "VAHAN_AUTH_REQUIRED" || hold.guardVersion !== VAHAN_AUTH_GUARD_VERSION) return null;
     const retryAfter = Date.parse(hold.retryAfter || "");
     return Number.isFinite(retryAfter) && retryAfter > Date.now() ? hold : null;
   } catch {
@@ -297,14 +295,44 @@ async function captureCaptcha(timeout = 15000) {
   };
 }
 
+let suppressCaptchaRefreshEventsUntil = 0;
+
+async function refreshCaptcha(previousCaptchaId, timeout = 15000) {
+  const refreshButton = document.querySelector("#captchaImg");
+  if (!refreshButton || !isVisible(refreshButton)) {
+    throw new Error("Could not find the official VAHAN CAPTCHA refresh button.");
+  }
+
+  // The official page owns CAPTCHA generation through #captchaImg. Do not
+  // synthesize an image URL: clicking this control keeps the request in the
+  // user's authenticated VAHAN session and clears the old CAPTCHA value.
+  suppressCaptchaRefreshEventsUntil = Date.now() + 1_000;
+  refreshButton.click();
+
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    try {
+      const captcha = await captureCaptcha(1_000);
+      if (!previousCaptchaId || captcha.captchaId !== previousCaptchaId) return captcha;
+    } catch (_error) {
+      // The image is briefly unavailable while the official page replaces it.
+    }
+    await delay(150);
+  }
+  throw new Error("VAHAN did not provide a new CAPTCHA image in time.");
+}
+
 let captchaRefreshTimer;
 async function notifyCaptchaRefresh() {
   clearTimeout(captchaRefreshTimer);
   captchaRefreshTimer = setTimeout(async () => {
     try {
+      if (Date.now() < suppressCaptchaRefreshEventsUntil) return;
       const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
       if (!activeServerJob || activeServerJob.stage !== "WAITING_CAPTCHA") return;
-      const captcha = await captureCaptcha();
+      // VAHAN can leave the old image visible beside its invalid message.
+      // Click its official refresh control and wait for a different CAPTCHA.
+      const captcha = await refreshCaptcha(activeServerJob.captchaId);
       if (captcha.captchaId === activeServerJob.captchaId) return;
       await chrome.runtime.sendMessage({ type: "SERVER_CAPTCHA_CHANGED", captcha });
     } catch (_error) {
@@ -354,6 +382,25 @@ function submitRemoteCaptcha(value, autoApply) {
 }
 
 let autoApplyCleanup;
+let applyResultWatcherButton;
+
+// Apply can update VAHAN with AJAX instead of doing a full navigation. Keep a
+// listener on the real button so server jobs are also watched in that case.
+function watchApplyButton(button) {
+  if (!button || applyResultWatcherButton === button) return;
+  applyResultWatcherButton = button;
+  button.addEventListener("click", () => {
+    window.setTimeout(() => {
+      startServerResultWatcher().catch((error) => {
+        chrome.runtime.sendMessage({
+          type: "SERVER_JOB_PAGE_RESULT",
+          result: "FAILED",
+          error: error.message,
+        }).catch(() => {});
+      });
+    }, 750);
+  }, true);
+}
 
 function configureAutoApply(enabled) {
   autoApplyCleanup?.();
@@ -366,6 +413,7 @@ function configureAutoApply(enabled) {
 
   const captcha = document.querySelector("#externalCaptcha");
   const applyButton = document.querySelector("#applyTrigger");
+  watchApplyButton(applyButton);
   if (!enabled || !captcha || !applyButton) return;
 
   let timer;
@@ -459,26 +507,58 @@ function resetFloatingSteps() {
   }
 }
 
-const hasInvalidCaptchaMessage = () => /invalid captcha/i.test(document.body?.innerText || "");
-// VAHAN trả text này khi filter hợp lệ nhưng không có dữ liệu khớp (khác timeout/lỗi thật) —
-// #downloadBtn1 sẽ KHÔNG BAO GIỜ xuất hiện trong trường hợp này, nên phải phát hiện riêng,
-// nếu không resumeServerJobAfterApply() sẽ chờ hết 90s rồi báo FAILED "Timed out" gây hiểu lầm.
-const NO_RECORD_TEXT = "no record found";
-const hasNoRecordMessage = () => (document.body?.innerText || "").toLocaleLowerCase().includes(NO_RECORD_TEXT);
-const isVisible = (element) => Boolean(element && (
-  element.getClientRects().length || window.getComputedStyle(element).display !== "none"
-));
+// VAHAN trả các thông báo này trong DOM sau khi xử lý form. Không được tìm
+// chuỗi trên toàn bộ body: DOM có thể giữ thông báo cũ/ẩn trong template.
+// Chỉ nhận diện một node đang hiển thị, có nội dung ngắn và thực sự chứa thông báo.
+const NO_RECORD_TEXT = /\bno\s+record\s+found\b/i;
+const INVALID_CAPTCHA_TEXT = /\binvalid\s+captcha\b/i;
+const NO_RECORD_CONFIRMATION_MS = 15_000;
+const compactText = (value) => String(value || "").replace(/\s+/g, " ").trim();
+const isVisible = (element) => {
+  if (!element || element.getClientRects().length === 0) return false;
+  if (element.getAttribute?.("aria-hidden") === "true") return false;
+  if (element.closest?.('[aria-hidden="true"]')) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== "none"
+    && style.visibility !== "hidden"
+    && style.opacity !== "0";
+};
+const hasVisiblePageMessage = (pattern) => [...document.querySelectorAll("body *")]
+  .filter(isVisible)
+  .some((element) => {
+    const text = compactText(element.textContent);
+    if (!pattern.test(text) || text.length > 240) return false;
+    // If a parent contains the same message through a child, let the leaf
+    // node decide. This avoids matching the whole result page/container.
+    return ![...element.children].some((child) =>
+      isVisible(child) && pattern.test(compactText(child.textContent)));
+  });
+const hasInvalidCaptchaMessage = () => hasVisiblePageMessage(INVALID_CAPTCHA_TEXT);
+const hasVisibleNoRecordMessage = () => hasVisiblePageMessage(NO_RECORD_TEXT);
 
-async function resumeServerJobAfterApply() {
+let resultWatcherJobId;
+async function startServerResultWatcher() {
   const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
   if (!activeServerJob || activeServerJob.stage !== "WAITING_RESULT") return;
+  if (resultWatcherJobId === activeServerJob.jobId) return;
+
+  resultWatcherJobId = activeServerJob.jobId;
+  try {
+    await resumeServerJobAfterApply(activeServerJob);
+  } finally {
+    if (resultWatcherJobId === activeServerJob.jobId) resultWatcherJobId = undefined;
+  }
+}
+
+async function resumeServerJobAfterApply(activeServerJob) {
 
   updateFloatingStep("captcha", "done");
   updateFloatingStep("apply", "done");
   updateFloatingStep("export", "running");
-  setFloatingStatus("running", "Trang đã tải lại. Đang kiểm tra kết quả VAHAN...");
+  setFloatingStatus("running", "Đang kiểm tra kết quả VAHAN...");
 
   const deadline = Date.now() + 90_000;
+  let noRecordSince = 0;
   while (Date.now() < deadline) {
     const authHold = await getActiveVahanAuthHold();
     if (authHold) {
@@ -501,15 +581,11 @@ async function resumeServerJobAfterApply() {
       return;
     }
 
-    if (hasNoRecordMessage()) {
-      updateFloatingStep("export", "idle");
-      setFloatingStatus("success", "VAHAN không có dữ liệu khớp bộ lọc này (No record found).");
-      await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "NO_RECORD" });
-      return;
-    }
-
     const downloadButton = document.querySelector("#downloadBtn1");
     if (isVisible(downloadButton)) {
+      // A ready download is authoritative. Some VAHAN pages briefly keep an
+      // old "No record found" node while the new report is rendered.
+      noRecordSince = 0;
       if (activeServerJob.config?.autoExport ?? true) {
         setFloatingStatus("running", "Báo cáo đã sẵn sàng. Đang tải và xác minh file Excel...");
         await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "DOWNLOAD_READY" });
@@ -519,6 +595,22 @@ async function resumeServerJobAfterApply() {
       }
       updateFloatingStep("export", "done");
       return;
+    }
+
+    // VAHAN can render "No record found" before it finishes creating the
+    // downloadable report (the report may legitimately contain zero totals).
+    // Require a long, stable empty-result window before skipping; a visible
+    // download button always wins immediately above.
+    if (hasVisibleNoRecordMessage()) {
+      if (!noRecordSince) noRecordSince = Date.now();
+      if (Date.now() - noRecordSince >= NO_RECORD_CONFIRMATION_MS) {
+        updateFloatingStep("export", "idle");
+        setFloatingStatus("success", "VAHAN không có dữ liệu khớp bộ lọc này (No record found).");
+        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "NO_RECORD" });
+        return;
+      }
+    } else {
+      noRecordSince = 0;
     }
     await delay(500);
   }
@@ -763,6 +855,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   let operation;
   if (message?.type === "FILL_VAHAN") operation = fillVahan(message.config).then(() => ({ ok: true }));
   else if (message?.type === "CAPTURE_CAPTCHA") operation = captureCaptcha().then((captcha) => ({ ok: true, ...captcha }));
+  else if (message?.type === "REFRESH_CAPTCHA") {
+    operation = refreshCaptcha(message.previousCaptchaId).then((captcha) => ({ ok: true, ...captcha }));
+  }
   else if (message?.type === "SUBMIT_REMOTE_CAPTCHA") {
     operation = Promise.resolve({ ok: true, ...submitRemoteCaptcha(message.value, message.autoApply) });
   }
@@ -770,6 +865,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const button = document.querySelector("#downloadBtn1");
     if (!isVisible(button)) operation = Promise.resolve({ ok: false, error: "Excel download button is not visible." });
     else { button.click(); operation = Promise.resolve({ ok: true }); }
+  }
+  else if (message?.type === "CAPTURE_EXCEL_DOWNLOAD") {
+    operation = captureExcelDownload(message.href, message.fileName || "report.xlsx")
+      .then(() => ({ ok: true }));
   }
   else if (message?.type === "GET_VAHAN_OPTIONS") operation = Promise.resolve({ ok: true, options: readOptions(message.selectors) });
   else if (message?.type === "GET_STATE_OPTIONS") operation = getStateOptions(message.delhiNcr).then((options) => ({ ok: true, options }));
@@ -784,11 +883,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-injectFloatingWidget();
+// All extension controls now live in the toolbar popup. Do not inject a
+// floating card into the official VAHAN page: it can obscure the result table
+// and duplicates the Web UI workflow.
 initializeAutoApplyPreference();
 startAutoExportWatcher();
 observeCaptchaChanges();
-resumeServerJobAfterApply().catch((error) => {
+startServerResultWatcher().catch((error) => {
   chrome.runtime.sendMessage({
     type: "SERVER_JOB_PAGE_RESULT",
     result: "FAILED",

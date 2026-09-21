@@ -5,6 +5,7 @@ const labels: Record<Status, string> = {
   QUEUED: "Đang xếp hàng",
   ASSIGNED: "Đã giao cho extension",
   OPENING_VAHAN: "Đang mở VAHAN",
+  CAPTURING_CAPTCHA: "Đang lấy CAPTCHA",
   FILLING_FILTERS: "Đang điền bộ lọc",
   WAITING_CAPTCHA: "Đang chờ CAPTCHA",
   SUBMITTING: "Đang gửi CAPTCHA",

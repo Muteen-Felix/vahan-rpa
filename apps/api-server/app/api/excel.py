@@ -73,6 +73,10 @@ async def upload_excel(job_id: UUID, file: UploadFile) -> dict:
                 )
             await out.write(chunk)
 
+    if size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Excel file is empty.")
+
     if job.scenario_name:
         file_name = f"{_sanitize_filename(job.scenario_name)}.xlsx"
     elif file.filename:

@@ -49,7 +49,7 @@ try {
   const subscription = await ui.timeout(3_000).emitWithAck("ui:subscribe-job", { jobId: job.id });
   if (!subscription?.ok) throw new Error(subscription?.error || "Job subscription failed.");
 
-  for (const nextStatus of ["OPENING_VAHAN", "FILLING_FILTERS"]) {
+  for (const nextStatus of ["OPENING_VAHAN", "CAPTURING_CAPTCHA"]) {
     const statusPromise = event(ui, "job:status");
     const acknowledgement = await runner.timeout(3_000).emitWithAck("job:status", {
       jobId: job.id,
