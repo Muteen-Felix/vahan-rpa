@@ -6,6 +6,7 @@ khi nào người đã gõ xong, rồi tự tiếp quản Apply -> Export -> ver
 import sys
 import time
 import zipfile
+import json
 
 # [FACT] Fix: chạy qua pipe/redirect trên Windows, stdout mặc định là cp1252 và
 # crash khi print tiếng Việt có dấu (UnicodeEncodeError). Ép lại UTF-8 cho an toàn.
@@ -15,7 +16,15 @@ if hasattr(sys.stdout, "reconfigure"):
 from openpyxl import load_workbook
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-from config import DOWNLOAD_DIR
+from config import DIAGNOSTIC_DIR, DOWNLOAD_DIR
+from ui_contract import (
+    UIDriftError,
+    assert_ui_contract,
+    find_all_checkbox,
+    find_dropdown_option,
+    format_ui_drift,
+    get_dropdown_container,
+)
 
 URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"
 
@@ -41,9 +50,9 @@ URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"
 # nguyên giá trị đã chọn, chỉ #externalCaptcha bị xoá trắng. Nên khi retry KHÔNG cần
 # chọn lại filter, chỉ cần chờ người gõ CAPTCHA mới.
 SELECTORS = {
-    "state_container": "xpath=//*[@id='stateName']/following::div[contains(@class,'multiselect-dropdown')][1]",
-    "category_container": "xpath=//*[@id='vehicleCategoryGroup']/following::div[contains(@class,'multiselect-dropdown')][1]",
-    "fuel_container": "xpath=//*[@id='vehicleFuel']/following::div[contains(@class,'multiselect-dropdown')][1]",
+    "state_select": "#stateName",
+    "category_select": "#vehicleCategoryGroup",
+    "fuel_select": "#vehicleFuel",
     "yaxis": "#yAxis",
     "xaxis": "#xAxis",
     "captcha_input": "#externalCaptcha",
@@ -59,58 +68,117 @@ CAPTCHA_WAIT_TIMEOUT_MS = 300_000  # 5 phút mỗi lượt — đủ cho ngườ
 
 def select_checkbox_option(page, container_selector: str, option_text: str, label: str):
     """Checkbox multi-select searchable dropdown (State/Category/Fuel) — verify thật
-    bằng test_category_and_fuel.py. Dùng cho một giá trị cụ thể, KHÔNG dùng cho case "All"."""
-    container = page.locator(container_selector)
+    bằng test_category_and_fuel.py. Dùng cho một giá trị cụ thể, KHÔNG dùng cho case "All".
+
+    ``container_selector`` is retained in the function signature for compatibility,
+    but callers now pass the underlying select id so the wrapper is resolved by the
+    UI contract adapter instead of a document-wide positional XPath.
+    """
+    hidden_select_id = container_selector.removeprefix("#")
+    container = get_dropdown_container(page, hidden_select_id, step=label)
     container.click()
-    page.wait_for_timeout(400)
 
-    search_box = container.locator(".multiselect-dropdown-search[placeholder='search']").first
+    search_candidates = container.locator(
+        "input.multiselect-dropdown-search, input[type='search'], input[placeholder*='search' i]"
+    )
+    if search_candidates.count() != 1:
+        raise UIDriftError(
+            "UI_DRIFT_SEARCH_INPUT",
+            f"Không tìm thấy duy nhất ô tìm kiếm cho {label}, count={search_candidates.count()}.",
+            step=label,
+            details={"label": label, "count": search_candidates.count()},
+        )
+    search_box = search_candidates.first
     search_box.fill(option_text)
-    page.wait_for_timeout(500)
+    container.locator("[data-search-text]").first.wait_for(state="visible", timeout=5_000)
 
-    option = container.locator(f"div[data-search-text='{option_text}']").first
+    option = find_dropdown_option(container, option_text, label=label, step=label)
     option.scroll_into_view_if_needed()
     option.click()
-    page.wait_for_timeout(300)
 
-    checkbox = container.locator(f"div[data-search-text='{option_text}'] input[type='checkbox']").first
+    checkbox = option.locator("input[type='checkbox']")
+    if checkbox.count() != 1:
+        raise UIDriftError(
+            "UI_DRIFT_OPTION_CONTROL",
+            f"Option '{option_text}' trong {label} không có đúng một checkbox.",
+            step=label,
+            details={"label": label, "option": option_text, "checkbox_count": checkbox.count()},
+        )
+    checkbox = checkbox.first
     assert checkbox.is_checked(), f"[{label}] click xong nhưng checkbox KHÔNG được tick"
 
+    selected = page.locator(f"#{hidden_select_id} option:checked")
+    selected_text = [value.strip().casefold() for value in selected.all_text_contents()]
+    if option_text.strip().casefold() not in selected_text:
+        raise UIDriftError(
+            "UI_DRIFT_SELECTION_NOT_SYNCED",
+            f"{label} hiển thị đã chọn nhưng select gốc không đồng bộ với '{option_text}'.",
+            step=label,
+            details={"label": label, "option": option_text, "selected": selected_text},
+        )
+
     page.click("body", position={"x": 2, "y": 2})
-    page.wait_for_timeout(300)
 
 
 def select_all_checkbox(page, container_selector: str, label: str):
     """Riêng case chọn "All" — không phải option thường (không có data-search-text),
     mà là div.multiselect-dropdown-all-selector nằm đầu danh sách. Verify bằng
     inspect_fuel_options.py. KHÔNG dùng select_checkbox_option() cho case này."""
-    container = page.locator(container_selector)
+    hidden_select_id = container_selector.removeprefix("#")
+    container = get_dropdown_container(page, hidden_select_id, step=label)
     container.click()
-    page.wait_for_timeout(400)
 
-    all_checkbox = container.locator("div.multiselect-dropdown-all-selector input[type='checkbox']").first
+    all_checkbox = find_all_checkbox(container, label=label, step=label)
     all_checkbox.click()
-    page.wait_for_timeout(300)
     assert all_checkbox.is_checked(), f"[{label}] click xong nhưng checkbox 'All' KHÔNG được tick"
 
+    option_count = page.locator(f"#{hidden_select_id} option").count()
+    selected_count = page.locator(f"#{hidden_select_id} option:checked").count()
+    if option_count == 0 or selected_count != option_count:
+        raise UIDriftError(
+            "UI_DRIFT_SELECT_ALL_NOT_SYNCED",
+            f"{label} hiển thị All nhưng select gốc không chọn đủ option.",
+            step=label,
+            details={"label": label, "option_count": option_count, "selected_count": selected_count},
+        )
+
     page.click("body", position={"x": 2, "y": 2})
-    page.wait_for_timeout(300)
 
 
 def apply_filters(page):
     """Category Group = Two Wheeler, Fuel = All, Y-Axis = Fuel, X-Axis = Vehicle
     Category Group. [ASSUMPTION] Không chọn State/Year (dùng mặc định trang) — theo
     yêu cầu phạm vi hiện tại, chưa phải quyết định chính thức mục 0.1 báo cáo."""
-    select_checkbox_option(page, SELECTORS["category_container"], "TWO WHEELER", "Category Group")
+    select_checkbox_option(page, SELECTORS["category_select"], "TWO WHEELER", "Category Group")
     # [FACT] mục 0.1 báo cáo (role1) đã chốt Fuel = "All".
-    select_all_checkbox(page, SELECTORS["fuel_container"], "Fuel")
+    select_all_checkbox(page, SELECTORS["fuel_select"], "Fuel")
 
     page.select_option(SELECTORS["yaxis"], label="Fuel")
     # Bắt buộc dispatch click để trigger updateXAxisOptions() — xem ghi chú ở SELECTORS.
     page.locator(SELECTORS["yaxis"]).evaluate('el => el.dispatchEvent(new Event("click", {bubbles:true}))')
-    page.wait_for_timeout(500)
+    page.wait_for_function(
+        """
+        () => Array.from(document.querySelectorAll('#xAxis option')).some((option) =>
+            (option.label || option.textContent || '').trim().toUpperCase() === 'VEHICLE CATEGORY GROUP'
+        )
+        """,
+        timeout=5_000,
+    )
     page.select_option(SELECTORS["xaxis"], label="Vehicle Category Group")
-    page.wait_for_timeout(300)
+
+    expected_hidden = {
+        "#yAxis_hidden": "vehicleFuel",
+        "#xAxis_hidden": "vehicleCategoryGroup",
+    }
+    for selector, expected in expected_hidden.items():
+        actual = page.locator(selector).input_value()
+        if actual != expected:
+            raise UIDriftError(
+                "UI_DRIFT_AXIS_NOT_SYNCED",
+                f"{selector} không đồng bộ: expected={expected!r}, actual={actual!r}.",
+                step="axis",
+                details={"selector": selector, "expected": expected, "actual": actual},
+            )
     # Tự động focus vào ô CAPTCHA ngay sau khi chọn X-Axis để người dùng gõ được luôn
     captcha_box = page.locator(SELECTORS["captcha_input"])
     captcha_box.scroll_into_view_if_needed()
@@ -161,6 +229,41 @@ def verify_file(path):
     return result
 
 
+def validate_report_file(verification: dict) -> None:
+    """Fail closed if the downloaded workbook is not the expected report shape."""
+
+    if not verification.get("exists"):
+        raise ValueError("File Excel không tồn tại sau khi tải.")
+    if not verification.get("is_real_xlsx"):
+        raise ValueError("File tải về không phải XLSX hợp lệ.")
+
+    expected_columns = ["Fuel", "Two Wheeler", "Total"]
+    actual_columns = verification.get("columns")
+    if actual_columns != expected_columns:
+        raise ValueError(
+            f"Schema file không khớp: expected={expected_columns!r}, actual={actual_columns!r}."
+        )
+
+
+def write_ui_diagnostic(result: dict, error: UIDriftError) -> str:
+    """Write metadata-only diagnostics; never persist CAPTCHA or page HTML."""
+
+    path = DIAGNOSTIC_DIR / f"ui-drift-{int(time.time())}.json"
+    notification = format_ui_drift(error)
+    payload = {
+        "iteration": result.get("iteration"),
+        "timestamp_epoch": int(time.time()),
+        "error_code": error.code,
+        "step": error.step,
+        "message": str(error),
+        "details": error.details,
+        "user_notification": notification,
+        "ui_contract": result.get("ui_contract"),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return str(path)
+
+
 def run_once(iteration_label="", max_captcha_attempts=3):
     """1 lần chạy đầy đủ: mở trang -> filter -> chờ CAPTCHA (attended) -> Apply ->
     chờ bảng render -> Export -> verify. Trả về dict kết quả + thời gian đo được,
@@ -179,6 +282,9 @@ def run_once(iteration_label="", max_captcha_attempts=3):
             t_step = time.time()
             page.goto(URL, wait_until="domcontentloaded")
             result["t_load_page_s"] = round(time.time() - t_step, 1)
+
+            print("[1.5/5] Kiểm tra UI contract trước khi thao tác...")
+            result["ui_contract"] = assert_ui_contract(page, step="preflight")
 
             print("[2/5] Chọn filter (Category=Two Wheeler, Fuel=All, Y/X-Axis)...")
             t_step = time.time()
@@ -200,6 +306,14 @@ def run_once(iteration_label="", max_captcha_attempts=3):
 
                 page.click(SELECTORS["apply_button"])
                 page.wait_for_load_state("networkidle")
+
+                # Apply có thể render lại toàn bộ trang.  Xác nhận contract vẫn
+                # giữ nguyên trước khi đọc lỗi CAPTCHA hoặc chạm vào kết quả.
+                assert_ui_contract(
+                    page,
+                    step="post-apply",
+                    expected_signature=result["ui_contract"]["signature"],
+                )
 
                 if page.get_by_text("Invalid CAPTCHA", exact=False).count() > 0:
                     print(f"    [CAPTCHA lần {attempt}] Sai — trang tự sinh CAPTCHA mới (filter vẫn giữ nguyên), thử lại.")
@@ -234,9 +348,19 @@ def run_once(iteration_label="", max_captcha_attempts=3):
 
             verify = verify_file(path)
             result.update(verify)
+            validate_report_file(verify)
             result["success"] = True
             return result
 
+        except UIDriftError as e:
+            result["success"] = False
+            result["ui_drift"] = True
+            result["error_code"] = e.code
+            notification = format_ui_drift(e)
+            result["error"] = notification["message"]
+            result["ui_drift_notification"] = notification
+            result["diagnostic_path"] = write_ui_diagnostic(result, e)
+            return result
         except PWTimeout as e:
             result["success"] = False
             result["error"] = f"TIMEOUT: {e}"

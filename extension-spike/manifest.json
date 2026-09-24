@@ -1,20 +1,25 @@
 ﻿{
   "manifest_version": 3,
   "name": "VAHAN RPA Assistant",
-  "version": "1.0.0",
-  "description": "Tool tự động trích xuất báo cáo VAHAN RPA (Attended Automation Demo)",
+  "version": "1.1.0",
+  "description": "Tool tự động trích xuất báo cáo VAHAN RPA với bảo vệ UI drift (Attended Automation)",
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
-    "*://*.parivahan.gov.in/*"
+    "*://*.parivahan.gov.in/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "*://*.parivahan.gov.in/*"
+        "*://*.parivahan.gov.in/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
       ],
       "js": [
         "content.js"
@@ -22,6 +27,9 @@
       "run_at": "document_idle"
     }
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "VAHAN RPA Assistant"

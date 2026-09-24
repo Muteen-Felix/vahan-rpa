@@ -1,0 +1,135 @@
+[
+  {
+    "name": "1. Tất cả nhiên liệu",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["BIO-CNG/BIO-GAS", "CNG ONLY", "DI-METHYL ETHER", "DIESEL", "DIESEL/HYBRID", "DUAL DIESEL/BIO CNG", "DUAL DIESEL/CNG", "DUAL DIESEL/LNG", "ELECTRIC(BOV)", "ETHANOL(E100)", "FLEX-FUEL(BIO-DIESEL)", "FLEX-FUEL(ETHANOL)", "FUEL CELL HYDROGEN", "HCNG", "HYDROGEN(ICE)", "LNG", "LPG ONLY", "METHANOL", "NOT APPLICABLE", "PETROL", "PETROL(E20)", "PETROL(E20)/CNG", "PETROL(E20)/HYBRID", "PETROL(E20)/HYBRID/CNG", "PETROL(E20)/LPG", "PETROL/CNG", "PETROL/HYBRID", "PETROL/HYBRID/CNG", "PETROL/LPG", "PETROL/METHANOL", "PLUG-IN HYBRID EV", "PURE EV", "SOLAR", "STRONG HYBRID EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "2. Nhiên liệu Xăng (Petrol)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["PETROL"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "3. Nhiên liệu Dầu Diesel",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["DIESEL"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "4. Xe điện (BOV) tại Delhi",
+    "filters": {
+      "states": ["Delhi"],
+      "rtos": ["DWARKA - DL9"],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["ELECTRIC(BOV)"],
+      "evTypes": ["ELECTRIC(BOV)"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "5. Xe điện thuần (Pure EV)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["PURE EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "6. Xe Hybrid mạnh (Strong Hybrid EV)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["STRONG HYBRID EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "7. Nhiên liệu CNG",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["CNG ONLY"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "8. Nhiên liệu Petrol(E20)/Hybrid/CNG",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["PETROL(E20)/HYBRID/CNG"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "9. Tất cả nhiên liệu - Năm 2025",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["BIO-CNG/BIO-GAS", "CNG ONLY", "DI-METHYL ETHER", "DIESEL", "DIESEL/HYBRID", "DUAL DIESEL/BIO CNG", "DUAL DIESEL/CNG", "DUAL DIESEL/LNG", "ELECTRIC(BOV)", "ETHANOL(E100)", "FLEX-FUEL(BIO-DIESEL)", "FLEX-FUEL(ETHANOL)", "FUEL CELL HYDROGEN", "HCNG", "HYDROGEN(ICE)", "LNG", "LPG ONLY", "METHANOL", "NOT APPLICABLE", "PETROL", "PETROL(E20)", "PETROL(E20)/CNG", "PETROL(E20)/HYBRID", "PETROL(E20)/HYBRID/CNG", "PETROL(E20)/LPG", "PETROL/CNG", "PETROL/HYBRID", "PETROL/HYBRID/CNG", "PETROL/LPG", "PETROL/METHANOL", "PLUG-IN HYBRID EV", "PURE EV", "SOLAR", "STRONG HYBRID EV"],
+      "fromYear": "2025",
+      "toYear": "2025",
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  },
+  {
+    "name": "10. Tất cả nhiên liệu (chạy lần 2)",
+    "filters": {
+      "states": [],
+      "rtos": [],
+      "categoryGroups": ["Two Wheeler"],
+      "fuels": ["BIO-CNG/BIO-GAS", "CNG ONLY", "DI-METHYL ETHER", "DIESEL", "DIESEL/HYBRID", "DUAL DIESEL/BIO CNG", "DUAL DIESEL/CNG", "DUAL DIESEL/LNG", "ELECTRIC(BOV)", "ETHANOL(E100)", "FLEX-FUEL(BIO-DIESEL)", "FLEX-FUEL(ETHANOL)", "FUEL CELL HYDROGEN", "HCNG", "HYDROGEN(ICE)", "LNG", "LPG ONLY", "METHANOL", "NOT APPLICABLE", "PETROL", "PETROL(E20)", "PETROL(E20)/CNG", "PETROL(E20)/HYBRID", "PETROL(E20)/HYBRID/CNG", "PETROL(E20)/LPG", "PETROL/CNG", "PETROL/HYBRID", "PETROL/HYBRID/CNG", "PETROL/LPG", "PETROL/METHANOL", "PLUG-IN HYBRID EV", "PURE EV", "SOLAR", "STRONG HYBRID EV"],
+      "yAxis": "Fuel",
+      "xAxis": "Vehicle Category Group",
+      "autoApply": true,
+      "autoExport": true
+    }
+  }
+]

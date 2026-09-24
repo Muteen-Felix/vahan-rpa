@@ -19,6 +19,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 from config import DOWNLOAD_DIR
+from ui_contract import assert_ui_contract, find_dropdown_option, get_dropdown_container
 
 URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"
 
@@ -36,6 +37,9 @@ def run():
         page.goto(URL, wait_until="networkidle")
         print("    OK")
 
+        contract = assert_ui_contract(page, step="smoke-preflight")
+        print(f"    UI contract={contract['contract_version']} signature={contract['signature']}")
+
         print("[2] Tim hidden select #vehicleCategoryGroup...")
         hidden = page.locator("#vehicleCategoryGroup")
         print(f"    count={hidden.count()}")
@@ -47,30 +51,24 @@ def run():
             return
 
         print("[3] Doan container = div.multiselect-dropdown gan nhat SAU hidden select (ASSUMPTION)...")
-        container = page.locator(
-            "xpath=//*[@id='vehicleCategoryGroup']/following::div[contains(@class,'multiselect-dropdown')][1]"
-        )
-        print(f"    count={container.count()}")
-        if container.count() == 0:
-            print("    [BLOCKED] Doan container sai. Can nguoi tu tay bam vao dropdown"
-                  " Category Group tren browser, dung DevTools 'Inspect' de lay selector that.")
-            page.wait_for_timeout(180000)
-            browser.close()
-            return
+        container = get_dropdown_container(page, "vehicleCategoryGroup", step="Category Group")
+        print("    container=OK (scoped trong form-group)")
 
         print("[4] Click container de mo dropdown...")
         container.click()
         page.wait_for_timeout(500)
 
         print("[5] Go 'TWO WHEELER' vao o search (scope trong container, khong query toan trang)...")
-        search_box = container.locator(".multiselect-dropdown-search[placeholder='search']").first
+        search_box = container.locator(
+            "input.multiselect-dropdown-search, input[type='search'], input[placeholder*='search' i]"
+        ).first
         print(f"    search_box count={search_box.count()}, visible={search_box.is_visible() if search_box.count() else 'N/A'}")
         search_box.fill("TWO WHEELER")
         page.wait_for_timeout(500)
 
         print("[6] Click option [data-search-text='TWO WHEELER'] (scope trong container)...")
-        option = container.locator("[data-search-text='TWO WHEELER']").first
-        print(f"    option count={option.count()}")
+        option = find_dropdown_option(container, "TWO WHEELER", label="Category Group", step="Category Group")
+        print("    option=OK")
         option.scroll_into_view_if_needed()
         option.click()
         page.wait_for_timeout(500)

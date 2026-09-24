@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VAHAN Report Automation</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div class="brand" aria-label="VAHAN Report Automation">
+          <span class="brand-mark" aria-hidden="true">V</span>
+          <span class="brand-copy"><strong>VAHAN</strong><small>REPORT AUTOMATION</small></span>
+        </div>
+        <span class="attended-badge">ATTENDED</span>
+      </header>
+
+      <section class="status-card" aria-label="Trạng thái backend">
+        <span class="eyebrow">KẾT NỐI</span>
+        <div id="runnerConnection" class="runner-connection" data-state="connecting">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <strong class="connection-text">Đang kết nối backend...</strong>
+        </div>
+        <p id="connectionDetail" class="connection-detail">Đang đọc cấu hình extension.</p>
+      </section>
+
+      <section class="status-card workflow-card" aria-labelledby="workflowHeading">
+        <div class="card-heading">
+          <div>
+            <span class="eyebrow">TIẾN TRÌNH</span>
+            <h1 id="workflowHeading">Luồng đang xử lý</h1>
+          </div>
+          <span id="workflowBadge" class="workflow-badge" data-state="idle">Sẵn sàng</span>
+        </div>
+        <strong id="workflowTitle" class="workflow-title">Chưa có job đang chạy</strong>
+        <p id="workflowDetail" class="workflow-detail">Tạo báo cáo từ Web UI để extension nhận và xử lý.</p>
+        <p id="workflowJobId" class="workflow-job-id" hidden></p>
+      </section>
+
+      <section id="authGuard" class="auth-guard" hidden aria-live="assertive">
+        <strong>VAHAN yêu cầu xác thực HTTP</strong>
+        <p id="authGuardMessage"></p>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button id="reloadVahanTab" class="primary-button" type="button" style="flex: 1;">↻ Tải lại trang VAHAN</button>
+          <button id="clearAuthHold" class="secondary-button" type="button" style="flex: 1;">Bỏ tạm dừng</button>
+        </div>
+      </section>
+
+      <details class="backend-settings" open>
+        <summary>Cấu hình backend</summary>
+        <div class="settings-body">
+          <label>Server URL<input id="runnerServerUrl" type="url" value="http://127.0.0.1:8000" /></label>
+          <label>Tên runner<input id="runnerName" value="VAHAN Chrome" /></label>
+          <label>Runner token<input id="runnerToken" type="password" value="change-me" autocomplete="off" /></label>
+          <button id="saveRunnerConfig" class="primary-button" type="button">Lưu và kết nối lại</button>
+          <p id="status" class="form-status" role="status"></p>
+        </div>
+      </details>
+
+      <p class="footer-note">CAPTCHA luôn do người dùng tự đọc và nhập trên VAHAN.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

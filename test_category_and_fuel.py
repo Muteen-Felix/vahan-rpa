@@ -17,6 +17,8 @@ nhom chot gia tri khac, doi FUEL_VALUE ben duoi.
 import time
 from playwright.sync_api import sync_playwright
 
+from ui_contract import assert_ui_contract, find_all_checkbox, find_dropdown_option, get_dropdown_container
+
 URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"
 
 CATEGORY_VALUE = "TWO WHEELER"
@@ -37,28 +39,26 @@ def select_checkbox_dropdown(page, hidden_select_id: str, search_text: str, labe
     hidden = page.locator(f"#{hidden_select_id}")
     assert hidden.count() == 1, f"[{label}] KHONG tim thay #{hidden_select_id}, count={hidden.count()}"
 
-    container = page.locator(
-        f"xpath=//*[@id='{hidden_select_id}']/following::div[contains(@class,'multiselect-dropdown')][1]"
-    )
-    assert container.count() == 1, f"[{label}] container count={container.count()}, xpath sai"
+    container = get_dropdown_container(page, hidden_select_id, step=label)
 
     print(f"[{label}] Click container mo dropdown...")
     container.click()
     page.wait_for_timeout(400)
 
-    search_box = container.locator(".multiselect-dropdown-search[placeholder='search']").first
+    search_box = container.locator(
+        "input.multiselect-dropdown-search, input[type='search'], input[placeholder*='search' i]"
+    ).first
     assert search_box.count() == 1, f"[{label}] search box count={search_box.count()}"
     search_box.fill(search_text)
     page.wait_for_timeout(500)
 
-    option = container.locator(f"div[data-search-text='{search_text}']").first
-    assert option.count() == 1, f"[{label}] option '{search_text}' count={option.count()}"
+    option = find_dropdown_option(container, search_text, label=label, step=label)
     option.scroll_into_view_if_needed()
     option.click()
     page.wait_for_timeout(300)
 
     # verify checkbox that su duoc tick, khong chi tin click khong loi
-    checkbox = container.locator(f"div[data-search-text='{search_text}'] input[type='checkbox']").first
+    checkbox = option.locator("input[type='checkbox']").first
     checked = checkbox.is_checked()
     print(f"[{label}] checkbox checked={checked}")
     assert checked, f"[{label}] click xong nhung checkbox KHONG duoc tick — co gi do sai"
@@ -79,17 +79,13 @@ def select_all_checkbox(page, hidden_select_id: str, label: str):
     hidden = page.locator(f"#{hidden_select_id}")
     assert hidden.count() == 1, f"[{label}] KHONG tim thay #{hidden_select_id}, count={hidden.count()}"
 
-    container = page.locator(
-        f"xpath=//*[@id='{hidden_select_id}']/following::div[contains(@class,'multiselect-dropdown')][1]"
-    )
-    assert container.count() == 1, f"[{label}] container count={container.count()}, xpath sai"
+    container = get_dropdown_container(page, hidden_select_id, step=label)
 
     print(f"[{label}] Click container mo dropdown...")
     container.click()
     page.wait_for_timeout(400)
 
-    all_selector = container.locator("div.multiselect-dropdown-all-selector input[type='checkbox']").first
-    assert all_selector.count() == 1, f"[{label}] all-selector checkbox count={all_selector.count()}"
+    all_selector = find_all_checkbox(container, label=label, step=label)
     all_selector.click()
     page.wait_for_timeout(300)
 
@@ -112,6 +108,9 @@ def run():
         print("[0] Mo trang...")
         page.goto(URL, wait_until="networkidle")
         print("    OK")
+
+        contract = assert_ui_contract(page, step="smoke-preflight")
+        print(f"    UI contract={contract['contract_version']} signature={contract['signature']}")
 
         select_checkbox_dropdown(page, "vehicleCategoryGroup", CATEGORY_VALUE, "Category Group")
         select_all_checkbox(page, "vehicleFuel", "Fuel")

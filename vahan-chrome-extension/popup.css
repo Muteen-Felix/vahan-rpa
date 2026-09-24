@@ -1,0 +1,73 @@
+:root {
+  color: #111827;
+  background: #f3f5f7;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+
+body { width: 360px; margin: 0; background: #f3f5f7; }
+
+.popup-shell { display: grid; gap: 12px; padding: 14px; }
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 2px 8px;
+}
+
+.brand { display: flex; align-items: center; gap: 9px; color: #061a40; }
+.brand-mark { font: 700 27px/1 Manrope, Inter, sans-serif; letter-spacing: -7px; transform: scaleX(1.25); }
+.brand-copy { display: grid; gap: 1px; padding-left: 2px; }
+.brand-copy strong { font: 700 13px/1 Manrope, Inter, sans-serif; letter-spacing: .18em; }
+.brand-copy small { color: #667085; font-size: 7px; font-weight: 700; letter-spacing: .2em; }
+.attended-badge { padding: 7px 9px; background: #061a40; color: #fff; font-size: 8px; font-weight: 700; letter-spacing: .12em; }
+
+.status-card,
+.backend-settings,
+.auth-guard {
+  border: 1px solid #dfe3e8;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .045);
+}
+
+.status-card { padding: 15px; }
+.eyebrow { display: block; color: #1464f4; font-size: 9px; font-weight: 700; letter-spacing: .15em; }
+
+.runner-connection { display: flex; align-items: center; gap: 9px; margin-top: 8px; color: #061a40; font-size: 13px; }
+.connection-dot { width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, .14); }
+.runner-connection[data-state="connected"] .connection-dot { background: #22c55e; box-shadow: 0 0 0 4px rgba(34, 197, 94, .14); }
+.runner-connection[data-state="error"] .connection-dot,
+.runner-connection[data-state="disconnected"] .connection-dot { background: #ef4444; box-shadow: 0 0 0 4px rgba(239, 68, 68, .12); }
+.connection-detail,.workflow-detail,.form-status { margin: 8px 0 0; color: #667085; font-size: 10px; line-height: 1.5; }
+
+.card-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.card-heading h1 { margin: 4px 0 0; color: #061a40; font: 600 15px/1.2 Manrope, Inter, sans-serif; letter-spacing: -.02em; }
+.workflow-badge { padding: 5px 7px; background: #eff6ff; color: #1464f4; font-size: 9px; font-weight: 700; white-space: nowrap; }
+.workflow-badge[data-state="waiting"] { background: #fffbeb; color: #a16207; }
+.workflow-badge[data-state="running"] { background: #eff6ff; color: #1464f4; }
+.workflow-badge[data-state="success"] { background: #ecfdf3; color: #137a37; }
+.workflow-badge[data-state="error"] { background: #fff1f2; color: #b42318; }
+.workflow-title { display: block; margin-top: 15px; color: #061a40; font-size: 12px; line-height: 1.45; }
+.workflow-job-id { margin: 8px 0 0; color: #89919e; font: 9px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.auth-guard { padding: 14px; border-left: 3px solid #dc2626; background: #fff1f2; color: #991b1b; }
+.auth-guard strong { font-size: 12px; }
+.auth-guard p { margin: 7px 0 11px; font-size: 10px; line-height: 1.5; }
+
+.backend-settings summary { padding: 14px 15px; color: #061a40; cursor: pointer; font-size: 12px; font-weight: 700; }
+.backend-settings[open] summary { border-bottom: 1px solid #e6eaf0; }
+.settings-body { padding: 0 15px 15px; }
+label { display: grid; gap: 6px; margin-top: 12px; color: #344054; font-size: 10px; font-weight: 700; }
+input { width: 100%; min-height: 35px; padding: 8px 9px; border: 1px solid #d6dbe2; outline: none; background: #fff; color: #111827; font: 11px Inter, sans-serif; }
+input:focus { border-color: #1464f4; box-shadow: inset 2px 0 #1464f4; }
+button { border: 0; cursor: pointer; font: 700 10px Inter, sans-serif; letter-spacing: .03em; }
+.primary-button { width: 100%; min-height: 37px; margin-top: 14px; background: #1464f4; color: #fff; text-transform: uppercase; }
+.primary-button:hover { background: #0d55d7; }
+.primary-button:disabled,.secondary-button:disabled { opacity: .6; cursor: wait; }
+.secondary-button { min-height: 31px; padding: 7px 9px; background: #fff; color: #344054; border: 1px solid #cbd5e1; }
+.form-status.error { color: #b42318; }
+.form-status.success { color: #137a37; }
+.footer-note { margin: 0; padding: 0 2px; color: #89919e; font-size: 9px; line-height: 1.45; }
