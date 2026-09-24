@@ -172,8 +172,11 @@ input:focus,select:focus { border-color:var(--blue); box-shadow:inset 3px 0 var(
 .job-state[data-state="FAILED"],.job-state[data-state="CANCELLED"] { border-color:#dc2626; background:#fff1f2; color:#b42318; }
 .captcha-image { display:block; width:100%; max-width:320px; min-height:80px; margin:22px auto 6px; border:1px solid #d8dee4; background:#fff; object-fit:contain; }
 .captcha-refresh-button { margin-top:0; }
-.security-note { margin:11px 0 0; color:#7d8590; font-size:10px; line-height:1.5; text-align:center; }
 .error-message { color:#b42318; font-size:11px; }
+.job-error-box { margin-top:14px; padding:12px 14px; border-left:3px solid #dc2626; background:#fff1f2; color:#b42318; border-radius:4px; font-size:12px; }
+.job-error-title { display:block; margin-bottom:4px; font-weight:700; color:#991b1b; }
+.job-error-detail { margin:0 0 6px; line-height:1.4; }
+.job-error-suggestion { margin:0; color:#4b5563; font-size:11px; }
 .captcha-refresh-message { padding:9px 11px; border-left:3px solid #d8a400; background:#fff9db; color:#715b00; font-size:11px; }
 .global-error { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; padding:13px 16px; border-left:3px solid #dc2626; background:#fff1f2; color:#b42318; font-size:12px; }
 .global-error button { border:0; background:transparent; color:inherit; font-size:20px; }

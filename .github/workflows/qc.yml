@@ -1,0 +1,20 @@
+name: qc
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  qc:
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+      packages: read
+    uses: Muteen-Felix/QC-Agent/.github/workflows/qc-gate.reusable.yml@9947edff8146903a5848d75cacc12c3b94b18547
+    with:
+      project: vahan-rpa
+      image: ghcr.io/muteen-felix/qc-agent@sha256:d7dd998f825c2da721935ec4ad8428e729f3ba260c4eae6751bb1a878d426ffb
+      suites: "api-contract"
+    secrets: inherit

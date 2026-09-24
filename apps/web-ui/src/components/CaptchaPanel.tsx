@@ -53,7 +53,7 @@ export function CaptchaPanel({ challenge, submitting, refreshing, autoApply, onS
         {submitting ? "Đang chuẩn bị báo cáo..." : autoApply ? "Gửi mã → Điền bộ lọc → Apply" : "Gửi mã và điền bộ lọc"}
       </button>
       {!autoApply && <p className="security-note">Sau khi gửi, hãy kiểm tra và bấm Apply trên tab VAHAN.</p>}
-      <p className="security-note">🔒 Hệ thống không đọc hoặc giải CAPTCHA tự động.</p>
+      {/* <p className="security-note">🔒 Hệ thống không đọc hoặc giải CAPTCHA tự động.</p> */}
     </section>
   );
 }

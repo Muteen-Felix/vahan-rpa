@@ -7,11 +7,19 @@ import {
   VAHAN_AUTH_HOLD_KEY,
   VAHAN_AUTH_GUARD_VERSION,
   VAHAN_AUTH_REQUIRED_CODE,
+  VAHAN_SESSION_EXPIRED_CODE,
+  VAHAN_UNREACHABLE_CODE,
+  VAHAN_SERVER_ERROR_CODE,
   createVahanAuthHold,
   isVahanAuthHoldActive,
   isVahanMainFrameAuthChallenge,
   isVahanRequestUrl,
+  isVahanPublicReportUrl,
+  isVahanRedirectedHomeUrl,
+  isChromeErrorUrl,
   vahanAuthHoldMessage,
+  vahanSessionExpiredMessage,
+  vahanUnreachableMessage,
 } from "./vahan-auth-guard.mjs";
 
 const DEFAULT_RUNNER_CONFIG = Object.freeze({
@@ -26,6 +34,9 @@ const VAHAN_URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicrepor
 // navigation in getVahanTab(); sendToVahan()'s reload-recovery keeps the
 // tighter default timeout since it's recovering an already-loaded tab.
 const INITIAL_PAGE_LOAD_TIMEOUT_MS = 75_000;
+// Max idle age before an existing tab is considered stale and reloaded to guarantee
+// a fresh session (JSESSIONID) and CSRF token.
+const MAX_TAB_IDLE_AGE_MS = 10 * 60 * 1000;
 const VAHAN_OPTION_SELECTORS = Object.freeze({
   archivedFlags: { selector: "#archivedFlags", multiple: true },
   period: { selector: "#reportType" },
@@ -61,8 +72,16 @@ let vahanAuthHold;
 let authHoldWrite = Promise.resolve();
 const authChallengeWaiters = new Set();
 const authFailureReportedJobs = new Set();
+const tabActivityTimestamps = new Map();
+const tabLastErrors = new Map();
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function recordTabActivity(tabId) {
+  if (tabId !== undefined && tabId !== null) {
+    tabActivityTimestamps.set(tabId, Date.now());
+  }
+}
 
 class VahanAuthRequiredError extends Error {
   constructor(hold) {
@@ -70,6 +89,32 @@ class VahanAuthRequiredError extends Error {
     this.name = "VahanAuthRequiredError";
     this.code = VAHAN_AUTH_REQUIRED_CODE;
     this.hold = hold;
+  }
+}
+
+class VahanSessionExpiredError extends Error {
+  constructor(message = vahanSessionExpiredMessage()) {
+    super(message);
+    this.name = "VahanSessionExpiredError";
+    this.code = VAHAN_SESSION_EXPIRED_CODE;
+  }
+}
+
+class VahanUnreachableError extends Error {
+  constructor(detail = "") {
+    super(vahanUnreachableMessage(detail));
+    this.name = "VahanUnreachableError";
+    this.code = VAHAN_UNREACHABLE_CODE;
+    this.detail = detail;
+  }
+}
+
+class VahanServerError extends Error {
+  constructor(statusCode = 500) {
+    super(`Máy chủ VAHAN đang gặp sự cố (HTTP ${statusCode}). Hệ thống có thể đang bảo trì.`);
+    this.name = "VahanServerError";
+    this.code = VAHAN_SERVER_ERROR_CODE;
+    this.statusCode = statusCode;
   }
 }
 
@@ -163,20 +208,52 @@ function installVahanAuthGuard() {
   // manually waited/reloaded the official page.
   chrome.webRequest.onCompleted?.addListener(
     (details) => {
-      if (details.type !== "main_frame" || details.statusCode < 200 || details.statusCode >= 300) return;
-      if (!isVahanRequestUrl(details.url) || !vahanAuthHold) return;
-      if (vahanAuthHold.tabId !== null && vahanAuthHold.tabId !== details.tabId) return;
-      try {
-        const completed = new URL(details.url);
-        const challenged = new URL(vahanAuthHold.url);
-        if (`${completed.origin}${completed.pathname}` !== `${challenged.origin}${challenged.pathname}`) return;
-      } catch {
-        return;
+      if (details.type !== "main_frame") return;
+      if (details.statusCode >= 500 && isVahanRequestUrl(details.url)) {
+        tabLastErrors.set(details.tabId, {
+          type: "SERVER_ERROR",
+          statusCode: details.statusCode,
+          url: details.url,
+          timestamp: Date.now(),
+        });
       }
-      clearVahanAuthHold().catch(() => {});
+      if (details.statusCode >= 200 && details.statusCode < 300) {
+        if (isVahanPublicReportUrl(details.url)) {
+          recordTabActivity(details.tabId);
+          tabLastErrors.delete(details.tabId);
+        }
+        if (!isVahanRequestUrl(details.url) || !vahanAuthHold) return;
+        if (vahanAuthHold.tabId !== null && vahanAuthHold.tabId !== details.tabId) return;
+        try {
+          const completed = new URL(details.url);
+          const challenged = new URL(vahanAuthHold.url);
+          if (`${completed.origin}${completed.pathname}` !== `${challenged.origin}${challenged.pathname}`) return;
+        } catch {
+          return;
+        }
+        clearVahanAuthHold().catch(() => {});
+      }
     },
     { urls: ["https://analytics.parivahan.gov.in/*"] },
   );
+
+  if (chrome.webNavigation?.onErrorOccurred) {
+    chrome.webNavigation.onErrorOccurred.addListener((details) => {
+      if (details.frameId === 0 && isVahanRequestUrl(details.url)) {
+        tabLastErrors.set(details.tabId, {
+          type: "NETWORK_ERROR",
+          error: details.error,
+          url: details.url,
+          timestamp: Date.now(),
+        });
+      }
+    });
+  }
+
+  chrome.tabs.onRemoved?.addListener((tabId) => {
+    tabActivityTimestamps.delete(tabId);
+    tabLastErrors.delete(tabId);
+  });
 }
 
 async function reportJobStatus(jobId, status, error) {
@@ -252,10 +329,30 @@ function assertJobActive(jobId) {
   if (cancelledJobIds.has(jobId)) throw new Error("Job was cancelled.");
 }
 
+async function verifyTabUrl(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  const url = tab?.url || "";
+  if (isChromeErrorUrl(url)) {
+    const lastError = tabLastErrors.get(tabId);
+    throw new VahanUnreachableError(lastError?.error || "Lỗi kết nối");
+  }
+  const lastError = tabLastErrors.get(tabId);
+  if (lastError && lastError.type === "SERVER_ERROR" && Date.now() - lastError.timestamp < 15_000) {
+    throw new VahanServerError(lastError.statusCode);
+  }
+  if (isVahanRedirectedHomeUrl(url)) {
+    throw new VahanSessionExpiredError();
+  }
+  return tab;
+}
+
 async function waitForTabComplete(tabId, timeout = 30_000) {
   await assertNoVahanAuthHold(tabId);
   const current = await chrome.tabs.get(tabId);
-  if (current.status === "complete") return;
+  if (current.status === "complete") {
+    await verifyTabUrl(tabId);
+    return;
+  }
   await new Promise((resolve, reject) => {
     let settled = false;
     const authWaiter = {
@@ -279,7 +376,9 @@ async function waitForTabComplete(tabId, timeout = 30_000) {
     };
     const listener = (updatedId, changeInfo) => {
       if (updatedId !== tabId || changeInfo.status !== "complete") return;
-      finish(resolve);
+      verifyTabUrl(tabId)
+        .then(() => finish(resolve))
+        .catch((error) => finish(reject, error));
     };
     authChallengeWaiters.add(authWaiter);
     chrome.tabs.onUpdated.addListener(listener);
@@ -289,16 +388,36 @@ async function waitForTabComplete(tabId, timeout = 30_000) {
 async function getVahanTab() {
   await assertNoVahanAuthHold();
   const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*" });
-  const tab = tabs[0] || await chrome.tabs.create({ url: VAHAN_URL, active: false });
+  let tab = tabs[0];
+  let forceReload = false;
+
+  if (tab?.id) {
+    const lastActive = tabActivityTimestamps.get(tab.id) || 0;
+    const isStale = (Date.now() - lastActive) > MAX_TAB_IDLE_AGE_MS;
+    if (isStale || !isVahanPublicReportUrl(tab.url)) {
+      forceReload = true;
+    }
+  } else {
+    tab = await chrome.tabs.create({ url: VAHAN_URL, active: false });
+  }
+
   if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
+
+  if (forceReload) {
+    await chrome.tabs.update(tab.id, { url: VAHAN_URL });
+  }
 
   try {
     await waitForTabComplete(tab.id, INITIAL_PAGE_LOAD_TIMEOUT_MS);
   } catch (error) {
-    // An auth-hold rejection is a different failure mode surfaced through the
-    // same await; it must propagate immediately, never be treated as "just
-    // slow" and retried.
-    if (error instanceof VahanAuthRequiredError || !String(error?.message).includes("did not finish loading")) {
+    // An auth-hold or resilience rejection is surfaced immediately
+    if (error instanceof VahanAuthRequiredError
+      || error instanceof VahanUnreachableError
+      || error instanceof VahanServerError
+      || error instanceof VahanSessionExpiredError) {
+      throw error;
+    }
+    if (!String(error?.message).includes("did not finish loading")) {
       throw error;
     }
     // Cross-border network slowness is transient: reload once and give the
@@ -306,12 +425,18 @@ async function getVahanTab() {
     await chrome.tabs.reload(tab.id);
     try {
       await waitForTabComplete(tab.id, INITIAL_PAGE_LOAD_TIMEOUT_MS);
-    } catch {
+    } catch (retryError) {
+      if (retryError instanceof VahanUnreachableError
+        || retryError instanceof VahanServerError
+        || retryError instanceof VahanSessionExpiredError) {
+        throw retryError;
+      }
       throw new Error("VAHAN page did not finish loading after a retry — the site may be down or extremely slow.");
     }
   }
 
   await assertNoVahanAuthHold(tab.id);
+  recordTabActivity(tab.id);
   return tab.id;
 }
 
@@ -327,12 +452,43 @@ async function sendToVahan(tabId, message) {
       return await chrome.tabs.sendMessage(tabId, message);
     } catch (error) {
       await assertNoVahanAuthHold(tabId);
+      if (String(error?.message).includes("Receiving end")) {
+        try {
+          const currentTab = await chrome.tabs.get(tabId);
+          if (isChromeErrorUrl(currentTab?.url)) {
+            const lastError = tabLastErrors.get(tabId);
+            throw new VahanUnreachableError(lastError?.error || "Lỗi kết nối");
+          }
+          if (isVahanRedirectedHomeUrl(currentTab?.url)) {
+            throw new VahanSessionExpiredError();
+          }
+        } catch (inspectError) {
+          if (inspectError instanceof VahanUnreachableError || inspectError instanceof VahanSessionExpiredError) {
+            throw inspectError;
+          }
+        }
+      }
       if (attempt === 0 && String(error?.message).includes("Receiving end")) {
         reloadAttempted = true;
         await chrome.tabs.reload(tabId);
         await waitForTabComplete(tabId);
       }
-      if (attempt === 5 || reloadAttempted && attempt > 0) throw error;
+      if (attempt === 5 || (reloadAttempted && attempt > 0)) {
+        try {
+          const finalTab = await chrome.tabs.get(tabId);
+          if (isChromeErrorUrl(finalTab?.url)) {
+            throw new VahanUnreachableError();
+          }
+          if (isVahanRedirectedHomeUrl(finalTab?.url)) {
+            throw new VahanSessionExpiredError();
+          }
+        } catch (finalInspectError) {
+          if (finalInspectError instanceof VahanUnreachableError || finalInspectError instanceof VahanSessionExpiredError) {
+            throw finalInspectError;
+          }
+        }
+        throw error;
+      }
       await delay(500);
     }
   }
@@ -492,10 +648,16 @@ async function executeJob(job) {
     if (!cancelledJobIds.has(jobId)) {
       const authHeld = isVahanAuthHoldActive(vahanAuthHold, Date.now(), tabId);
       if (!(authHeld && authFailureReportedJobs.has(jobId))) {
+        let errorMessage = error.message;
+        if (authHeld) {
+          errorMessage = `${VAHAN_AUTH_REQUIRED_CODE}: ${vahanAuthHoldMessage(vahanAuthHold)}`;
+        } else if (error.code) {
+          errorMessage = `${error.code}: ${error.message}`;
+        }
         await reportJobStatus(
           jobId,
           "FAILED",
-          authHeld ? `${VAHAN_AUTH_REQUIRED_CODE}: ${vahanAuthHoldMessage(vahanAuthHold)}` : error.message,
+          errorMessage,
         ).catch(() => {});
         if (authHeld) authFailureReportedJobs.add(jobId);
       }
@@ -894,6 +1056,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CLEAR_VAHAN_AUTH_HOLD") {
     clearVahanAuthHold()
       .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "RELOAD_VAHAN_PAGE") {
+    (async () => {
+      await clearVahanAuthHold();
+      const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/*" });
+      if (tabs[0]?.id) {
+        await chrome.tabs.update(tabs[0].id, { url: VAHAN_URL });
+        return { ok: true };
+      }
+      await chrome.tabs.create({ url: VAHAN_URL });
+      return { ok: true };
+    })()
+      .then(sendResponse)
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }

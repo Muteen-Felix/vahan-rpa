@@ -31,8 +31,20 @@ const matchingMany = (options: string[], wanted: string[]) =>
 
 function optionErrorMessage(reason: unknown): string {
   const message = reason instanceof Error ? reason.message : String(reason || "");
+  if (/VAHAN_SESSION_EXPIRED|session timeout/i.test(message)) {
+    return "Phiên làm việc VAHAN đã hết hạn. Hãy tải lại tab VAHAN trên trình duyệt để đọc lựa chọn.";
+  }
+  if (/VAHAN_UNREACHABLE|chrome-error|lỗi kết nối/i.test(message)) {
+    return "Không thể kết nối đến trang VAHAN. Kiểm tra kết nối mạng hoặc thử lại sau.";
+  }
+  if (/VAHAN_SERVER_ERROR|HTTP 5/i.test(message)) {
+    return "Máy chủ VAHAN đang gặp sự cố nội bộ. Vui lòng chờ ít phút rồi thử lại.";
+  }
   if (/operation has timed out|timed out|timeout/i.test(message)) {
     return "VAHAN đang phản hồi chậm. Hệ thống sẽ thử đọc lại lựa chọn khi extension sẵn sàng.";
+  }
+  if (/Receiving end does not exist/i.test(message)) {
+    return "Không tìm thấy nội dung trang VAHAN. Hãy đảm bảo tab VAHAN đang mở đúng trang Public Report.";
   }
   return message || "Không đọc được lựa chọn từ VAHAN.";
 }

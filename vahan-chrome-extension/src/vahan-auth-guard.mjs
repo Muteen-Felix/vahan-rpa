@@ -1,5 +1,8 @@
 export const VAHAN_AUTH_HOLD_KEY = "vahanAuthHold";
 export const VAHAN_AUTH_REQUIRED_CODE = "VAHAN_AUTH_REQUIRED";
+export const VAHAN_SESSION_EXPIRED_CODE = "VAHAN_SESSION_EXPIRED";
+export const VAHAN_UNREACHABLE_CODE = "VAHAN_UNREACHABLE";
+export const VAHAN_SERVER_ERROR_CODE = "VAHAN_SERVER_ERROR";
 export const VAHAN_AUTH_HOLD_MS = 15 * 60 * 1000;
 export const VAHAN_AUTH_GUARD_VERSION = 2;
 
@@ -12,6 +15,35 @@ export function isVahanRequestUrl(value) {
   } catch {
     return false;
   }
+}
+
+export function isVahanPublicReportUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:"
+      && url.hostname === VAHAN_HOST
+      && url.pathname.startsWith("/analytics/vahanpublicreport");
+  } catch {
+    return false;
+  }
+}
+
+export function isVahanRedirectedHomeUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.hostname !== VAHAN_HOST) return false;
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    return path === "" || path === "/" || path === "/analytics" || path === "/analytics/login";
+  } catch {
+    return false;
+  }
+}
+
+export function isChromeErrorUrl(value) {
+  const str = String(value || "").toLowerCase();
+  return str.startsWith("chrome-error://")
+    || (str.startsWith("chrome-extension://") && str.includes("error"))
+    || str.includes("chromewebdata");
 }
 
 // A protected image, stylesheet or API request must not lock the whole
@@ -74,3 +106,13 @@ export function vahanAuthHoldMessage(hold = {}) {
     + `Extension đã tạm dừng để không thử lại liên tục. Hãy đóng hộp thoại đăng nhập, `
     + `chờ đến ${retryAfter}, kiểm tra truy cập trang chính thức rồi mới chạy lại.`;
 }
+
+export function vahanSessionExpiredMessage() {
+  return "Phiên làm việc trên VAHAN đã hết hạn (Session Timeout). Vui lòng tải lại trang VAHAN để tạo phiên mới.";
+}
+
+export function vahanUnreachableMessage(detail = "") {
+  const reason = detail ? ` (${detail})` : "";
+  return `Không thể kết nối đến trang VAHAN${reason}. Máy chủ có thể đang bảo trì hoặc mất kết nối mạng.`;
+}
+

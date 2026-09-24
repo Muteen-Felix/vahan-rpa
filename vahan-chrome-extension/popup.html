@@ -41,7 +41,10 @@
       <section id="authGuard" class="auth-guard" hidden aria-live="assertive">
         <strong>VAHAN yêu cầu xác thực HTTP</strong>
         <p id="authGuardMessage"></p>
-        <button id="clearAuthHold" class="secondary-button" type="button">Đã đóng hộp thoại, thử lại</button>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button id="reloadVahanTab" class="primary-button" type="button" style="flex: 1;">↻ Tải lại trang VAHAN</button>
+          <button id="clearAuthHold" class="secondary-button" type="button" style="flex: 1;">Bỏ tạm dừng</button>
+        </div>
       </section>
 
       <details class="backend-settings" open>

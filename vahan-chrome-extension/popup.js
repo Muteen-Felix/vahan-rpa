@@ -11,6 +11,7 @@ const workflowJobId = document.querySelector("#workflowJobId");
 const authGuard = document.querySelector("#authGuard");
 const authGuardMessage = document.querySelector("#authGuardMessage");
 const clearAuthHoldButton = document.querySelector("#clearAuthHold");
+const reloadVahanTabButton = document.querySelector("#reloadVahanTab");
 const status = document.querySelector("#status");
 
 const connectionLabels = {
@@ -126,6 +127,20 @@ clearAuthHoldButton.addEventListener("click", async () => {
     setStatus(error.message || "Không thể xóa trạng thái tạm dừng.", "error");
   } finally {
     clearAuthHoldButton.disabled = false;
+  }
+});
+
+reloadVahanTabButton?.addEventListener("click", async () => {
+  reloadVahanTabButton.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "RELOAD_VAHAN_PAGE" });
+    if (!response?.ok) throw new Error(response?.error || "Không thể tải lại trang VAHAN.");
+    renderAuthHold(null);
+    setStatus("Đang tải lại trang VAHAN...", "success");
+  } catch (error) {
+    setStatus(error.message || "Không thể tải lại trang VAHAN.", "error");
+  } finally {
+    reloadVahanTabButton.disabled = false;
   }
 });
 

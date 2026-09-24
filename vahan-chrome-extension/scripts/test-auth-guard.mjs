@@ -3,11 +3,19 @@ import {
   VAHAN_AUTH_HOLD_MS,
   VAHAN_AUTH_GUARD_VERSION,
   VAHAN_AUTH_REQUIRED_CODE,
+  VAHAN_SESSION_EXPIRED_CODE,
+  VAHAN_UNREACHABLE_CODE,
+  VAHAN_SERVER_ERROR_CODE,
   createVahanAuthHold,
   isVahanAuthHoldActive,
   isVahanMainFrameAuthChallenge,
   isVahanRequestUrl,
+  isVahanPublicReportUrl,
+  isVahanRedirectedHomeUrl,
+  isChromeErrorUrl,
   vahanAuthHoldMessage,
+  vahanSessionExpiredMessage,
+  vahanUnreachableMessage,
 } from "../src/vahan-auth-guard.mjs";
 
 const now = Date.parse("2026-09-18T10:00:00.000Z");
@@ -47,4 +55,28 @@ assert.equal(isVahanMainFrameAuthChallenge({
 assert.equal(isVahanAuthHoldActive({ ...first, guardVersion: 1 }, now + 1_000, 42), false);
 assert.match(vahanAuthHoldMessage(first), /tạm dừng/);
 
+// Tests for new resilience functions
+assert.equal(VAHAN_SESSION_EXPIRED_CODE, "VAHAN_SESSION_EXPIRED");
+assert.equal(VAHAN_UNREACHABLE_CODE, "VAHAN_UNREACHABLE");
+assert.equal(VAHAN_SERVER_ERROR_CODE, "VAHAN_SERVER_ERROR");
+
+assert.equal(isVahanPublicReportUrl("https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"), true);
+assert.equal(isVahanPublicReportUrl("https://analytics.parivahan.gov.in/analytics/vahanpublicreport"), true);
+assert.equal(isVahanPublicReportUrl("https://analytics.parivahan.gov.in/analytics/"), false);
+assert.equal(isVahanPublicReportUrl("https://analytics.parivahan.gov.in/analytics/login"), false);
+
+assert.equal(isVahanRedirectedHomeUrl("https://analytics.parivahan.gov.in/analytics/"), true);
+assert.equal(isVahanRedirectedHomeUrl("https://analytics.parivahan.gov.in/analytics"), true);
+assert.equal(isVahanRedirectedHomeUrl("https://analytics.parivahan.gov.in/analytics/login"), true);
+assert.equal(isVahanRedirectedHomeUrl("https://analytics.parivahan.gov.in/"), true);
+assert.equal(isVahanRedirectedHomeUrl("https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en"), false);
+
+assert.equal(isChromeErrorUrl("chrome-error://chromewebdata/"), true);
+assert.equal(isChromeErrorUrl("chrome-error://something"), true);
+assert.equal(isChromeErrorUrl("https://analytics.parivahan.gov.in/analytics/vahanpublicreport"), false);
+
+assert.match(vahanSessionExpiredMessage(), /hết hạn/);
+assert.match(vahanUnreachableMessage("ERR_CONNECTION_TIMED_OUT"), /ERR_CONNECTION_TIMED_OUT/);
+
 console.log("VAHAN auth guard tests passed.");
+

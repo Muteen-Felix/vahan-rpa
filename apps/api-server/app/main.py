@@ -27,6 +27,13 @@ fastapi_app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@fastapi_app.get("/", tags=["health"])
+async def root() -> dict[str, str]:
+    return {"status": "ok", "app": settings.app_name}
+
+
 fastapi_app.include_router(api_router)
 
 application = socketio.ASGIApp(
