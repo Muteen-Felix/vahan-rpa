@@ -361,3 +361,6 @@ Ctrl+C
 
 Extension có thể giữ nguyên trong Chrome. Khi backend dừng, popup/widget sẽ báo
 mất kết nối và tự reconnect khi backend chạy lại.
+
+
+Test 123 123
