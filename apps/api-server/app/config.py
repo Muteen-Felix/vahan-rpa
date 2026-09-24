@@ -11,10 +11,11 @@ DEFAULT_WEB_CORS_ORIGINS = (
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 )
-# The unpacked extension ID is stable for this repository's current Chrome
-# installation. Other installations can override it with
-# VAHAN_API_EXTENSION_IDS without changing the web origins.
-DEFAULT_EXTENSION_IDS = ("ooplajjjjphdcaolokpaenmkjlbcmlhk",)
+# manifest.json now pins a fixed "key", so the unpacked extension ID is the
+# same on every machine regardless of the clone path. Other installations can
+# still override it with VAHAN_API_EXTENSION_IDS without changing the web
+# origins (e.g. if someone loads a fork with a different key).
+DEFAULT_EXTENSION_IDS = ("lnlmikbapplimecdenhhadbhmbenddpd",)
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:

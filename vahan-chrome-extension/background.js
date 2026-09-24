@@ -4145,6 +4145,7 @@
   });
   var HEARTBEAT_INTERVAL_MS = 2e4;
   var VAHAN_URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en";
+  var INITIAL_PAGE_LOAD_TIMEOUT_MS = 75e3;
   var VAHAN_OPTION_SELECTORS = Object.freeze({
     archivedFlags: { selector: "#archivedFlags", multiple: true },
     period: { selector: "#reportType" },
@@ -4378,7 +4379,19 @@
     const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*" });
     const tab = tabs[0] || await chrome.tabs.create({ url: VAHAN_URL, active: false });
     if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
-    await waitForTabComplete(tab.id);
+    try {
+      await waitForTabComplete(tab.id, INITIAL_PAGE_LOAD_TIMEOUT_MS);
+    } catch (error) {
+      if (error instanceof VahanAuthRequiredError || !String(error?.message).includes("did not finish loading")) {
+        throw error;
+      }
+      await chrome.tabs.reload(tab.id);
+      try {
+        await waitForTabComplete(tab.id, INITIAL_PAGE_LOAD_TIMEOUT_MS);
+      } catch {
+        throw new Error("VAHAN page did not finish loading after a retry \u2014 the site may be down or extremely slow.");
+      }
+    }
     await assertNoVahanAuthHold2(tab.id);
     return tab.id;
   }
@@ -4412,20 +4425,9 @@
     return /(?:\.xlsx?(?:$|[?#])|\.xlsm(?:$|[?#])|excel|spreadsheet|export)/i.test(source);
   }
   async function triggerAndWaitForExcelDownload(tabId) {
-    let downloadId;
-    let resolveDownload;
-    let rejectDownload;
-    let downloadTimer;
     let resolveBlob;
     let rejectBlob;
     let blobTimer;
-    const downloadPromise = new Promise((resolve, reject) => {
-      resolveDownload = resolve;
-      rejectDownload = reject;
-      downloadTimer = setTimeout(() => {
-        reject(new Error("Excel download did not complete within 60 seconds."));
-      }, 6e4);
-    });
     const blobPromise = new Promise((resolve, reject) => {
       resolveBlob = resolve;
       rejectBlob = reject;
@@ -4433,22 +4435,15 @@
         reject(new Error("Excel file bytes were not captured within 60 seconds."));
       }, 6e4);
     });
-    const finishDownload = (value2) => {
-      if (downloadId === void 0) return;
-      clearTimeout(downloadTimer);
-      resolveDownload(value2);
-      resolveDownload = () => {
-      };
-    };
-    const failDownload = (error) => {
-      clearTimeout(downloadTimer);
-      rejectDownload(error);
-      rejectDownload = () => {
-      };
-    };
     const onCreated = (item) => {
-      if (downloadId !== void 0 || !isLikelyExcelDownload(item, tabId)) return;
-      downloadId = item.id;
+      if (!isLikelyExcelDownload(item, tabId)) return;
+      try {
+        chrome.downloads.cancel(item.id, () => {
+          chrome.downloads.erase({ id: item.id }, () => {
+          });
+        });
+      } catch (e) {
+      }
       if (item.url) {
         sendToVahan(tabId, {
           type: "CAPTURE_EXCEL_DOWNLOAD",
@@ -4456,14 +4451,6 @@
           fileName: item.filename?.split(/[\\/]/).pop() || "report.xlsx"
         }).catch(() => {
         });
-      }
-      if (item.state === "complete") finishDownload(item);
-    };
-    const onChanged = (delta) => {
-      if (delta.id !== downloadId || !delta.state) return;
-      if (delta.state.current === "complete") finishDownload(delta);
-      if (delta.state.current === "interrupted") {
-        failDownload(new Error("Excel download was interrupted."));
       }
     };
     const blobResolver = (data) => {
@@ -4481,14 +4468,12 @@
     };
     pendingBlobResolver = blobResolver;
     chrome.downloads.onCreated.addListener(onCreated);
-    chrome.downloads.onChanged.addListener(onChanged);
     try {
       const response = await sendToVahan(tabId, { type: "CLICK_EXCEL_DOWNLOAD" });
       if (!response?.ok) {
         rejectBlob(new Error(response?.error || "Could not click the Excel download button."));
-        failDownload(new Error(response?.error || "Could not click the Excel download button."));
       }
-      const [{}, { dataUrl, fileName }] = await Promise.all([downloadPromise, blobPromise]);
+      const { dataUrl, fileName } = await blobPromise;
       const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
       const jobId = activeServerJob?.jobId;
       if (!jobId) throw new Error("No active job to attach the Excel file to.");
@@ -4516,10 +4501,8 @@
       }
       return await uploadResponse.json();
     } finally {
-      clearTimeout(downloadTimer);
       clearTimeout(blobTimer);
       chrome.downloads.onCreated.removeListener(onCreated);
-      chrome.downloads.onChanged.removeListener(onChanged);
       if (pendingBlobResolver === blobResolver) pendingBlobResolver = void 0;
     }
   }

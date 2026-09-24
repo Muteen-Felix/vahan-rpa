@@ -55,6 +55,7 @@ export default function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchStatus, setBatchStatus] = useState<BatchStatus>("idle");
+  const [failedAtIndex, setFailedAtIndex] = useState<number | null>(null);
   const [reportsTrigger, setReportsTrigger] = useState(0);
   const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0, current: "" });
   const [batchLog, setBatchLog] = useState<{
@@ -104,6 +105,7 @@ export default function App() {
     setScenarios(nextScenarios);
     setBatchLog([]);
     setBatchStatus("idle");
+    setFailedAtIndex(null);
     setBatchProgress({
       done: 0,
       total: nextScenarios.length,
@@ -325,6 +327,7 @@ export default function App() {
     setBatchRunning(true);
     setBatchStatus("running");
     setBatchLog([]);
+    setFailedAtIndex(null);
     setBatchProgress({ done: 0, total: queue.length, current: queue[0].name });
 
     let outcome: BatchStatus = "completed";
@@ -345,6 +348,7 @@ export default function App() {
           detail: "Dừng batch: không còn extension runner nào ONLINE và rảnh.",
         }]);
         outcome = "error";
+        setFailedAtIndex(i);
         break;
       }
 
@@ -373,6 +377,7 @@ export default function App() {
             detail: result.error || `Job kết thúc ở trạng thái ${result.status} — dừng batch.`,
           }]);
           outcome = "error";
+          setFailedAtIndex(i);
           break;
         }
       } catch (reason) {
@@ -381,6 +386,7 @@ export default function App() {
           detail: reason instanceof Error ? reason.message : "Lỗi không rõ khi tạo job.",
         }]);
         outcome = "error";
+        setFailedAtIndex(i);
         break;
       }
     }
@@ -395,6 +401,11 @@ export default function App() {
 
   function stopBatch() {
     batchStopRef.current = true;
+  }
+
+  function resumeScenarioQueue() {
+    if (failedAtIndex === null) return;
+    runScenarioQueue(scenarios.slice(failedAtIndex));
   }
 
   async function cancelJob() {
@@ -422,7 +433,7 @@ export default function App() {
           <a href="#configure">Bảng điều khiển</a>
           <a href="#activity">Tiến trình</a>
           <a href="#reports">Báo cáo đã xuất</a>
-          <a href="#settings">Cài đặt</a>
+          {/* <a href="#settings">Cài đặt</a> */}
           <span className="attended-badge">ATTENDED RPA</span>
         </nav>
       </header>
@@ -481,11 +492,13 @@ export default function App() {
                       progress={batchProgress}
                       batchStatus={batchStatus}
                       log={batchLog}
+                      canResume={failedAtIndex !== null}
+                      onResume={resumeScenarioQueue}
                       disabled={busy}
                     />
-                    {scenarios.length === 0 && (
+                    {/* {scenarios.length === 0 && (
                       <FilterForm runners={runners} busy={busy} onSubmit={createJob} />
-                    )}
+                    )} */}
                   </div>
                   <div className="right-column" id="activity">
                     <JobStatus job={job} onCancel={cancelJob} />

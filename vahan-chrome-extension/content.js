@@ -1,8 +1,8 @@
 // ── Excel byte bridge ───────────────────────────────────────────────
-// interceptor-main.js observes the page's export in the MAIN world. This
-// isolated-world handler forwards the non-empty bytes to the service worker.
-// The native browser download is intentionally left enabled; the bridge is
-// only for attaching the same file to the server-side exported-report list.
+// interceptor-main.js observes the page's export in the MAIN world and
+// suppresses the native browser download. This isolated-world handler
+// forwards the captured, non-empty bytes to the service worker, which
+// uploads them to the API server as the sole copy of the report.
 function sendExcelDataUrl(dataUrl, fileName) {
   if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
     console.error("[VAHAN EXT] Invalid Excel data URL.");
@@ -127,6 +127,16 @@ async function selectLabels(selector, rawValue) {
   }
 }
 
+async function clearSelect(selector) {
+  const select = document.querySelector(selector);
+  if (!select) return;
+  if (![...select.options].some((option) => option.selected)) return;
+  for (const option of select.options) option.selected = false;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  if (typeof select.loadOptions === "function") select.loadOptions();
+  await delay(50);
+}
+
 async function loadMakerOptions(rawValue) {
   const makers = splitValues(rawValue);
   const select = document.querySelector("#vehicleMaker");
@@ -248,6 +258,14 @@ async function fillVahan(config) {
     statuses: "#vehicleStatus", ownerTypes: "#vehicleOwnerType",
     vehicleType: "#vehicleType", fitness: "#fitnessCheck",
   };
+  // Clear fields the new scenario omits *before* setting the fields it
+  // specifies. VAHAN's dropdowns are mutually dependent (e.g. a stale
+  // #evType selection restricts #vehicleFuel's option list), so a value left
+  // over from the previous scenario can make an otherwise-valid label in
+  // this scenario appear "not found".
+  for (const [key, selector] of Object.entries(optionalSelects)) {
+    if (!has(key)) await clearSelect(selector);
+  }
   for (const [key, selector] of Object.entries(optionalSelects)) {
     if (has(key)) await selectLabels(selector, config[key]);
   }
@@ -295,7 +313,7 @@ async function captureCaptcha(timeout = 15000) {
   };
 }
 
-let suppressCaptchaRefreshEventsUntil = 0;
+let isRefreshingCaptcha = false;
 
 async function refreshCaptcha(previousCaptchaId, timeout = 15000) {
   const refreshButton = document.querySelector("#captchaImg");
@@ -306,20 +324,27 @@ async function refreshCaptcha(previousCaptchaId, timeout = 15000) {
   // The official page owns CAPTCHA generation through #captchaImg. Do not
   // synthesize an image URL: clicking this control keeps the request in the
   // user's authenticated VAHAN session and clears the old CAPTCHA value.
-  suppressCaptchaRefreshEventsUntil = Date.now() + 1_000;
-  refreshButton.click();
+  isRefreshingCaptcha = true;
+  try {
+    refreshButton.click();
 
-  const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) {
-    try {
-      const captcha = await captureCaptcha(1_000);
-      if (!previousCaptchaId || captcha.captchaId !== previousCaptchaId) return captcha;
-    } catch (_error) {
-      // The image is briefly unavailable while the official page replaces it.
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      try {
+        const captcha = await captureCaptcha(1_000);
+        if (!previousCaptchaId || captcha.captchaId !== previousCaptchaId) return captcha;
+      } catch (_error) {
+        // The image is briefly unavailable while the official page replaces it.
+      }
+      await delay(150);
     }
-    await delay(150);
+    throw new Error("VAHAN did not provide a new CAPTCHA image in time.");
+  } finally {
+    // Settle window so DOM load and mutation observer events from this refresh don't re-trigger.
+    setTimeout(() => {
+      isRefreshingCaptcha = false;
+    }, 500);
   }
-  throw new Error("VAHAN did not provide a new CAPTCHA image in time.");
 }
 
 let captchaRefreshTimer;
@@ -327,12 +352,12 @@ async function notifyCaptchaRefresh() {
   clearTimeout(captchaRefreshTimer);
   captchaRefreshTimer = setTimeout(async () => {
     try {
-      if (Date.now() < suppressCaptchaRefreshEventsUntil) return;
+      if (isRefreshingCaptcha) return;
       const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
       if (!activeServerJob || activeServerJob.stage !== "WAITING_CAPTCHA") return;
-      // VAHAN can leave the old image visible beside its invalid message.
-      // Click its official refresh control and wait for a different CAPTCHA.
-      const captcha = await refreshCaptcha(activeServerJob.captchaId);
+      // Passively capture the new CAPTCHA image if it changed out-of-band on VAHAN;
+      // never trigger an active refresh click from this observer.
+      const captcha = await captureCaptcha();
       if (captcha.captchaId === activeServerJob.captchaId) return;
       await chrome.runtime.sendMessage({ type: "SERVER_CAPTCHA_CHANGED", captcha });
     } catch (_error) {

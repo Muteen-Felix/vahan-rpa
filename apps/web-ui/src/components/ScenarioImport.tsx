@@ -19,6 +19,8 @@ interface Props {
   progress: { done: number; total: number; current: string };
   batchStatus: "idle" | "running" | "completed" | "stopped" | "error";
   log: BatchLogEntry[];
+  canResume: boolean;
+  onResume: () => void;
   disabled: boolean;
 }
 
@@ -63,7 +65,7 @@ function parseScenarioFile(raw: string): Scenario[] {
   });
 }
 
-export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, batchStatus, log, disabled }: Props) {
+export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, batchStatus, log, canResume, onResume, disabled }: Props) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
@@ -164,6 +166,12 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
           {running && (
             <button className="secondary-button" type="button" onClick={onStop}>
               Dừng sau job hiện tại
+            </button>
+          )}
+          {!running && batchStatus === "error" && canResume && (
+            <button className="retry-button" type="button" disabled={disabled} onClick={onResume}>
+              <span className="retry-icon" aria-hidden="true">↻</span>
+              Chạy lại từ mục bị lỗi
             </button>
           )}
         </>

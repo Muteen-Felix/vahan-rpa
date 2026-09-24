@@ -1,7 +1,9 @@
 // Runs in the page's MAIN execution world. VAHAN creates the Excel file as a
 // blob URL and can revoke that URL immediately after anchor.click(). Capture
 // it here, before the page has a chance to revoke it, then bridge the data URL
-// to the isolated content script.
+// to the isolated content script. The native browser download is suppressed:
+// the captured bytes are uploaded to the API server instead of also landing
+// in the user's local Downloads folder.
 (function () {
   const originalClick = HTMLAnchorElement.prototype.click;
   const originalCreateObjectURL = URL.createObjectURL.bind(URL);
@@ -90,19 +92,25 @@
       const href = this.getAttribute("href") || this.href;
       if (isExcelHref(href)) {
         captureAndBridge(href, this.getAttribute("download") || "report.xlsx");
+        // Suppress the native browser download; the bridge above uploads the
+        // exact bytes to the API server instead.
+        return;
       }
     }
     return originalClick.call(this);
   };
 
   // Cover code that dispatches a synthetic click event instead of invoking
-  // HTMLAnchorElement.click(). Do not cancel the event: Chrome must still
-  // create the real download that the service worker waits for.
+  // HTMLAnchorElement.click(). Cancel the event so Chrome never starts the
+  // native download; the bridge above carries the bytes to the server.
   document.addEventListener("click", (event) => {
     const anchor = event.target?.closest?.("a[download]");
     if (!anchor) return;
     const href = anchor.getAttribute("href") || anchor.href;
     if (isExcelHref(href)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       captureAndBridge(href, anchor.getAttribute("download") || "report.xlsx");
     }
   }, true);

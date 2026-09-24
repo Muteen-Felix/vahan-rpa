@@ -1,6 +1,6 @@
 [
   {
-    "name": "1. Baseline robot (FACT logic, nhung fuels=[] da sua thanh full list - CHUA chay lai qua extension moi) - Fuel=All",
+    "name": "1. Tất cả nhiên liệu",
     "filters": {
       "states": [],
       "rtos": [],
@@ -13,7 +13,7 @@
     }
   },
   {
-    "name": "2. Fuel=PETROL (truc Y/X doi ve cap da xac nhan chay duoc, KHAC voi baseline tay Role 1 dung Total Consolidated - cap do chua verify qua automation)",
+    "name": "2. Nhiên liệu Xăng (Petrol)",
     "filters": {
       "states": [],
       "rtos": [],
@@ -26,7 +26,7 @@
     }
   },
   {
-    "name": "3. Fuel=DIESEL (ASSUMPTION, chua chay thu)",
+    "name": "3. Nhiên liệu Dầu Diesel",
     "filters": {
       "states": [],
       "rtos": [],
@@ -39,7 +39,7 @@
     }
   },
   {
-    "name": "4. Fuel=ELECTRIC(BOV), State=Delhi (ASSUMPTION, seed FilterForm.tsx; truc Y/X doi ve cap da xac nhan chay duoc thay vi Vehicle Class/Month Wise chua verify)",
+    "name": "4. Xe điện (BOV) tại Delhi",
     "filters": {
       "states": ["Delhi"],
       "rtos": ["DWARKA - DL9"],
@@ -53,7 +53,7 @@
     }
   },
   {
-    "name": "5. Fuel=PURE EV (ASSUMPTION)",
+    "name": "5. Xe điện thuần (Pure EV)",
     "filters": {
       "states": [],
       "rtos": [],
@@ -66,7 +66,7 @@
     }
   },
   {
-    "name": "6. Fuel=STRONG HYBRID EV (ASSUMPTION)",
+    "name": "6. Xe Hybrid mạnh (Strong Hybrid EV)",
     "filters": {
       "states": [],
       "rtos": [],
@@ -79,7 +79,7 @@
     }
   },
   {
-    "name": "7. Fuel=CNG ONLY (ASSUMPTION)",
+    "name": "7. Nhiên liệu CNG",
     "filters": {
       "states": [],
       "rtos": [],
@@ -92,7 +92,7 @@
     }
   },
   {
-    "name": "8. Fuel=PETROL(E20)/HYBRID/CNG - test ky tu dac biet (ASSUMPTION, rui ro cao nhat)",
+    "name": "8. Nhiên liệu Petrol(E20)/Hybrid/CNG",
     "filters": {
       "states": [],
       "rtos": [],
@@ -105,7 +105,7 @@
     }
   },
   {
-    "name": "9. Fuel=All, Year 2025-2025 (ASSUMPTION, ngoai pham vi spike goc)",
+    "name": "9. Tất cả nhiên liệu - Năm 2025",
     "filters": {
       "states": [],
       "rtos": [],
@@ -120,7 +120,7 @@
     }
   },
   {
-    "name": "10. Fuel=All lan 2, cung truc Y/X voi bo #1 (da doi khoi Vehicle Category Group/Total Consolidated vi timeout xAxis that - xem ghi chu duoi file)",
+    "name": "10. Tất cả nhiên liệu (chạy lần 2)",
     "filters": {
       "states": [],
       "rtos": [],

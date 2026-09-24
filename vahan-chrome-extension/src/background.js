@@ -21,6 +21,11 @@ const DEFAULT_RUNNER_CONFIG = Object.freeze({
 });
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const VAHAN_URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en";
+// Cross-border latency (e.g. Vietnam -> India) can make the initial cold load
+// take much longer than a same-region load. This only applies to the first
+// navigation in getVahanTab(); sendToVahan()'s reload-recovery keeps the
+// tighter default timeout since it's recovering an already-loaded tab.
+const INITIAL_PAGE_LOAD_TIMEOUT_MS = 75_000;
 const VAHAN_OPTION_SELECTORS = Object.freeze({
   archivedFlags: { selector: "#archivedFlags", multiple: true },
   period: { selector: "#reportType" },
@@ -286,7 +291,26 @@ async function getVahanTab() {
   const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*" });
   const tab = tabs[0] || await chrome.tabs.create({ url: VAHAN_URL, active: false });
   if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
-  await waitForTabComplete(tab.id);
+
+  try {
+    await waitForTabComplete(tab.id, INITIAL_PAGE_LOAD_TIMEOUT_MS);
+  } catch (error) {
+    // An auth-hold rejection is a different failure mode surfaced through the
+    // same await; it must propagate immediately, never be treated as "just
+    // slow" and retried.
+    if (error instanceof VahanAuthRequiredError || !String(error?.message).includes("did not finish loading")) {
+      throw error;
+    }
+    // Cross-border network slowness is transient: reload once and give the
+    // page one more chance before giving up.
+    await chrome.tabs.reload(tab.id);
+    try {
+      await waitForTabComplete(tab.id, INITIAL_PAGE_LOAD_TIMEOUT_MS);
+    } catch {
+      throw new Error("VAHAN page did not finish loading after a retry — the site may be down or extremely slow.");
+    }
+  }
+
   await assertNoVahanAuthHold(tab.id);
   return tab.id;
 }
@@ -324,25 +348,17 @@ function isLikelyExcelDownload(item, tabId) {
 }
 
 async function triggerAndWaitForExcelDownload(tabId) {
-  // Keep the native Chrome download as the source of truth, matching the
-  // server-orchestrated flow on develop. The page's Blob bridge is used to
-  // upload the exact bytes to the API, but it must never replace or cancel the
-  // real browser download.
-  let downloadId;
-  let resolveDownload;
-  let rejectDownload;
-  let downloadTimer;
+  // The page-level bridge (interceptor-main.js / content.js) suppresses the
+  // native browser download and hands us the exact bytes instead. The only
+  // copy of the report is the one this function uploads to the API server.
+  // The listeners below are a secondary defense: if suppression ever fails
+  // (e.g. a VAHAN change bypasses the patched click path), cancel and erase
+  // any Excel-looking download that slips through so it never lands as a
+  // second, unmanaged copy on the user's machine.
   let resolveBlob;
   let rejectBlob;
   let blobTimer;
 
-  const downloadPromise = new Promise((resolve, reject) => {
-    resolveDownload = resolve;
-    rejectDownload = reject;
-    downloadTimer = setTimeout(() => {
-      reject(new Error("Excel download did not complete within 60 seconds."));
-    }, 60_000);
-  });
   const blobPromise = new Promise((resolve, reject) => {
     resolveBlob = resolve;
     rejectBlob = reject;
@@ -351,40 +367,23 @@ async function triggerAndWaitForExcelDownload(tabId) {
     }, 60_000);
   });
 
-  const finishDownload = (value) => {
-    if (downloadId === undefined) return;
-    clearTimeout(downloadTimer);
-    resolveDownload(value);
-    resolveDownload = () => {};
-  };
-  const failDownload = (error) => {
-    clearTimeout(downloadTimer);
-    rejectDownload(error);
-    rejectDownload = () => {};
-  };
   const onCreated = (item) => {
-    if (downloadId !== undefined || !isLikelyExcelDownload(item, tabId)) return;
-    downloadId = item.id;
+    if (!isLikelyExcelDownload(item, tabId)) return;
+    try {
+      chrome.downloads.cancel(item.id, () => {
+        chrome.downloads.erase({ id: item.id }, () => {});
+      });
+    } catch (e) {}
 
     // If the page used a download URL rather than the URL.createObjectURL
-    // path, ask the tab to copy that source into the same upload bridge. This
-    // fallback is deliberately best-effort; the native download remains
-    // allowed to continue.
+    // path, ask the tab to copy that source into the same upload bridge so we
+    // still capture the bytes despite the suppression having missed it.
     if (item.url) {
       sendToVahan(tabId, {
         type: "CAPTURE_EXCEL_DOWNLOAD",
         href: item.url,
         fileName: item.filename?.split(/[\\/]/).pop() || "report.xlsx",
       }).catch(() => {});
-    }
-
-    if (item.state === "complete") finishDownload(item);
-  };
-  const onChanged = (delta) => {
-    if (delta.id !== downloadId || !delta.state) return;
-    if (delta.state.current === "complete") finishDownload(delta);
-    if (delta.state.current === "interrupted") {
-      failDownload(new Error("Excel download was interrupted."));
     }
   };
 
@@ -401,19 +400,14 @@ async function triggerAndWaitForExcelDownload(tabId) {
   };
   pendingBlobResolver = blobResolver;
   chrome.downloads.onCreated.addListener(onCreated);
-  chrome.downloads.onChanged.addListener(onChanged);
 
   try {
     const response = await sendToVahan(tabId, { type: "CLICK_EXCEL_DOWNLOAD" });
     if (!response?.ok) {
       rejectBlob(new Error(response?.error || "Could not click the Excel download button."));
-      failDownload(new Error(response?.error || "Could not click the Excel download button."));
     }
 
-    // Both conditions are required: Chrome has completed the real download,
-    // and the non-empty bytes have been uploaded below. This prevents a
-    // success status while the exported-report list still has no usable file.
-    const [{}, { dataUrl, fileName }] = await Promise.all([downloadPromise, blobPromise]);
+    const { dataUrl, fileName } = await blobPromise;
 
     // Upload to API server.
     const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
@@ -449,10 +443,8 @@ async function triggerAndWaitForExcelDownload(tabId) {
     }
     return await uploadResponse.json();
   } finally {
-    clearTimeout(downloadTimer);
     clearTimeout(blobTimer);
     chrome.downloads.onCreated.removeListener(onCreated);
-    chrome.downloads.onChanged.removeListener(onChanged);
     if (pendingBlobResolver === blobResolver) pendingBlobResolver = undefined;
   }
 }
