@@ -28,7 +28,7 @@ def _normalise_date(value: str | None) -> str | None:
         return date.fromisoformat(value).isoformat()
     except ValueError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="date must use YYYY-MM-DD format.",
         ) from error
 
@@ -143,7 +143,11 @@ async def receive_ui_health_log(command: UiHealthLogRequest) -> UiHealthLogRespo
     response_model_by_alias=True,
 )
 async def list_ui_health_reports(
-    date_filter: str | None = Query(default=None, alias="date"),
+    date_filter: str | None = Query(
+        default=None,
+        alias="date",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    ),
 ) -> UiHealthReportsResponse:
     reports = await services.ui_health_logs.list_reports(_normalise_date(date_filter))
     return UiHealthReportsResponse.model_validate(reports)
