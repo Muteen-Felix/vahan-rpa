@@ -15,7 +15,10 @@ DEFAULT_WEB_CORS_ORIGINS = (
 # same on every machine regardless of the clone path. Other installations can
 # still override it with VAHAN_API_EXTENSION_IDS without changing the web
 # origins (e.g. if someone loads a fork with a different key).
-DEFAULT_EXTENSION_IDS = ("lnlmikbapplimecdenhhadbhmbenddpd",)
+DEFAULT_EXTENSION_IDS = (
+    "lnlmikbapplimecdenhhadbhmbenddpd",
+    "ooplajjjjphdcaolokpaenmkjlbcmlhk",
+)
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:

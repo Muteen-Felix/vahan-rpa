@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.config import settings
-from app.models.job import JobStatus
+from app.models.job import Job, JobStatus
 from app.services import services
 
 router = APIRouter(prefix="/jobs", tags=["excel"])
@@ -20,8 +20,28 @@ def _sanitize_filename(name: str) -> str:
     return cleaned or "report"
 
 
-def _excel_path(job_id: UUID) -> Path:
-    return _report_dir / f"{job_id}.xlsx"
+def _generate_excel_filename(job: Job, uploaded_filename: str | None = None) -> str:
+    dt = job.created_at.astimezone() if job.created_at.tzinfo else job.created_at
+    timestamp = dt.strftime("%Y%m%d_%H%M%S")
+
+    if job.scenario_name:
+        base_name = _sanitize_filename(job.scenario_name)
+    elif uploaded_filename and uploaded_filename != "report.xlsx":
+        clean_stem = _sanitize_filename(Path(uploaded_filename).stem)
+        base_name = clean_stem
+    else:
+        base_name = f"report_{str(job.id)[:8]}"
+
+    return f"{base_name}_{timestamp}.xlsx"
+
+
+def _excel_path(job: Job) -> Path:
+    if job.excel_file_name:
+        path = _report_dir / job.excel_file_name
+        if path.is_file():
+            return path
+    # Backward compatibility fallback
+    return _report_dir / f"{job.id}.xlsx"
 
 
 @router.get("/reports", status_code=status.HTTP_200_OK)
@@ -58,7 +78,8 @@ async def upload_excel(job_id: UUID, file: UploadFile) -> dict:
         raise HTTPException(status_code=400, detail="Only .xlsx files are accepted.")
 
     _report_dir.mkdir(parents=True, exist_ok=True)
-    dest = _excel_path(job_id)
+    file_name = _generate_excel_filename(job, file.filename)
+    dest = _report_dir / file_name
 
     size = 0
     async with aiofiles.open(dest, "wb") as out:
@@ -77,13 +98,6 @@ async def upload_excel(job_id: UUID, file: UploadFile) -> dict:
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Excel file is empty.")
 
-    if job.scenario_name:
-        file_name = f"{_sanitize_filename(job.scenario_name)}.xlsx"
-    elif file.filename:
-        file_name = file.filename
-    else:
-        file_name = f"{job_id}.xlsx"
-
     await services.jobs.set_excel_file(job_id, file_name=file_name, file_size=size)
 
     return {"ok": True, "fileName": file_name, "sizeBytes": size}
@@ -95,7 +109,7 @@ async def download_excel(job_id: UUID) -> FileResponse:
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
 
-    path = _excel_path(job_id)
+    path = _excel_path(job)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Excel file not found for this job.")
 

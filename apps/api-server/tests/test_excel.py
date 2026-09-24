@@ -37,8 +37,9 @@ async def test_upload_and_download_excel_flow() -> None:
         assert upload_resp.status_code == 200
         upload_data = upload_resp.json()
         assert upload_data["ok"] is True
-        # Filename should be sanitized from scenarioName
-        expected_name = "Delhi EV _ 2024_ Two-Wheeler.xlsx"
+        # Filename should be sanitized from scenarioName and have timestamp
+        dt = job.created_at.astimezone() if job.created_at.tzinfo else job.created_at
+        expected_name = f"Delhi EV _ 2024_ Two-Wheeler_{dt.strftime('%Y%m%d_%H%M%S')}.xlsx"
         assert upload_data["fileName"] == expected_name
         assert upload_data["sizeBytes"] == len(fake_excel_bytes)
 
