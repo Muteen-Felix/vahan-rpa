@@ -31,3 +31,9 @@ npm.cmd run dev
 
 Open `http://127.0.0.1:5173`. The backend URL defaults to
 `http://127.0.0.1:8000` and can be changed with `VITE_API_URL`.
+
+The main screen shows the admin login configured in the API. Set
+`VAHAN_UI_AUTH_USERNAME`, `VAHAN_UI_AUTH_PASSWORD` (at least 12 characters), and
+`VAHAN_UI_AUTH_TOKEN_SECRET` (at least 32 characters) in the API process before
+starting it. Access tokens expire after one hour by default; signing out or token
+expiry returns the browser to the login screen.

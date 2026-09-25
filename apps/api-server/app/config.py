@@ -27,6 +27,37 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _local_ui_auth_values() -> dict[str, str]:
+    """Read only the dashboard credentials from the ignored API .env file."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    allowed_keys = {
+        "VAHAN_UI_AUTH_USERNAME",
+        "VAHAN_UI_AUTH_PASSWORD",
+        "VAHAN_UI_AUTH_TOKEN_SECRET",
+        "VAHAN_UI_AUTH_TOKEN_TTL_SECONDS",
+    }
+    values: dict[str, str] = {}
+    try:
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return values
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        key, separator, value = line.partition("=")
+        if not separator or key.strip() not in allowed_keys:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     app_name: str = "VAHAN RPA API"
@@ -39,13 +70,31 @@ class Settings:
     )
     socketio_cors_origins: str | tuple[str, ...] = "*"
     runner_token: str = "change-me"
+    ui_auth_username: str = ""
+    ui_auth_password: str = ""
+    ui_auth_token_secret: str = ""
+    ui_auth_token_ttl_seconds: int = 3600
     runner_disconnect_grace_seconds: float = 30.0
     ui_health_log_dir: str = str(DEFAULT_UI_HEALTH_LOG_DIR)
     excel_report_dir: str = str(DEFAULT_EXCEL_REPORT_DIR)
     max_excel_upload_bytes: int = 50 * 1024 * 1024  # 50 MB
 
+    @property
+    def ui_auth_configured(self) -> bool:
+        return (
+            bool(self.ui_auth_username.strip())
+            and len(self.ui_auth_password) >= 12
+            and len(self.ui_auth_token_secret) >= 32
+        )
+
     @classmethod
     def from_env(cls) -> "Settings":
+        local_auth = _local_ui_auth_values()
+
+        def auth_value(name: str, default: str = "") -> str:
+            environment_value = os.getenv(name)
+            return environment_value if environment_value is not None else local_auth.get(name, default)
+
         web_origins = tuple(
             origin.strip()
             for origin in os.getenv(
@@ -82,6 +131,10 @@ class Settings:
             cors_origins=origins,
             socketio_cors_origins=socketio_origins,
             runner_token=os.getenv("VAHAN_API_RUNNER_TOKEN", "change-me"),
+            ui_auth_username=auth_value("VAHAN_UI_AUTH_USERNAME").strip(),
+            ui_auth_password=auth_value("VAHAN_UI_AUTH_PASSWORD"),
+            ui_auth_token_secret=auth_value("VAHAN_UI_AUTH_TOKEN_SECRET"),
+            ui_auth_token_ttl_seconds=max(60, int(auth_value("VAHAN_UI_AUTH_TOKEN_TTL_SECONDS", "3600"))),
             runner_disconnect_grace_seconds=float(os.getenv("VAHAN_API_RUNNER_DISCONNECT_GRACE_SECONDS", "30")),
             ui_health_log_dir=os.getenv("VAHAN_UI_HEALTH_LOG_DIR", str(DEFAULT_UI_HEALTH_LOG_DIR)),
             excel_report_dir=os.getenv("VAHAN_EXCEL_REPORT_DIR", str(DEFAULT_EXCEL_REPORT_DIR)),

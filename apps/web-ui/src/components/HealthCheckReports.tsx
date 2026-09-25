@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 import type { PendingUiHealthCheck, UiHealthReportsResponse } from "../contracts";
-import { API_URL, api } from "../services/api-client";
+import { api } from "../services/api-client";
+import { AuthenticatedDownload } from "./AuthenticatedDownload";
 
 const MANUAL_REPORT_POLL_INTERVAL_MS = 2_000;
 const MANUAL_REPORT_POLL_TIMEOUT_MS = 90_000;
@@ -287,13 +288,13 @@ export function HealthCheckReports({
                 <div className="health-report-file" key={report.fileName}>
                   <span className="health-report-file-name" title={report.fileName}>{report.fileName}</span>
                   <small>{formatBytes(report.sizeBytes)}</small>
-                  <a
+                  <AuthenticatedDownload
                     className="secondary-button health-report-download"
-                    href={`${API_URL}${report.downloadUrl}`}
-                    download={report.fileName}
+                    path={report.downloadUrl}
+                    fileName={report.fileName}
                   >
                     Tải CSV
-                  </a>
+                  </AuthenticatedDownload>
                 </div>
               )) : <span className="health-reports-empty">Không tìm thấy file CSV cho ngày này.</span>}
             </div>

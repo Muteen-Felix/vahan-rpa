@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import type { Scenario, VahanFilters } from "../contracts";
-import { api } from "../services/api-client";
+import { AuthenticatedDownload } from "./AuthenticatedDownload";
 
 interface BatchLogEntry {
   name: string;
@@ -201,13 +201,13 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
                 <span>{entry.detail}</span>
                 {entry.excelFileName && entry.jobId && (
                   <div>
-                    <a
-                      href={api.excelDownloadUrl(entry.jobId)}
-                      download={entry.excelFileName}
+                    <AuthenticatedDownload
+                      path={`/api/jobs/${entry.jobId}/excel`}
+                      fileName={entry.excelFileName}
                       className="batch-excel-link"
                     >
                       📥 Tải Excel
-                    </a>
+                    </AuthenticatedDownload>
                   </div>
                 )}
               </li>

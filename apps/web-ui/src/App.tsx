@@ -19,7 +19,7 @@ import type {
   UiHealthCheckNowResponse,
   VahanFilters,
 } from "./contracts";
-import { api } from "./services/api-client";
+import { AUTH_REQUIRED_EVENT, api } from "./services/api-client";
 import { uiSocket } from "./services/socket-client";
 
 const ACTIVE_JOB_STORAGE_KEY = "vahanActiveJobId";
@@ -157,8 +157,16 @@ export default function App() {
         }
       });
     };
-    const onDisconnect = () => setConnection("disconnected");
-    const onConnectError = () => setConnection("error");
+    const onDisconnect = (reason: string) => {
+      setConnection("disconnected");
+      if (reason === "io server disconnect") window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+    };
+    const onConnectError = (reason: Error) => {
+      setConnection("error");
+      if (/rejected|unauthorized|authentication required|token expired/i.test(reason.message)) {
+        window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+      }
+    };
     const onRunnerChange = () => refreshRunners();
     const onJobStatus = async (updated: Job) => {
       setJob(updated);
@@ -435,6 +443,7 @@ export default function App() {
           <a href="#reports">Báo cáo đã xuất</a>
           {/* <a href="#settings">Cài đặt</a> */}
           <span className="attended-badge">ATTENDED RPA</span>
+          <button className="logout-button" type="button" onClick={api.logout}>Đăng xuất</button>
         </nav>
       </header>
 

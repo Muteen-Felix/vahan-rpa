@@ -3,7 +3,7 @@ from pathlib import Path
 from uuid import UUID
 
 import aiofiles
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, Header, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.config import settings
@@ -66,10 +66,16 @@ async def list_exported_reports() -> list[dict]:
     "/{job_id}/upload-excel",
     status_code=status.HTTP_200_OK,
 )
-async def upload_excel(job_id: UUID, file: UploadFile) -> dict:
+async def upload_excel(
+    job_id: UUID,
+    file: UploadFile,
+    runner_id: str | None = Header(default=None, alias="X-VAHAN-RUNNER-ID"),
+) -> dict:
     job = await services.jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
+    if not runner_id or runner_id != job.runner_id:
+        raise HTTPException(status_code=403, detail="This runner is not assigned to the job.")
 
     if file.content_type and file.content_type not in {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

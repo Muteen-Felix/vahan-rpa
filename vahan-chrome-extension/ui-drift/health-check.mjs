@@ -164,7 +164,12 @@ async function loadBackendSchedule(chromeApi, fetchImpl) {
   const serverUrl = String(runnerConfig.serverUrl || "").trim().replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(serverUrl)) return null;
 
-  const response = await fetchImpl(`${serverUrl}${UI_HEALTH_SCHEDULE_PATH}`);
+  const response = await fetchImpl(`${serverUrl}${UI_HEALTH_SCHEDULE_PATH}`, {
+    headers: {
+      "X-VAHAN-RUNNER-TOKEN": String(runnerConfig.token || ""),
+      "X-VAHAN-RUNNER-ID": String(runnerConfig.runnerId || ""),
+    },
+  });
   if (!response?.ok) {
     throw new Error(`Không tải được lịch kiểm tra từ backend (${response?.status || "unknown"}).`);
   }
@@ -191,7 +196,11 @@ async function postHealthCheck(chromeApi, healthCheck, fetchImpl) {
   const response = await withTimeout(
     fetchImpl(`${serverUrl}${UI_HEALTH_LOG_PATH}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-VAHAN-RUNNER-TOKEN": String(runnerConfig.token || ""),
+        "X-VAHAN-RUNNER-ID": String(runnerConfig.runnerId || ""),
+      },
       body: JSON.stringify({
         healthCheck,
         pageUrl: healthCheck.pageUrl || UI_HEALTH_OFFICIAL_URL,

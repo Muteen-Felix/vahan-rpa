@@ -1,14 +1,18 @@
+import asyncio
+import time
 from uuid import UUID
 
 from socketio.exceptions import TimeoutError as SocketIOTimeoutError
 
 from app.models.job import JobStatus, can_transition
 from app.realtime.server import sio
+from app.security import access_token_expiry, verify_access_token
 from app.services import services
 
 
 CAPTCHA_FORWARD_TIMEOUT_SECONDS = 45
 CAPTCHA_REFRESH_TIMEOUT_SECONDS = 20
+_ui_token_expiry_tasks: dict[str, asyncio.Task] = {}
 
 
 async def _fail_captcha_submission(job_id: UUID, runner_id: str, error: str) -> None:
@@ -72,9 +76,39 @@ async def _forward_captcha_submission(
 
 
 @sio.event(namespace="/ui")
-async def connect(_sid: str, _environ: dict, _auth: dict | None) -> bool:
-    # Authentication is deliberately deferred for the single-user MVP.
+async def connect(_sid: str, _environ: dict, auth: dict | None) -> bool:
+    auth = auth or {}
+    token = str(auth.get("token", ""))
+    username = verify_access_token(token)
+    expires_at = access_token_expiry(token)
+    if not username or not expires_at:
+        return False
+    previous_task = _ui_token_expiry_tasks.pop(_sid, None)
+    if previous_task:
+        previous_task.cancel()
+    _ui_token_expiry_tasks[_sid] = asyncio.create_task(_disconnect_after_expiry(_sid, expires_at))
     return True
+
+
+async def _disconnect_after_expiry(sid: str, expires_at: int) -> None:
+    try:
+        await asyncio.sleep(max(0, expires_at - time.time()))
+        await sio.disconnect(sid, namespace="/ui")
+    except asyncio.CancelledError:
+        return
+    except Exception:  # The socket may have disconnected before its token expired.
+        return
+    finally:
+        current_task = asyncio.current_task()
+        if _ui_token_expiry_tasks.get(sid) is current_task:
+            _ui_token_expiry_tasks.pop(sid, None)
+
+
+@sio.event(namespace="/ui")
+async def disconnect(sid: str) -> None:
+    task = _ui_token_expiry_tasks.pop(sid, None)
+    if task and task is not asyncio.current_task():
+        task.cancel()
 
 
 @sio.on("ui:subscribe-job", namespace="/ui")

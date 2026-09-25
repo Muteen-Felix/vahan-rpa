@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 import type { ExportedReportItem } from "../contracts";
-import { api, API_URL } from "../services/api-client";
+import { AuthenticatedDownload } from "./AuthenticatedDownload";
+import { api } from "../services/api-client";
 
 function formatSize(bytes: number): string {
   if (!bytes) return "0 B";
@@ -104,7 +105,7 @@ export function ExportedReportsList({ refreshTrigger }: { refreshTrigger?: numbe
                     {formatDate(report.createdAt)}
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    <a
+                    <AuthenticatedDownload
                       className="primary-button"
                       style={{
                         display: "inline-flex",
@@ -116,11 +117,11 @@ export function ExportedReportsList({ refreshTrigger }: { refreshTrigger?: numbe
                         textDecoration: "none",
                         fontSize: "11px",
                       }}
-                      href={`${API_URL}${report.downloadUrl}`}
-                      download={report.fileName}
+                      path={report.downloadUrl}
+                      fileName={report.fileName}
                     >
                       📥 Tải xuống
-                    </a>
+                    </AuthenticatedDownload>
                   </td>
                 </tr>
               ))}

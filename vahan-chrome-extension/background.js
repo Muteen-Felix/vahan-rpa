@@ -3640,7 +3640,12 @@
     const runnerConfig = stored?.runnerConfig || {};
     const serverUrl = String(runnerConfig.serverUrl || "").trim().replace(/\/+$/, "");
     if (!/^https?:\/\//i.test(serverUrl)) return null;
-    const response = await fetchImpl(`${serverUrl}${UI_HEALTH_SCHEDULE_PATH}`);
+    const response = await fetchImpl(`${serverUrl}${UI_HEALTH_SCHEDULE_PATH}`, {
+      headers: {
+        "X-VAHAN-RUNNER-TOKEN": String(runnerConfig.token || ""),
+        "X-VAHAN-RUNNER-ID": String(runnerConfig.runnerId || "")
+      }
+    });
     if (!response?.ok) {
       throw new Error(`Kh\xF4ng t\u1EA3i \u0111\u01B0\u1EE3c l\u1ECBch ki\u1EC3m tra t\u1EEB backend (${response?.status || "unknown"}).`);
     }
@@ -3664,7 +3669,11 @@
     const response = await withTimeout(
       fetchImpl(`${serverUrl}${UI_HEALTH_LOG_PATH}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-VAHAN-RUNNER-TOKEN": String(runnerConfig.token || ""),
+          "X-VAHAN-RUNNER-ID": String(runnerConfig.runnerId || "")
+        },
         body: JSON.stringify({
           healthCheck,
           pageUrl: healthCheck.pageUrl || UI_HEALTH_OFFICIAL_URL,
@@ -4656,6 +4665,10 @@
       formData.append("file", blob, uploadFileName);
       const uploadResponse = await fetch(`${serverUrl}/api/jobs/${jobId}/upload-excel`, {
         method: "POST",
+        headers: {
+          "X-VAHAN-RUNNER-TOKEN": config.token,
+          "X-VAHAN-RUNNER-ID": config.runnerId
+        },
         body: formData
       });
       if (!uploadResponse.ok) {

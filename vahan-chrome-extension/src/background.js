@@ -591,6 +591,10 @@ async function triggerAndWaitForExcelDownload(tabId) {
 
     const uploadResponse = await fetch(`${serverUrl}/api/jobs/${jobId}/upload-excel`, {
       method: "POST",
+      headers: {
+        "X-VAHAN-RUNNER-TOKEN": config.token,
+        "X-VAHAN-RUNNER-ID": config.runnerId,
+      },
       body: formData,
     });
     if (!uploadResponse.ok) {

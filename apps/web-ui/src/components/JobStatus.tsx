@@ -1,5 +1,5 @@
 import type { Job, JobStatus as Status } from "../contracts";
-import { api } from "../services/api-client";
+import { AuthenticatedDownload } from "./AuthenticatedDownload";
 
 const labels: Record<Status, string> = {
   QUEUED: "Đang xếp hàng",
@@ -110,13 +110,13 @@ export function JobStatus({ job, onCancel }: { job: Job | null; onCancel: () => 
       })()}
       {hasExcel && (
         <div className="job-excel-download">
-          <a
+          <AuthenticatedDownload
             className="primary-button"
-            href={api.excelDownloadUrl(job.id)}
-            download={job.excelFileName || "report.xlsx"}
+            path={`/api/jobs/${job.id}/excel`}
+            fileName={job.excelFileName || "report.xlsx"}
           >
             📥 Tải báo cáo Excel
-          </a>
+          </AuthenticatedDownload>
           <p className="job-excel-meta">
             {job.excelFileName}
             {job.excelFileSize != null && ` · ${formatSize(job.excelFileSize)}`}
