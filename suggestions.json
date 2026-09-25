@@ -1,0 +1,20 @@
+[
+  {
+    "path": ".github/workflows/qc.yml",
+    "start_line": 20,
+    "end_line": 20,
+    "replacement": "      sut_health_path: \"/api/health\""
+  },
+  {
+    "path": ".qc-agent/perf/smoke.js",
+    "start_line": 5,
+    "end_line": 8,
+    "replacement": "// qc-agent:begin refine k6_paths\nconst PATHS = [\"/\", \"/api/health\", \"/api/runners\"];\n// qc-agent:end"
+  },
+  {
+    "path": ".qc-agent/suites/api-contract.yaml",
+    "start_line": 21,
+    "end_line": 23,
+    "replacement": "    # qc-agent:begin refine exclude_path\n    exclude_path:\n    - \"/api/jobs/{job_id}/upload-excel\"  # POST nhận multipart/form-data: fuzz tệp không có nghĩa và tốn thời gian\n    # qc-agent:end"
+  }
+]
