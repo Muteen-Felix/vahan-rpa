@@ -101,18 +101,18 @@ export function isVahanAuthHoldActive(hold, now = Date.now(), tabId) {
 }
 
 export function vahanAuthHoldMessage(hold = {}) {
-  const retryAfter = hold.retryAfter ? new Date(hold.retryAfter).toLocaleString() : "sau khi xác nhận";
-  return `VAHAN đang yêu cầu xác thực HTTP (${hold.statusCode || 401}). `
-    + `Extension đã tạm dừng để không thử lại liên tục. Hãy đóng hộp thoại đăng nhập, `
-    + `chờ đến ${retryAfter}, kiểm tra truy cập trang chính thức rồi mới chạy lại.`;
+  const retryAfter = hold.retryAfter ? new Date(hold.retryAfter).toLocaleString("en-GB") : "after confirmation";
+  return `VAHAN requires HTTP authentication (${hold.statusCode || 401}). `
+    + `The extension is paused to prevent repeated retries. Close the sign-in dialog, `
+    + `wait until ${retryAfter}, verify that the official page is accessible, then try again.`;
 }
 
 export function vahanSessionExpiredMessage() {
-  return "Phiên làm việc trên VAHAN đã hết hạn (Session Timeout). Vui lòng tải lại trang VAHAN để tạo phiên mới.";
+  return "The VAHAN session has expired (session timeout). Reload the VAHAN page to start a new session.";
 }
 
 export function vahanUnreachableMessage(detail = "") {
   const reason = detail ? ` (${detail})` : "";
-  return `Không thể kết nối đến trang VAHAN${reason}. Máy chủ có thể đang bảo trì hoặc mất kết nối mạng.`;
+  return `Cannot reach VAHAN${reason}. The server may be under maintenance or your network may be disconnected.`;
 }
 

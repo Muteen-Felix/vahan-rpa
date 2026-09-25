@@ -75,10 +75,10 @@ async function getActiveVahanAuthHold() {
 
 function authHoldStatusMessage(hold) {
   const retryAfter = hold?.retryAfter
-    ? new Date(hold.retryAfter).toLocaleString()
-    : "sau khi xác nhận";
-  return `VAHAN đang yêu cầu xác thực HTTP. Extension đã tạm dừng để không thử lại liên tục. `
-    + `Hãy đóng hộp thoại đăng nhập, chờ đến ${retryAfter} rồi tải lại trang.`;
+    ? new Date(hold.retryAfter).toLocaleString("en-GB")
+    : "after confirmation";
+  return `VAHAN requires HTTP authentication. The extension is paused to prevent repeated retries. `
+    + `Close the sign-in dialog, wait until ${retryAfter}, then reload the page.`;
 }
 
 
@@ -90,17 +90,66 @@ function getOptionMap(select) {
 }
 
 async function waitForOptions(selector, labels, timeout = 15000) {
-  const deadline = Date.now() + timeout;
   const expected = labels.map(normalize);
-  while (Date.now() < deadline) {
+  const isReady = () => {
     const select = document.querySelector(selector);
-    if (select) {
-      const available = getOptionMap(select).map((option) => option.label);
-      if (expected.every((label) => available.includes(label))) return;
+    if (!select) return false;
+    const available = getOptionMap(select).map((option) => option.label);
+    return expected.every((label) => available.includes(label));
+  };
+  await waitForDomCondition(
+    isReady,
+    timeout,
+    100,
+    `${selector}: dynamic options did not load within ${timeout} ms.`,
+  );
+}
+
+function waitForDomCondition(check, timeout, stableMs, timeoutMessage) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stableTimer;
+    const observer = new MutationObserver(evaluate);
+    const timeoutTimer = window.setTimeout(() => {
+      finish(reject, new Error(timeoutMessage));
+    }, timeout);
+
+    function finish(callback, value) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutTimer);
+      window.clearTimeout(stableTimer);
+      observer.disconnect();
+      callback(value);
     }
-    await delay(200);
-  }
-  throw new Error(`${selector}: dynamic options did not load within ${timeout} ms.`);
+
+    function evaluate() {
+      if (settled) return;
+      if (!check()) {
+        window.clearTimeout(stableTimer);
+        stableTimer = undefined;
+        return;
+      }
+      if (!stableMs) {
+        finish(resolve);
+        return;
+      }
+      if (stableTimer === undefined) {
+        stableTimer = window.setTimeout(() => {
+          stableTimer = undefined;
+          if (check()) finish(resolve);
+          else evaluate();
+        }, stableMs);
+      }
+    }
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    evaluate();
+  });
 }
 
 async function refreshXAxisOptions(yAxisLabel, { resetSelection = false } = {}) {
@@ -128,28 +177,26 @@ async function refreshXAxisOptions(yAxisLabel, { resetSelection = false } = {}) 
 }
 
 async function waitForXAxisOptions(yAxisLabel, labels, timeout = 15000) {
-  const deadline = Date.now() + timeout;
   const expected = labels.map(normalize);
   let available = [];
-  let matchedSince = 0;
-  while (Date.now() < deadline) {
+  const isReady = () => {
     const xAxis = document.querySelector("#xAxis");
     if (xAxis) {
       available = [...xAxis.options]
         .filter((option) => option.value)
         .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim());
       const availableNormalized = available.map(normalize);
-      const allAvailable = expected.every((label) => availableNormalized.includes(label));
-      if (allAvailable) {
-        // Keep the requested option present briefly so an old option list
-        // visible during VAHAN's AJAX refresh is not mistaken for the new one.
-        if (!matchedSince) matchedSince = Date.now();
-        if (Date.now() - matchedSince >= 400) return;
-      } else {
-        matchedSince = 0;
-      }
+      return expected.every((label) => availableNormalized.includes(label));
     }
-    await delay(200);
+    return false;
+  };
+  try {
+    // Keep the requested option present briefly so an old list is not
+    // mistaken for the options VAHAN is rebuilding after the Y-Axis change.
+    await waitForDomCondition(isReady, timeout, 400, "X-Axis options did not settle.");
+    return;
+  } catch {
+    // Keep the existing, detailed selector error for the caller.
   }
   const missing = labels.filter((label, index) => !available.map(normalize).includes(expected[index]));
   throw new Error(
@@ -271,12 +318,19 @@ function fill(selector, value) {
 
 async function fillVahan(config) {
   const has = (key) => Object.prototype.hasOwnProperty.call(config, key);
-  if (has("archivedFlags")) await selectLabels("#archivedFlags", config.archivedFlags);
-  if (has("period")) await selectLabels("#reportType", config.period);
+
+  // These controls are independent. Dispatch their change events together so
+  // each widget's settling delay overlaps instead of serializing the fields.
+  await Promise.all([
+    ...(has("archivedFlags") ? [selectLabels("#archivedFlags", config.archivedFlags)] : []),
+    ...(has("period") ? [selectLabels("#reportType", config.period)] : []),
+  ]);
   await delay(300);
-  if (has("financialYears")) await selectLabels("#financialYearSelect", config.financialYears);
-  if (has("reportYear")) await selectLabels("#reportYear", config.reportYear);
-  if (has("reportMonth")) await selectLabels("#reportMonth", config.reportMonth);
+  await Promise.all([
+    ...(has("financialYears") ? [selectLabels("#financialYearSelect", config.financialYears)] : []),
+    ...(has("reportYear") ? [selectLabels("#reportYear", config.reportYear)] : []),
+    ...(has("reportMonth") ? [selectLabels("#reportMonth", config.reportMonth)] : []),
+  ]);
   if (has("fromYear")) fill("#fromYear", config.fromYear);
   if (has("toYear")) fill("#toYear", config.toYear);
   if (has("fromDate")) fill("#fromDate", config.fromDate);
@@ -288,16 +342,17 @@ async function fillVahan(config) {
     await selectLabels("#delhiNcr", config.delhiNcr);
     await delay(100);
   }
-  if (has("states")) await selectLabels("#stateName", config.states);
-  if (has("rtos") && splitValues(config.rtos).length) {
-    await waitForOptions("#rtoCode", splitValues(config.rtos));
-    await selectLabels("#rtoCode", config.rtos);
-  }
-  if (has("emissions")) await selectLabels("#vehicleEmission", config.emissions);
-  if (has("makers")) {
-    await loadMakerOptions(config.makers);
-    await selectLabels("#vehicleMaker", config.makers);
-  }
+  const geographyTask = (async () => {
+    if (has("states")) {
+      const states = splitValues(config.states);
+      if (states.length) await waitForOptions("#stateName", states, 5_000);
+      await selectLabels("#stateName", config.states);
+    }
+    if (has("rtos") && splitValues(config.rtos).length) {
+      await waitForOptions("#rtoCode", splitValues(config.rtos));
+      await selectLabels("#rtoCode", config.rtos);
+    }
+  })();
   const optionalSelects = {
     categoryGroups: "#vehicleCategoryGroup", subCategories: "#vehicleSubCategory",
     classes: "#vehicleClass", fuels: "#vehicleFuel", evTypes: "#evType",
@@ -309,25 +364,75 @@ async function fillVahan(config) {
   // #evType selection restricts #vehicleFuel's option list), so a value left
   // over from the previous scenario can make an otherwise-valid label in
   // this scenario appear "not found".
-  for (const [key, selector] of Object.entries(optionalSelects)) {
-    if (!has(key)) await clearSelect(selector);
+  const dependentOptionalKeys = new Set([
+    "categoryGroups", "subCategories", "classes", "fuels", "evTypes", "vehicleType",
+  ]);
+  await Promise.all(Object.entries(optionalSelects)
+    .filter(([key]) => !has(key) && !dependentOptionalKeys.has(key))
+    .map(([, selector]) => clearSelect(selector)));
+  for (const key of dependentOptionalKeys) {
+    if (!has(key)) await clearSelect(optionalSelects[key]);
   }
-  for (const [key, selector] of Object.entries(optionalSelects)) {
-    if (has(key)) await selectLabels(selector, config[key]);
+
+  const independentVehicleTasks = [];
+  if (has("emissions")) independentVehicleTasks.push(selectLabels("#vehicleEmission", config.emissions));
+  if (has("makers")) {
+    independentVehicleTasks.push((async () => {
+      await loadMakerOptions(config.makers);
+      await selectLabels("#vehicleMaker", config.makers);
+    })());
   }
-  if (has("yAxis")) {
-    await selectLabels("#yAxis", config.yAxis);
-    await refreshXAxisOptions(splitValues(config.yAxis)[0], { resetSelection: true });
+  for (const key of ["statuses", "ownerTypes", "fitness"]) {
+    const selector = optionalSelects[key];
+    if (has(key)) independentVehicleTasks.push(selectLabels(selector, config[key]));
   }
-  if (has("xAxis") && splitValues(config.xAxis).length) {
-    const yAxis = document.querySelector("#yAxis");
-    const selectedYAxis = yAxis && [...yAxis.options].find((option) => option.value === yAxis.value);
-    const yAxisLabel = splitValues(config.yAxis)[0]
-      || selectedYAxis?.label
-      || selectedYAxis?.textContent?.trim();
-    await waitForXAxisOptions(yAxisLabel || "(current selection)", splitValues(config.xAxis));
-    await selectLabels("#xAxis", config.xAxis);
-  }
+
+  const dependentVehicleTask = (async () => {
+    // These filters rebuild one another's option lists, so keep this chain in
+    // order and wait for each requested option to appear.
+    if (has("categoryGroups")) await selectLabels(optionalSelects.categoryGroups, config.categoryGroups);
+    if (has("subCategories")) {
+      if (splitValues(config.subCategories).length) {
+        await waitForOptions(optionalSelects.subCategories, splitValues(config.subCategories));
+      }
+      await selectLabels(optionalSelects.subCategories, config.subCategories);
+    }
+    if (has("classes")) {
+      if (splitValues(config.classes).length) {
+        await waitForOptions(optionalSelects.classes, splitValues(config.classes));
+      }
+      await selectLabels(optionalSelects.classes, config.classes);
+    }
+    // The EV selection can constrain Fuel, so preserve that dependency order.
+    if (has("evTypes")) await selectLabels(optionalSelects.evTypes, config.evTypes);
+    if (has("fuels")) {
+      if (splitValues(config.fuels).length) {
+        await waitForOptions(optionalSelects.fuels, splitValues(config.fuels));
+      }
+      await selectLabels(optionalSelects.fuels, config.fuels);
+    }
+  })();
+
+  const axisTask = (async () => {
+    if (has("yAxis")) {
+      await selectLabels("#yAxis", config.yAxis);
+      await refreshXAxisOptions(splitValues(config.yAxis)[0], { resetSelection: true });
+    }
+    if (has("xAxis") && splitValues(config.xAxis).length) {
+      const yAxis = document.querySelector("#yAxis");
+      const selectedYAxis = yAxis && [...yAxis.options].find((option) => option.value === yAxis.value);
+      const yAxisLabel = splitValues(config.yAxis)[0]
+        || selectedYAxis?.label
+        || selectedYAxis?.textContent?.trim();
+      await waitForXAxisOptions(yAxisLabel || "(current selection)", splitValues(config.xAxis));
+      await selectLabels("#xAxis", config.xAxis);
+    }
+  })();
+
+  // Run independent controls and the separate axis chain together. The
+  // category/subcategory/class and EV/fuel chains remain ordered by dependency.
+  await Promise.all([geographyTask, ...independentVehicleTasks, dependentVehicleTask, axisTask]);
+  if (has("vehicleType")) await selectLabels(optionalSelects.vehicleType, config.vehicleType);
   if (has("autoApply")) configureAutoApply(config.autoApply);
 }
 
@@ -448,7 +553,7 @@ function submitRemoteCaptcha(value, autoApply) {
   updateFloatingStep("captcha", "done");
 
   if (!autoApply) {
-    setFloatingStatus("waiting", "CAPTCHA đã được điền. Hãy kiểm tra và bấm Apply trên VAHAN.");
+    setFloatingStatus("waiting", "CAPTCHA entered. Review it and click Apply on VAHAN.");
     return { applied: false };
   }
 
@@ -467,7 +572,7 @@ function watchApplyButton(button) {
   if (!button || applyResultWatcherButton === button) return;
   applyResultWatcherButton = button;
   button.addEventListener("click", () => {
-    window.setTimeout(() => {
+    queueMicrotask(() => {
       startServerResultWatcher().catch((error) => {
         chrome.runtime.sendMessage({
           type: "SERVER_JOB_PAGE_RESULT",
@@ -475,7 +580,7 @@ function watchApplyButton(button) {
           error: error.message,
         }).catch(() => {});
       });
-    }, 750);
+    });
   }, true);
 }
 
@@ -486,7 +591,7 @@ function configureAutoApply(enabled) {
 
   const applyLabel = floatingWidget?.shadowRoot?.querySelector('[data-role="apply-label"]');
   if (applyLabel) {
-    applyLabel.textContent = enabled ? "5. Tự động bấm Apply" : "5. Bạn bấm Apply trên VAHAN";
+    applyLabel.textContent = enabled ? "5. Auto-click Apply" : "5. Click Apply on VAHAN";
   }
 
   const captcha = document.querySelector("#externalCaptcha");
@@ -506,13 +611,15 @@ function configureAutoApply(enabled) {
     cleanup();
     updateFloatingStep("captcha", "done");
     updateFloatingStep("apply", "running");
-    setFloatingStatus("running", "Đã nhập đủ CAPTCHA. Đang tự động bấm Apply...");
+    setFloatingStatus("running", "CAPTCHA complete. Clicking Apply...");
     applyButton.scrollIntoView({ behavior: "smooth", block: "center" });
     applyButton.click();
   };
   const onInput = () => {
     clearTimeout(timer);
-    if (captcha.value.trim().length >= 6) timer = setTimeout(submit, 800);
+    const length = captcha.value.trim().length;
+    if (length >= 6) timer = setTimeout(submit, 150);
+    else if (length === 5) setFloatingStatus("waiting", "5 of 6 CAPTCHA characters entered. Enter the final character shown in the image.");
   };
 
   captcha.addEventListener("input", onInput);
@@ -543,7 +650,7 @@ async function startAutoExportWatcher() {
       updateFloatingStep("captcha", "done");
       updateFloatingStep("apply", "done");
       updateFloatingStep("export", "done");
-      setFloatingStatus("success", "Đã tìm thấy kết quả và tải file Excel.");
+      setFloatingStatus("success", "Results found. Downloading the Excel file.");
       button.click();
     }
   }, 500);
@@ -568,11 +675,11 @@ function setFloatingStatus(state, message) {
   const badge = root.querySelector(".badge");
   const status = root.querySelector(".status");
   const labels = {
-    ready: "Sẵn sàng",
-    running: "Đang xử lý...",
-    waiting: "Chờ nhập CAPTCHA",
-    success: "Thành công",
-    error: "Có lỗi xảy ra",
+    ready: "Ready",
+    running: "Processing...",
+    waiting: "Waiting for CAPTCHA",
+    success: "Success",
+    error: "An error occurred",
   };
   badge.dataset.state = state;
   badge.textContent = labels[state] || labels.ready;
@@ -590,7 +697,7 @@ function resetFloatingSteps() {
 // Chỉ nhận diện một node đang hiển thị, có nội dung ngắn và thực sự chứa thông báo.
 const NO_RECORD_TEXT = /\bno\s+record\s+found\b/i;
 const INVALID_CAPTCHA_TEXT = /\binvalid\s+captcha\b/i;
-const NO_RECORD_CONFIRMATION_MS = 15_000;
+const NO_RECORD_CONFIRMATION_MS = 5_000;
 const compactText = (value) => String(value || "").replace(/\s+/g, " ").trim();
 const isVisible = (element) => {
   if (!element || element.getClientRects().length === 0) return false;
@@ -613,6 +720,19 @@ const hasVisiblePageMessage = (pattern) => [...document.querySelectorAll("body *
   });
 const hasInvalidCaptchaMessage = () => hasVisiblePageMessage(INVALID_CAPTCHA_TEXT);
 const hasVisibleNoRecordMessage = () => hasVisiblePageMessage(NO_RECORD_TEXT);
+const mutationCanChangeResult = (mutation) => {
+  const nodes = [mutation.target, ...mutation.addedNodes, ...mutation.removedNodes];
+  return nodes.some((node) => {
+    if (node.nodeType === 3) {
+      const text = compactText(node.textContent);
+      return NO_RECORD_TEXT.test(text) || INVALID_CAPTCHA_TEXT.test(text);
+    }
+    if (node.nodeType !== 1) return false;
+    if (node.id === "downloadBtn1" || node.querySelector?.("#downloadBtn1")) return true;
+    const text = compactText(node.textContent);
+    return text.length <= 240 && (NO_RECORD_TEXT.test(text) || INVALID_CAPTCHA_TEXT.test(text));
+  });
+};
 
 let resultWatcherJobId;
 async function startServerResultWatcher() {
@@ -628,73 +748,137 @@ async function startServerResultWatcher() {
   }
 }
 
+function waitForVahanResult(timeoutMs = 90_000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let checkQueued = false;
+    let noRecordTimer;
+    let timeoutTimer;
+    let observer;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(noRecordTimer);
+      window.clearTimeout(timeoutTimer);
+      observer?.disconnect();
+      chrome.storage.onChanged?.removeListener(onStorageChanged);
+      resolve(result);
+    };
+
+    const checkDom = () => {
+      if (settled) return;
+      if (hasInvalidCaptchaMessage()) {
+        finish({ type: "INVALID_CAPTCHA" });
+        return;
+      }
+      if (isVisible(document.querySelector("#downloadBtn1"))) {
+        finish({ type: "DOWNLOAD_READY" });
+        return;
+      }
+      if (hasVisibleNoRecordMessage()) {
+        if (noRecordTimer === undefined) {
+          // Give VAHAN a short window to reveal a report button. That button
+          // remains authoritative and wins even while this timer is pending.
+          noRecordTimer = window.setTimeout(() => {
+            noRecordTimer = undefined;
+            if (isVisible(document.querySelector("#downloadBtn1"))) {
+              finish({ type: "DOWNLOAD_READY" });
+            } else if (hasVisibleNoRecordMessage()) {
+              finish({ type: "NO_RECORD" });
+            } else {
+              queueCheck();
+            }
+          }, NO_RECORD_CONFIRMATION_MS);
+        }
+        return;
+      }
+      window.clearTimeout(noRecordTimer);
+      noRecordTimer = undefined;
+    };
+
+    const queueCheck = () => {
+      if (settled || checkQueued) return;
+      checkQueued = true;
+      queueMicrotask(() => {
+        checkQueued = false;
+        checkDom();
+      });
+    };
+
+    const checkAuthHold = () => {
+      getActiveVahanAuthHold().then((hold) => {
+        if (hold) finish({ type: "AUTH_REQUIRED", hold });
+      }).catch(() => {});
+    };
+
+    const onStorageChanged = (changes, areaName) => {
+      if (areaName === "local" && changes[VAHAN_AUTH_HOLD_KEY]) checkAuthHold();
+    };
+
+    observer = new MutationObserver((mutations) => {
+      if (mutations.some(mutationCanChangeResult)) queueCheck();
+    });
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["class", "style", "hidden", "aria-hidden"],
+    });
+    chrome.storage.onChanged?.addListener(onStorageChanged);
+    timeoutTimer = window.setTimeout(() => finish({ type: "TIMEOUT" }), timeoutMs);
+    checkAuthHold();
+    checkDom();
+  });
+}
+
 async function resumeServerJobAfterApply(activeServerJob) {
 
   updateFloatingStep("captcha", "done");
   updateFloatingStep("apply", "done");
   updateFloatingStep("export", "running");
-  setFloatingStatus("running", "Đang kiểm tra kết quả VAHAN...");
+  setFloatingStatus("running", "Checking for VAHAN results...");
 
-  const deadline = Date.now() + 90_000;
-  let noRecordSince = 0;
-  while (Date.now() < deadline) {
-    const authHold = await getActiveVahanAuthHold();
-    if (authHold) {
-      updateFloatingStep("export", "error");
-      setFloatingStatus("error", authHoldStatusMessage(authHold));
-      await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "AUTH_REQUIRED" });
-      return;
-    }
+  const outcome = await waitForVahanResult();
+  if (outcome.type === "AUTH_REQUIRED") {
+    updateFloatingStep("export", "error");
+    setFloatingStatus("error", authHoldStatusMessage(outcome.hold));
+    await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "AUTH_REQUIRED" });
+    return;
+  }
 
-    if (hasInvalidCaptchaMessage()) {
-      updateFloatingStep("captcha", "error");
-      updateFloatingStep("export", "idle");
-      setFloatingStatus("waiting", "CAPTCHA không đúng. Đang gửi ảnh mới sang Web UI...");
-      const captcha = await captureCaptcha();
-      await chrome.runtime.sendMessage({
-        type: "SERVER_JOB_PAGE_RESULT",
-        result: "INVALID_CAPTCHA",
-        captcha,
-      });
-      return;
-    }
+  if (outcome.type === "INVALID_CAPTCHA") {
+    updateFloatingStep("captcha", "error");
+    updateFloatingStep("export", "idle");
+    setFloatingStatus("waiting", "Incorrect CAPTCHA. Sending the new image to the Web UI...");
+    const captcha = await captureCaptcha();
+    await chrome.runtime.sendMessage({
+      type: "SERVER_JOB_PAGE_RESULT",
+      result: "INVALID_CAPTCHA",
+      captcha,
+    });
+    return;
+  }
 
-    const downloadButton = document.querySelector("#downloadBtn1");
-    if (isVisible(downloadButton)) {
-      // A ready download is authoritative. Some VAHAN pages briefly keep an
-      // old "No record found" node while the new report is rendered.
-      noRecordSince = 0;
-      if (activeServerJob.config?.autoExport ?? true) {
-        setFloatingStatus("running", "Báo cáo đã sẵn sàng. Đang tải và xác minh file Excel...");
-        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "DOWNLOAD_READY" });
-      } else {
-        setFloatingStatus("success", "Báo cáo đã sẵn sàng. Bạn có thể tải Excel thủ công.");
-        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "COMPLETED" });
-      }
-      updateFloatingStep("export", "done");
-      return;
-    }
+  if (outcome.type === "DOWNLOAD_READY") {
+    // Every server batch case requires a stored Excel file. The page's
+    // autoExport preference only applies to standalone/manual use.
+    setFloatingStatus("running", "Report ready. Downloading and verifying the Excel file...");
+    await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "DOWNLOAD_READY" });
+    updateFloatingStep("export", "done");
+    return;
+  }
 
-    // VAHAN can render "No record found" before it finishes creating the
-    // downloadable report (the report may legitimately contain zero totals).
-    // Require a long, stable empty-result window before skipping; a visible
-    // download button always wins immediately above.
-    if (hasVisibleNoRecordMessage()) {
-      if (!noRecordSince) noRecordSince = Date.now();
-      if (Date.now() - noRecordSince >= NO_RECORD_CONFIRMATION_MS) {
-        updateFloatingStep("export", "idle");
-        setFloatingStatus("success", "VAHAN không có dữ liệu khớp bộ lọc này (No record found).");
-        await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "NO_RECORD" });
-        return;
-      }
-    } else {
-      noRecordSince = 0;
-    }
-    await delay(500);
+  if (outcome.type === "NO_RECORD") {
+    updateFloatingStep("export", "idle");
+    setFloatingStatus("success", "VAHAN returned no data for these filters (no record found).");
+    await chrome.runtime.sendMessage({ type: "SERVER_JOB_PAGE_RESULT", result: "NO_RECORD" });
+    return;
   }
 
   updateFloatingStep("export", "error");
-  setFloatingStatus("error", "Quá thời gian chờ kết quả từ VAHAN.");
+  setFloatingStatus("error", "Timed out while waiting for VAHAN results.");
   await chrome.runtime.sendMessage({
     type: "SERVER_JOB_PAGE_RESULT",
     result: "FAILED",
@@ -706,10 +890,10 @@ function renderFloatingRunnerConnection(connection = {}) {
   const element = floatingWidget?.shadowRoot?.querySelector(".backend-connection");
   if (!element) return;
   const labels = {
-    connected: "Backend đã kết nối",
-    connecting: "Đang kết nối backend...",
-    disconnected: "Backend đã ngắt kết nối",
-    error: "Không thể kết nối backend",
+    connected: "Backend connected",
+    connecting: "Connecting to backend...",
+    disconnected: "Backend disconnected",
+    error: "Could not connect to backend",
   };
   element.dataset.state = connection.status || "disconnected";
   element.querySelector("span:last-child").textContent =
@@ -722,7 +906,7 @@ async function runFromFloatingWidget() {
   const button = root.querySelector(".start");
   button.disabled = true;
   resetFloatingSteps();
-  setFloatingStatus("running", "Đang đọc cấu hình đã lưu...");
+  setFloatingStatus("running", "Loading saved configuration...");
   updateFloatingStep("time", "running");
 
   try {
@@ -730,7 +914,7 @@ async function runFromFloatingWidget() {
     if (authHold) throw new Error(authHoldStatusMessage(authHold));
     const { vahanConfig } = await chrome.storage.local.get("vahanConfig");
     if (!vahanConfig) {
-      throw new Error("Chưa có cấu hình. Hãy mở popup extension và chọn bộ lọc trước.");
+      throw new Error("No configuration found. Open the extension popup and choose filters first.");
     }
 
     await fillVahan(vahanConfig);
@@ -741,14 +925,14 @@ async function runFromFloatingWidget() {
     setFloatingStatus(
       "waiting",
       vahanConfig.autoApply
-        ? "Đã điền bộ lọc. Apply sẽ tự chạy sau khi bạn nhập đủ CAPTCHA."
-        : "Đã điền bộ lọc. Hãy nhập CAPTCHA và bấm Apply trên trang VAHAN.",
+        ? "Filters filled. Apply will run automatically after you enter the CAPTCHA."
+        : "Filters filled. Enter the CAPTCHA and click Apply on VAHAN.",
     );
-    button.textContent = "↻ Điền Lại Bộ Lọc";
+    button.textContent = "↻ Refill filters";
   } catch (error) {
     updateFloatingStep("time", "error");
     setFloatingStatus("error", error.message);
-    button.textContent = "↻ Thử Lại";
+    button.textContent = "↻ Try again";
   } finally {
     button.disabled = false;
   }
@@ -764,29 +948,29 @@ function injectFloatingWidget() {
     <style>
       :host { all: initial; }
       .card {
-        position: fixed; right: 24px; bottom: 24px; z-index: 2147483647;
-        width: 360px; overflow: hidden; border: 1px solid #e1e4e8;
-        border-radius: 12px; background: #fff; color: #24292e;
-        box-shadow: 0 10px 30px rgba(0,0,0,.22);
+        position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
+        width: min(340px, calc(100vw - 24px)); overflow: hidden; border: 1px solid #e2e6ec;
+        border-radius: 16px; background: #fff; color: #172033;
+        box-shadow: 0 8px 24px rgba(15,23,42,.14);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
       .header {
         display: flex; align-items: center; gap: 8px;
-        padding: 12px 16px; color: #fff;
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        padding: 11px 14px; border-bottom: 1px solid #eef0f3; color: #172033;
+        background: #fff;
       }
-      .title { display: flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 700; }
+      .title { font-size: 13px; font-weight: 600; }
       .toggle {
-        width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
-        background: rgba(255,255,255,.2); color: #fff; font-size: 16px;
+        width: 28px; height: 28px; margin-left: auto; padding: 0; border: 0; border-radius: 50%;
+        background: #f2f4f7; color: #475467; font-size: 16px;
         line-height: 1; cursor: pointer;
       }
-      .toggle:hover { background: rgba(255,255,255,.3); }
-      .body { padding: 14px 16px; }
+      .toggle:hover { background: #e8ecf2; }
+      .body { padding: 12px 14px 14px; }
       .body[hidden] { display: none; }
       .backend-connection {
-        display: flex; align-items: center; gap: 7px; margin: 0 0 12px;
-        color: #586069; font-size: 12px;
+        display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+        color: #596579; font-size: 11px;
       }
       .backend-dot {
         width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%;
@@ -800,70 +984,72 @@ function injectFloatingWidget() {
         background: #cb2431; box-shadow: 0 0 0 3px rgba(203,36,49,.12);
       }
       .badge {
-        display: inline-block; margin-left: auto; padding: 3px 8px;
-        border: 1px solid rgba(255,255,255,.45); border-radius: 12px;
-        background: rgba(255,255,255,.16); color: #fff; font-size: 12px; font-weight: 600;
+        display: inline-block; margin-left: auto; padding: 5px 9px;
+        border: 1px solid #e4e8ee; border-radius: 999px;
+        background: #f7f8fa; color: #475467; font-size: 10px; font-weight: 600;
       }
       .badge[data-state="running"], .badge[data-state="waiting"] {
-        border-color: #fff5b1; background: #fffbdd; color: #9a6700;
+        border-color: #f4dda6; background: #fff8e8; color: #946200;
       }
-      .badge[data-state="success"] { border-color: #bef5cb; background: #dcffe4; color: #22863a; }
-      .badge[data-state="error"] { border-color: #ffdce0; background: #ffeef0; color: #cb2431; }
-      .steps { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; font-size: 13px; }
-      .step { display: flex; align-items: center; gap: 8px; color: #666; line-height: 1.35; }
-      .step-icon { width: 16px; color: #8c959f; font-size: 16px; font-weight: 700; text-align: center; }
-      .step[data-state="running"] { color: #005cc5; font-weight: 600; }
-      .step[data-state="waiting"] { color: #d93f0b; font-weight: 700; }
-      .step[data-state="done"] { color: #22863a; }
-      .step[data-state="error"] { color: #cb2431; font-weight: 700; }
+      .badge[data-state="success"] { border-color: #c9e9d5; background: #eef8f1; color: #137a37; }
+      .badge[data-state="error"] { border-color: #f1c6c6; background: #fff2f2; color: #b42318; }
+      .steps { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; font-size: 11px; }
+      .step { display: flex; align-items: center; gap: 8px; color: #667085; line-height: 1.4; }
+      .step-icon { width: 14px; color: #98a2b3; font-size: 14px; font-weight: 600; text-align: center; }
+      .step[data-state="running"] { color: #175cd3; font-weight: 600; }
+      .step[data-state="waiting"] { color: #946200; font-weight: 600; }
+      .step[data-state="done"] { color: #137a37; }
+      .step[data-state="error"] { color: #b42318; font-weight: 600; }
       .start {
-        width: 100%; padding: 10px; border: 0; border-radius: 6px;
-        background: #2ea44f; color: #fff; font-size: 14px; font-weight: 600;
+        width: 100%; min-height: 38px; padding: 9px 14px; border: 0; border-radius: 999px;
+        background: #2165d5; color: #fff; font-size: 12px; font-weight: 600;
         cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.1);
       }
-      .start:hover { background: #2c974b; }
+      .start:hover { background: #174ea6; }
       .start:disabled { opacity: .6; cursor: wait; }
       .preferences {
-        display: flex; flex-direction: column; gap: 7px; margin: 0 0 12px;
-        padding: 10px; border: 1px solid #e1e4e8; border-radius: 7px;
-        background: #f8f9fa;
+        display: block; margin: 0 0 10px;
+        padding: 10px 11px; border: 1px solid #e7eaf0; border-radius: 12px;
+        background: #fafbfc;
       }
+      .preferences summary { color: #475467; font-size: 11px; font-weight: 600; cursor: pointer; }
+      .preferences[open] summary { margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid #e7eaf0; }
       .preference {
-        display: flex; align-items: center; gap: 7px; color: #444;
-        font-size: 12px; line-height: 1.4; cursor: pointer;
+        display: flex; align-items: center; gap: 8px; margin-top: 7px; color: #475467;
+        font-size: 11px; line-height: 1.4; cursor: pointer;
       }
-      .preference input { width: 14px; height: 14px; margin: 0; accent-color: #2ea44f; }
+      .preference input { width: 14px; height: 14px; margin: 0; accent-color: #2165d5; }
       .open-popup {
-        width: 100%; margin-top: 8px; padding: 8px; border: 1px solid #d0d7de;
-        border-radius: 6px; background: #fff; color: #1e3c72; font-size: 13px;
+        width: 100%; min-height: 36px; margin-top: 8px; padding: 8px 12px; border: 1px solid #d7dce4;
+        border-radius: 999px; background: #fff; color: #344054; font-size: 11px;
         font-weight: 600; cursor: pointer;
       }
-      .open-popup:hover { background: #f6f8fa; border-color: #8c959f; }
-      .status { min-height: 22px; margin-top: 10px; color: #586069; font-size: 12px; line-height: 1.45; }
+      .open-popup:hover { background: #f7f8fa; border-color: #bfc7d2; }
+      .status { min-height: 18px; margin-top: 8px; color: #667085; font-size: 11px; line-height: 1.45; }
     </style>
-    <section class="card" aria-label="VAHAN RPA Tool">
+    <section class="card" aria-label="VAHAN extension">
       <header class="header">
-        <div class="title"><span aria-hidden="true">🤖</span> VAHAN RPA Tool</div>
-        <div class="badge" data-state="ready">Sẵn sàng</div>
-        <button class="toggle" type="button" aria-label="Thu gọn widget" aria-expanded="true">−</button>
+        <div class="title">Extension VAHAN</div>
+        <div class="badge" data-state="ready">Ready</div>
+        <button class="toggle" type="button" aria-label="Collapse widget" aria-expanded="true">−</button>
       </header>
       <div class="body">
-        <div class="backend-connection" data-state="connecting"><span class="backend-dot"></span><span>Đang kết nối backend...</span></div>
+        <div class="backend-connection" data-state="connecting"><span class="backend-dot"></span><span>Connecting to backend...</span></div>
         <div class="steps">
-          <div class="step" data-step="time" data-state="idle"><span class="step-icon">○</span><span>1. Điền thời gian và khu vực</span></div>
-          <div class="step" data-step="vehicle" data-state="idle"><span class="step-icon">○</span><span>2. Điền bộ lọc phương tiện</span></div>
-          <div class="step" data-step="axes" data-state="idle"><span class="step-icon">○</span><span>3. Thiết lập trục báo cáo</span></div>
-          <div class="step" data-step="captcha" data-state="idle"><span class="step-icon">○</span><span>4. Bạn nhập CAPTCHA thủ công</span></div>
-          <div class="step" data-step="apply" data-state="idle"><span class="step-icon">○</span><span data-role="apply-label">5. Bấm Apply trên VAHAN</span></div>
-          <div class="step" data-step="export" data-state="idle"><span class="step-icon">○</span><span>6. Gửi file Excel về server</span></div>
+          <div class="step" data-step="time" data-state="idle"><span class="step-icon">○</span><span>Time and region</span></div>
+          <div class="step" data-step="vehicle" data-state="idle"><span class="step-icon">○</span><span>Vehicle filters</span></div>
+          <div class="step" data-step="axes" data-state="idle"><span class="step-icon">○</span><span>Report axes</span></div>
+          <div class="step" data-step="captcha" data-state="idle"><span class="step-icon">○</span><span>Enter CAPTCHA on VAHAN</span></div>
+          <div class="step" data-step="apply" data-state="idle"><span class="step-icon">○</span><span data-role="apply-label">Apply</span></div>
+          <div class="step" data-step="export" data-state="idle"><span class="step-icon">○</span><span>Download Excel</span></div>
         </div>
-        <div class="preferences" aria-label="Tùy chọn tự động">
-          <label class="preference"><input data-setting="autoApply" type="checkbox"><span>Tự động bấm Apply sau khi nhập CAPTCHA</span></label>
+        <button class="start" type="button">Fill filters</button>
+        <details class="preferences">
+          <summary>Cài đặt nhanh</summary>
           <label class="preference"><input data-setting="autoExport" type="checkbox"><span>Tự động tải Excel khi có kết quả</span></label>
-        </div>
-        <button class="start" type="button">▶ Điền Bộ Lọc Tự Động</button>
-        <button class="open-popup" type="button">⚙ Mở Cấu Hình</button>
-        <div class="status" role="status">Nhấn nút trên để dùng cấu hình đã lưu từ popup.</div>
+        </details>
+        <button class="open-popup" type="button">Cài đặt kết nối</button>
+        <div class="status" role="status">Ready.</div>
       </div>
     </section>`;
 
@@ -875,7 +1061,7 @@ function injectFloatingWidget() {
     body.hidden = expanded;
     toggle.textContent = expanded ? "+" : "−";
     toggle.setAttribute("aria-expanded", String(!expanded));
-    toggle.setAttribute("aria-label", expanded ? "Mở rộng widget" : "Thu gọn widget");
+    toggle.setAttribute("aria-label", expanded ? "Expand widget" : "Collapse widget");
   });
   root.querySelector(".start").addEventListener("click", runFromFloatingWidget);
   for (const checkbox of root.querySelectorAll("[data-setting]")) {
@@ -888,18 +1074,15 @@ function injectFloatingWidget() {
   root.querySelector(".open-popup").addEventListener("click", async () => {
     try {
       const response = await chrome.runtime.sendMessage({ type: "OPEN_ACTION_POPUP" });
-      if (!response?.ok) throw new Error(response?.error || "Chrome không thể mở popup.");
+      if (!response?.ok) throw new Error(response?.error || "Chrome could not open the popup.");
     } catch (error) {
-      setFloatingStatus("error", `Không thể mở cấu hình: ${error.message}`);
+      setFloatingStatus("error", `Could not open settings: ${error.message}`);
     }
   });
   chrome.storage.local.get(["vahanConfig", "runnerConnection"]).then(({ vahanConfig, runnerConnection }) => {
     renderFloatingRunnerConnection(runnerConnection);
-    root.querySelector('[data-setting="autoApply"]').checked = vahanConfig?.autoApply ?? false;
     root.querySelector('[data-setting="autoExport"]').checked = vahanConfig?.autoExport ?? true;
-    if (vahanConfig?.autoApply) {
-      root.querySelector('[data-role="apply-label"]').textContent = "5. Tự động bấm Apply";
-    }
+    root.querySelector('[data-role="apply-label"]').textContent = "Auto-click Apply";
   });
 }
 
@@ -922,7 +1105,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   const root = floatingWidget?.shadowRoot;
 
   if (root) {
-    root.querySelector('[data-setting="autoApply"]').checked = autoApply;
     root.querySelector('[data-setting="autoExport"]').checked = autoExport;
   }
   if ((previous.autoApply ?? false) !== autoApply) configureAutoApply(autoApply);

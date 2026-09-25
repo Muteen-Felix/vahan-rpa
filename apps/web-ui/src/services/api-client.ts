@@ -76,7 +76,7 @@ async function downloadFile(path: string, fileName: string): Promise<void> {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     if (response.status === 401) notifyAuthenticationRequired();
-    throw new Error(body.detail || `Không tải được file (${response.status}).`);
+    throw new Error(body.detail || `Could not download the file (${response.status}).`);
   }
   const objectUrl = URL.createObjectURL(await response.blob());
   const anchor = document.createElement("a");
@@ -120,4 +120,8 @@ export const api = {
   getJob: (jobId: string) => request<Job>(`/api/jobs/${jobId}`),
   cancelJob: (jobId: string) => request<Job>(`/api/jobs/${jobId}/cancel`, { method: "POST" }),
   exportedReports: () => request<ExportedReportItem[]>("/api/jobs/reports"),
+  verifyReports: (fileNames: string[]) => request<{ files: Record<string, number> }>("/api/jobs/reports/verify", {
+    method: "POST",
+    body: JSON.stringify({ fileNames }),
+  }),
 };

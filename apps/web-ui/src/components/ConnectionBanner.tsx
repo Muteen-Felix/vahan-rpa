@@ -7,10 +7,10 @@ interface Props {
 
 export function ConnectionBanner({ backend, runners }: Props) {
   const text = {
-    connecting: "Đang kết nối backend...",
-    connected: runners > 0 ? `${runners} extension đang online` : "Backend đã kết nối · Chưa có extension online",
-    disconnected: "Đã mất kết nối backend",
-    error: "Không thể kết nối backend",
+    connecting: "Connecting to backend...",
+    connected: runners > 0 ? `${runners} extension runner${runners === 1 ? "" : "s"} online` : "Backend connected · No extension runner online",
+    disconnected: "Backend disconnected",
+    error: "Could not connect to backend",
   }[backend];
 
   return (

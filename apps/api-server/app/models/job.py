@@ -37,7 +37,12 @@ ALLOWED_JOB_TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
         JobStatus.CANCELLED,
     },
     JobStatus.CAPTURING_CAPTCHA: {JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},
-    JobStatus.FILLING_FILTERS: {JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},
+    JobStatus.FILLING_FILTERS: {
+        JobStatus.CAPTURING_CAPTCHA,
+        JobStatus.WAITING_CAPTCHA,
+        JobStatus.FAILED,
+        JobStatus.CANCELLED,
+    },
     JobStatus.WAITING_CAPTCHA: {JobStatus.SUBMITTING, JobStatus.FAILED, JobStatus.CANCELLED},
     JobStatus.SUBMITTING: {JobStatus.WAITING_RESULT, JobStatus.WAITING_CAPTCHA, JobStatus.FAILED, JobStatus.CANCELLED},
     JobStatus.WAITING_RESULT: {JobStatus.WAITING_CAPTCHA, JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED},

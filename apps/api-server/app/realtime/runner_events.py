@@ -6,6 +6,7 @@ from uuid import UUID
 from pathlib import Path
 
 from app.config import settings
+from app.excel_storage import stored_excel_path
 from app.models.job import JobStatus, can_transition
 from app.realtime.server import sio
 from app.services import services
@@ -134,6 +135,8 @@ async def job_status(sid: str, payload: dict) -> dict:
         return {"ok": False, "error": "Job does not belong to this runner."}
     if not can_transition(job.status, status):
         return {"ok": False, "error": f"Invalid job transition: {job.status} -> {status}."}
+    if status == JobStatus.COMPLETED and not stored_excel_path(job.excel_file_name):
+        return {"ok": False, "error": "Excel report has not been saved; job cannot be completed."}
     updated = await services.jobs.update_status(
         job_id,
         status,

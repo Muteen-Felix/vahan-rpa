@@ -2,17 +2,17 @@ import type { Job, JobStatus as Status } from "../contracts";
 import { AuthenticatedDownload } from "./AuthenticatedDownload";
 
 const labels: Record<Status, string> = {
-  QUEUED: "Đang xếp hàng",
-  ASSIGNED: "Đã giao cho extension",
-  OPENING_VAHAN: "Đang mở VAHAN",
-  CAPTURING_CAPTCHA: "Đang lấy CAPTCHA",
-  FILLING_FILTERS: "Đang điền bộ lọc",
-  WAITING_CAPTCHA: "Đang chờ CAPTCHA",
-  SUBMITTING: "Đang gửi CAPTCHA",
-  WAITING_RESULT: "Đang chờ kết quả",
-  COMPLETED: "Hoàn tất",
-  FAILED: "Thất bại",
-  CANCELLED: "Đã hủy",
+  QUEUED: "Queued",
+  ASSIGNED: "Assigned to extension",
+  OPENING_VAHAN: "Opening VAHAN",
+  CAPTURING_CAPTCHA: "Loading CAPTCHA",
+  FILLING_FILTERS: "Filling filters",
+  WAITING_CAPTCHA: "Waiting for CAPTCHA",
+  SUBMITTING: "Submitting CAPTCHA",
+  WAITING_RESULT: "Waiting for results",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
 };
 
 function formatSize(bytes: number): string {
@@ -32,49 +32,49 @@ function parseJobError(rawError: string): ParsedJobError {
 
   if (error.includes("VAHAN_SESSION_EXPIRED") || error.includes("Session Timeout")) {
     return {
-      title: "Phiên làm việc VAHAN đã hết hạn (Session Timeout)",
-      detail: "Máy chủ VAHAN đã hủy phiên làm việc do tab đã mở lâu không có tương tác.",
-      suggestion: "Vui lòng tải lại trang VAHAN trên trình duyệt và thử chạy lại.",
+      title: "VAHAN session expired",
+      detail: "VAHAN ended the session because the tab was inactive for too long.",
+      suggestion: "Reload the VAHAN page in your browser and try again.",
     };
   }
 
   if (error.includes("VAHAN_AUTH_REQUIRED") || error.includes("401")) {
     return {
-      title: "VAHAN yêu cầu xác thực hoặc phiên đã hết hạn (HTTP 401)",
+      title: "VAHAN authentication required (HTTP 401)",
       detail: error.replace(/^VAHAN_AUTH_REQUIRED:\s*/i, ""),
-      suggestion: "Đóng hộp thoại đăng nhập (nếu có), mở lại trang VAHAN chính thức và thử lại.",
+      suggestion: "Close any sign-in dialog, open the official VAHAN page, and try again.",
     };
   }
 
   if (error.includes("VAHAN_UNREACHABLE") || error.includes("chrome-error") || error.includes("Lỗi kết nối")) {
     return {
-      title: "Không thể kết nối đến trang VAHAN (Site Unreachable)",
+      title: "Cannot reach VAHAN",
       detail: error.replace(/^VAHAN_UNREACHABLE:\s*/i, ""),
-      suggestion: "Kiểm tra kết nối Internet của máy hoặc truy cập thử https://analytics.parivahan.gov.in xem trang có đang bảo trì không.",
+      suggestion: "Check your internet connection or visit https://analytics.parivahan.gov.in to see whether the site is available.",
     };
   }
 
   if (error.includes("VAHAN_SERVER_ERROR") || error.includes("HTTP 5")) {
     return {
-      title: "Máy chủ VAHAN gặp sự cố (Server Error)",
+      title: "VAHAN server error",
       detail: error.replace(/^VAHAN_SERVER_ERROR:\s*/i, ""),
-      suggestion: "Cổng thông tin VAHAN đang gặp sự cố nội bộ. Vui lòng chờ ít phút rồi thử lại.",
+      suggestion: "VAHAN is experiencing an internal error. Wait a few minutes and try again.",
     };
   }
 
   if (error.includes("Receiving end does not exist")) {
     return {
-      title: "Mất kết nối với tab VAHAN",
-      detail: "Extension không thể liên lạc với script trong tab VAHAN (tab có thể đã bị đóng hoặc chuyển sang trang khác).",
-      suggestion: "Hãy đảm bảo tab VAHAN đang mở đúng trang Public Report và tải lại tab.",
+      title: "Connection to the VAHAN tab was lost",
+      detail: "The extension cannot communicate with the VAHAN tab. The tab may be closed or on a different page.",
+      suggestion: "Make sure the VAHAN tab is on the Public Report page, then reload it.",
     };
   }
 
   if (error.startsWith("NO_RECORD_FOUND")) {
     return {
-      title: "Không có dữ liệu",
+      title: "No data found",
       detail: error.replace(/^NO_RECORD_FOUND:\s*/, ""),
-      suggestion: "Hãy thử nới lỏng hoặc thay đổi các tiêu chí lọc.",
+      suggestion: "Try broadening or changing the filters.",
     };
   }
 
@@ -92,7 +92,7 @@ export function JobStatus({ job, onCancel }: { job: Job | null; onCancel: () => 
     <section className="panel job-panel">
       <div className="panel-heading">
         <span className="step-number">2</span>
-        <div><h2>Tiến trình</h2><p className="job-id">Job {job.id}</p></div>
+        <div><h2>Activity</h2></div>
       </div>
       <div className="job-state" data-state={job.status}>
         <span className="pulse" />
@@ -104,7 +104,7 @@ export function JobStatus({ job, onCancel }: { job: Job | null; onCancel: () => 
           <div className="job-error-box error-message">
             {parsed.title && <strong className="job-error-title">{parsed.title}</strong>}
             <p className="job-error-detail">{parsed.detail}</p>
-            {parsed.suggestion && <p className="job-error-suggestion">💡 <em>Gợi ý: {parsed.suggestion}</em></p>}
+            {parsed.suggestion && <p className="job-error-suggestion">💡 <em>Suggestion: {parsed.suggestion}</em></p>}
           </div>
         );
       })()}
@@ -115,7 +115,7 @@ export function JobStatus({ job, onCancel }: { job: Job | null; onCancel: () => 
             path={`/api/jobs/${job.id}/excel`}
             fileName={job.excelFileName || "report.xlsx"}
           >
-            📥 Tải báo cáo Excel
+            📥 Download Excel report
           </AuthenticatedDownload>
           <p className="job-excel-meta">
             {job.excelFileName}
@@ -123,7 +123,7 @@ export function JobStatus({ job, onCancel }: { job: Job | null; onCancel: () => 
           </p>
         </div>
       )}
-      {!terminal && <button className="secondary-button" onClick={onCancel}>Hủy job</button>}
+      {!terminal && <button className="secondary-button" onClick={onCancel}>Cancel job</button>}
     </section>
   );
 }

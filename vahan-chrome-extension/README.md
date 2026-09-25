@@ -1,4 +1,4 @@
-# VAHAN RPA Chrome Extension
+# Vinfast RPA Assistant
 
 Chrome Extension Manifest V3 chạy trực tiếp trên máy client và là runner cho Web UI/backend. Cấu hình bộ lọc, kịch bản và báo cáo được quản lý trên Web UI; extension chỉ nhận job, thao tác trên tab VAHAN, rồi đồng bộ file Excel về backend. Người dùng luôn tự nhập CAPTCHA.
 

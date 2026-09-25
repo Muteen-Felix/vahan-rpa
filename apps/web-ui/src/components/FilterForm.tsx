@@ -32,21 +32,21 @@ const matchingMany = (options: string[], wanted: string[]) =>
 function optionErrorMessage(reason: unknown): string {
   const message = reason instanceof Error ? reason.message : String(reason || "");
   if (/VAHAN_SESSION_EXPIRED|session timeout/i.test(message)) {
-    return "Phiên làm việc VAHAN đã hết hạn. Hãy tải lại tab VAHAN trên trình duyệt để đọc lựa chọn.";
+    return "The VAHAN session has expired. Reload the VAHAN tab in your browser to load the options.";
   }
   if (/VAHAN_UNREACHABLE|chrome-error|lỗi kết nối/i.test(message)) {
-    return "Không thể kết nối đến trang VAHAN. Kiểm tra kết nối mạng hoặc thử lại sau.";
+    return "Cannot reach VAHAN. Check your internet connection or try again later.";
   }
   if (/VAHAN_SERVER_ERROR|HTTP 5/i.test(message)) {
-    return "Máy chủ VAHAN đang gặp sự cố nội bộ. Vui lòng chờ ít phút rồi thử lại.";
+    return "VAHAN is experiencing an internal error. Wait a few minutes and try again.";
   }
   if (/operation has timed out|timed out|timeout/i.test(message)) {
-    return "VAHAN đang phản hồi chậm. Hệ thống sẽ thử đọc lại lựa chọn khi extension sẵn sàng.";
+    return "VAHAN is responding slowly. The system will retry loading options when the extension is ready.";
   }
   if (/Receiving end does not exist/i.test(message)) {
-    return "Không tìm thấy nội dung trang VAHAN. Hãy đảm bảo tab VAHAN đang mở đúng trang Public Report.";
+    return "Could not find the VAHAN page content. Make sure the tab is on the Public Report page.";
   }
-  return message || "Không đọc được lựa chọn từ VAHAN.";
+  return message || "Could not load options from VAHAN.";
 }
 
 function DynamicSelect({ label, name, options, value, multiple = false, disabled = false, onChange }: {
@@ -79,15 +79,15 @@ function DynamicSelect({ label, name, options, value, multiple = false, disabled
     return <div className="dynamic-multi-field" ref={fieldRef}>
       <span className="dynamic-field-label">{label}</span>
       <button className="multi-trigger" type="button" disabled={disabled} aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <span>{selected.length ? `${selected.length} đã chọn` : "--- Chọn ---"}</span><i>⌄</i>
+        <span>{selected.length ? `${selected.length} selected` : "--- Select ---"}</span><i>⌄</i>
       </button>
       {open && <div className="dynamic-multi-popover"><div className="dynamic-multi">
-          <input type="search" autoFocus placeholder="Tìm kiếm..." value={search} disabled={disabled} onChange={(event) => setSearch(event.target.value)} />
+          <input type="search" autoFocus placeholder="Search..." value={search} disabled={disabled} onChange={(event) => setSearch(event.target.value)} />
           <label className="multi-select-all"><input type="checkbox" disabled={disabled || !visible.length}
             checked={Boolean(visible.length) && visible.every((item) => selected.includes(item))}
             onChange={(event) => onChange(name, event.target.checked
               ? [...new Set([...selected, ...visible])]
-              : selected.filter((item) => !visible.includes(item)))} /> Chọn tất cả</label>
+              : selected.filter((item) => !visible.includes(item)))} /> Select all</label>
           <div className="dynamic-option-list">{visible.map((option) =>
             <label key={option}><input type="checkbox" disabled={disabled} checked={selected.includes(option)}
               onChange={(event) => toggle(option, event.target.checked)} /> <span>{option}</span></label>)}</div>
@@ -121,11 +121,11 @@ export function FilterForm({ runners, busy, onSubmit }: Props) {
     ? runnerId : available[0]?.id || "";
 
   async function runnerRequest(request: Record<string, unknown>) {
-    if (!selectedRunner) throw new Error("Chưa có extension runner khả dụng.");
+    if (!selectedRunner) throw new Error("No extension runner is available.");
     const response = await uiSocket.timeout(22_000).emitWithAck("ui:runner-options", {
       runnerId: selectedRunner, request,
     }) as Acknowledgement & { options?: OptionMap | string[] };
-    if (!response.ok) throw new Error(response.error || "Không tải được lựa chọn từ VAHAN.");
+    if (!response.ok) throw new Error(response.error || "Could not load options from VAHAN.");
     return response;
   }
 
@@ -234,66 +234,66 @@ export function FilterForm({ runners, busy, onSubmit }: Props) {
 
   return <form className="panel filter-form" onSubmit={submit}>
     <div className="panel-heading"><span className="step-number">1</span><div>
-      <h2>Cấu hình báo cáo</h2><p>Các lựa chọn được đọc trực tiếp từ tab VAHAN.</p>
+      <h2>Report configuration</h2><p>Options are loaded directly from the VAHAN tab.</p>
     </div></div>
 
     <label>Extension runner<select value={selectedRunner} onChange={(event) => setRunnerId(event.target.value)} disabled={busy}>
-      {!available.length && <option value="">Chưa có extension khả dụng</option>}
+      {!available.length && <option value="">No extension available</option>}
       {available.map((runner) => <option key={runner.id} value={runner.id}>{runner.name} · {runner.id}</option>)}
     </select></label>
-    {loadingOptions && <p className="option-note">Đang đọc danh sách lựa chọn từ VAHAN...</p>}
+    {loadingOptions && <p className="option-note">Loading options from VAHAN...</p>}
     {optionError && <p className="error-message">{optionError}</p>}
 
-    <details className="filter-group" open><summary>Thời gian &amp; khu vực</summary><div className="form-grid">
-      {select("archivedFlags", "Trạng thái lưu trữ", true)}
-      {select("period", "Loại năm")}
-      {select("financialYears", "Năm tài chính", true)}
-      {select("reportYear", "Năm báo cáo")}
-      {select("reportMonth", "Tháng báo cáo")}
-      <label>Từ năm<input value={String(form.fromYear)} onChange={(e) => change("fromYear", e.target.value)} /></label>
-      <label>Đến năm<input value={String(form.toYear)} onChange={(e) => change("toYear", e.target.value)} /></label>
-      <label>Từ ngày<input value={String(form.fromDate)} onChange={(e) => change("fromDate", e.target.value)} /></label>
-      <label>Đến ngày<input value={String(form.toDate)} onChange={(e) => change("toDate", e.target.value)} /></label>
+    <details className="filter-group" open><summary>Time &amp; region</summary><div className="form-grid">
+      {select("archivedFlags", "Archive status", true)}
+      {select("period", "Year type")}
+      {select("financialYears", "Financial year", true)}
+      {select("reportYear", "Report year")}
+      {select("reportMonth", "Report month")}
+      <label>From year<input value={String(form.fromYear)} onChange={(e) => change("fromYear", e.target.value)} /></label>
+      <label>To year<input value={String(form.toYear)} onChange={(e) => change("toYear", e.target.value)} /></label>
+      <label>From date<input value={String(form.fromDate)} onChange={(e) => change("fromDate", e.target.value)} /></label>
+      <label>To date<input value={String(form.toDate)} onChange={(e) => change("toDate", e.target.value)} /></label>
       {select("delhiNcr", "Delhi NCR")}
-      {select("states", "Bang", true)}
+      {select("states", "State / UT", true)}
       {select("rtos", "RTO", true)}
     </div></details>
 
-    <details className="filter-group"><summary>Bộ lọc phương tiện</summary><div className="form-grid">
-      {select("emissions", "Tiêu chuẩn khí thải", true)}
-      <div className="maker-field"><span className="dynamic-field-label">Nhà sản xuất</span><div className="maker-autocomplete">
+    <details className="filter-group"><summary>Vehicle filters</summary><div className="form-grid">
+      {select("emissions", "Emission standards", true)}
+      <div className="maker-field"><span className="dynamic-field-label">Manufacturer</span><div className="maker-autocomplete">
         <div className="maker-chips">{(form.makers as string[]).map((maker) => <span className="maker-chip" key={maker}>{maker}
-          <button type="button" title={`Bỏ ${maker}`} onClick={() => change("makers", (form.makers as string[]).filter((item) => item !== maker))}>×</button>
+          <button type="button" title={`Remove ${maker}`} onClick={() => change("makers", (form.makers as string[]).filter((item) => item !== maker))}>×</button>
         </span>)}</div>
-        <input type="search" value={makerSearch} placeholder="Nhập ít nhất 2 ký tự để tìm..." onChange={(e) => setMakerSearch(e.target.value)} />
+        <input type="search" value={makerSearch} placeholder="Enter at least 2 characters to search..." onChange={(e) => setMakerSearch(e.target.value)} />
         {(makersLoading || makerSearch.trim().length >= 2) && <div className="maker-results">
-          {makersLoading && <p>Đang tìm...</p>}
-          {!makersLoading && !makerOptions.filter((item) => !(form.makers as string[]).includes(item)).length && <p>Không có kết quả.</p>}
+          {makersLoading && <p>Searching...</p>}
+          {!makersLoading && !makerOptions.filter((item) => !(form.makers as string[]).includes(item)).length && <p>No results.</p>}
           {!makersLoading && makerOptions.filter((item) => !(form.makers as string[]).includes(item)).map((maker) =>
             <button type="button" key={maker} onClick={() => {
               change("makers", [...(form.makers as string[]), maker]); setMakerSearch(""); setMakerOptions([]);
             }}>{maker}</button>)}
         </div>}
       </div></div>
-      {select("categoryGroups", "Nhóm phương tiện", true)}
-      {select("subCategories", "Nhóm phụ", true)}
-      {select("classes", "Loại phương tiện", true)}
-      {select("fuels", "Nhiên liệu", true)}
-      {select("evTypes", "Loại EV", true)}
-      {select("statuses", "Trạng thái", true)}
-      {select("ownerTypes", "Loại chủ sở hữu", true)}
-      {select("vehicleType", "Loại vận tải")}
-      {select("fitness", "Fitness còn hiệu lực")}
+      {select("categoryGroups", "Vehicle categories", true)}
+      {select("subCategories", "Subcategory", true)}
+      {select("classes", "Vehicle class", true)}
+      {select("fuels", "Fuel type", true)}
+      {select("evTypes", "EV type", true)}
+      {select("statuses", "Status", true)}
+      {select("ownerTypes", "Owner type", true)}
+      {select("vehicleType", "Transport type")}
+      {select("fitness", "Valid fitness")}
     </div></details>
 
-    <details className="filter-group" open><summary>Trục báo cáo</summary><div className="form-grid">
-      {select("yAxis", "Trục Y")}{select("xAxis", "Trục X")}
+    <details className="filter-group" open><summary>Report axes</summary><div className="form-grid">
+      {select("yAxis", "Y-axis")}{select("xAxis", "X-axis")}
     </div></details>
 
     <div className="checks">
-      <label><input type="checkbox" checked={Boolean(form.autoApply)} onChange={(e) => setForm((c) => ({ ...c, autoApply: e.target.checked }))} /> Tự động Apply sau khi nhập CAPTCHA</label>
-      <label><input type="checkbox" checked={Boolean(form.autoExport)} onChange={(e) => setForm((c) => ({ ...c, autoExport: e.target.checked }))} /> Tự động tải Excel</label>
+      <label><input type="checkbox" checked={Boolean(form.autoApply)} onChange={(e) => setForm((c) => ({ ...c, autoApply: e.target.checked }))} /> Automatically click Apply after entering the CAPTCHA</label>
+      <label><input type="checkbox" checked={Boolean(form.autoExport)} onChange={(e) => setForm((c) => ({ ...c, autoExport: e.target.checked }))} /> Automatically download Excel</label>
     </div>
-    <button className="primary-button" disabled={busy || loadingOptions || !selectedRunner}>{busy ? "Đang tạo job..." : "▶ Fill Filter"}</button>
+    <button className="primary-button" disabled={busy || loadingOptions || !selectedRunner}>{busy ? "Creating job..." : "▶ Fill Filter"}</button>
   </form>;
 }

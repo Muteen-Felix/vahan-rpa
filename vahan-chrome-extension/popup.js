@@ -6,6 +6,7 @@ const runnerToken = document.querySelector("#runnerToken");
 const saveRunnerConfigButton = document.querySelector("#saveRunnerConfig");
 const workflowBadge = document.querySelector("#workflowBadge");
 const workflowTitle = document.querySelector("#workflowTitle");
+const workflowMeta = document.querySelector("#workflowMeta");
 const workflowDetail = document.querySelector("#workflowDetail");
 const workflowJobId = document.querySelector("#workflowJobId");
 const authGuard = document.querySelector("#authGuard");
@@ -13,48 +14,126 @@ const authGuardMessage = document.querySelector("#authGuardMessage");
 const clearAuthHoldButton = document.querySelector("#clearAuthHold");
 const reloadVahanTabButton = document.querySelector("#reloadVahanTab");
 const status = document.querySelector("#status");
+const statusTab = document.querySelector("#statusTab");
+const settingsTab = document.querySelector("#settingsTab");
+const statusView = document.querySelector("#statusView");
+const backendSettings = document.querySelector("#backendSettings");
+
+function showPopupView(view) {
+  const showingSettings = view === "settings";
+  statusView.hidden = showingSettings;
+  backendSettings.hidden = !showingSettings;
+  statusTab.classList.toggle("active", !showingSettings);
+  settingsTab.classList.toggle("active", showingSettings);
+  statusTab.setAttribute("aria-selected", String(!showingSettings));
+  settingsTab.setAttribute("aria-selected", String(showingSettings));
+}
+
+statusTab.addEventListener("click", () => showPopupView("status"));
+settingsTab.addEventListener("click", () => showPopupView("settings"));
 
 const connectionLabels = {
-  connected: "Backend đã kết nối",
-  connecting: "Đang kết nối backend...",
-  disconnected: "Backend đã ngắt kết nối",
-  error: "Không thể kết nối backend",
+  connected: "Backend connected",
+  connecting: "Connecting to backend...",
+  disconnected: "Backend disconnected",
+  error: "Could not connect to backend",
 };
 
 const workflowStates = {
-  CAPTURING_CAPTCHA: ["Đang lấy CAPTCHA", "running", "Extension đang lấy ảnh CAPTCHA từ VAHAN."],
-  WAITING_CAPTCHA: ["Chờ người dùng nhập CAPTCHA", "waiting", "Nhập CAPTCHA tại Web UI để tiếp tục."],
-  SUBMITTING: ["Đang gửi CAPTCHA", "running", "Đang điền bộ lọc và gửi CAPTCHA lên VAHAN."],
-  WAITING_RESULT: ["Đang chờ kết quả VAHAN", "running", "VAHAN đang tạo kết quả báo cáo."],
-  DOWNLOADING_REPORT: ["Đang tải Excel", "running", "Chrome đang tải file Excel gốc từ VAHAN."],
-  UPLOADING_REPORT: ["Đang lưu báo cáo", "running", "Đang đồng bộ file Excel vào Báo cáo đã xuất."],
+  QUEUED: { state: "running", detail: "Queued" },
+  ASSIGNED: { state: "running", detail: "Assigned to extension" },
+  OPENING_VAHAN: { state: "running", detail: "Opening VAHAN" },
+  CAPTURING_CAPTCHA: { state: "running", detail: "Loading CAPTCHA" },
+  FILLING_FILTERS: { state: "running", detail: "Filling filters" },
+  WAITING_CAPTCHA: { state: "waiting", detail: "Waiting for CAPTCHA on VAHAN" },
+  SUBMITTING: { state: "running", detail: "Submitting CAPTCHA to VAHAN" },
+  WAITING_RESULT: { state: "running", detail: "Waiting for VAHAN results" },
+  DOWNLOADING_REPORT: { state: "running", detail: "Downloading Excel" },
+  UPLOADING_REPORT: { state: "running", detail: "Saving Excel" },
+  COMPLETED: { state: "success", detail: "Completed" },
+  FAILED: { state: "error", detail: "Job failed" },
+  CANCELLED: { state: "error", detail: "Job cancelled" },
 };
+
+function renderWorkflowScenario(scenarioName, fallbackTitle) {
+  workflowMeta.replaceChildren();
+  workflowMeta.hidden = true;
+
+  const fullName = typeof scenarioName === "string" ? scenarioName.trim() : "";
+  const parts = fullName.split(/\s*\|\s*/).filter(Boolean);
+  if (parts.length < 2) {
+    workflowTitle.textContent = fullName || fallbackTitle;
+    workflowTitle.title = fullName;
+    return;
+  }
+
+  const caseMatch = parts[0].match(/^(?:case\s*)?(\d+)$/i);
+  const categoryIndex = caseMatch ? 1 : 0;
+  workflowTitle.textContent = caseMatch
+    ? `Case ${caseMatch[1]} · ${parts[categoryIndex]}`
+    : parts[categoryIndex];
+  workflowTitle.title = fullName;
+
+  const filterParts = parts.slice(categoryIndex + 1);
+  for (const filter of filterParts) {
+    const axisMatch = filter.match(/^([YX])\s*=\s*(.+)$/i);
+    const axisPairMatch = filter.match(/^Y\s*=\s*(.+?)\s*\/\s*X\s*=\s*(.+)$/i);
+    if (axisPairMatch) {
+      addWorkflowChip(`Y · ${axisPairMatch[1]}`);
+      addWorkflowChip(`X · ${axisPairMatch[2]}`);
+    } else if (axisMatch) {
+      addWorkflowChip(`${axisMatch[1].toUpperCase()} · ${axisMatch[2]}`);
+    } else {
+      addWorkflowChip(filter);
+    }
+  }
+  workflowMeta.hidden = workflowMeta.childElementCount === 0;
+}
+
+function addWorkflowChip(label) {
+  const chip = document.createElement("span");
+  chip.className = "workflow-chip";
+  chip.textContent = label;
+  workflowMeta.append(chip);
+}
 
 function renderRunnerConnection(connection = {}) {
   const connectionState = connection.status || "disconnected";
   runnerConnection.dataset.state = connectionState;
   runnerConnection.querySelector(".connection-text").textContent =
     connectionLabels[connectionState] || connectionLabels.disconnected;
-  connectionDetail.textContent = connection.detail || "Chưa có thông tin kết nối gần nhất.";
+  connectionDetail.textContent = connection.detail || "No recent connection details.";
 }
 
 function renderWorkflow(job) {
   if (!job?.jobId) {
     workflowBadge.dataset.state = "idle";
-    workflowBadge.textContent = "Sẵn sàng";
-    workflowTitle.textContent = "Chưa có job đang chạy";
-    workflowDetail.textContent = "Tạo báo cáo từ Web UI để extension nhận và xử lý.";
+    workflowBadge.textContent = "Ready";
+    workflowTitle.textContent = "No job yet";
+    workflowTitle.removeAttribute("title");
+    workflowMeta.replaceChildren();
+    workflowMeta.hidden = true;
+    workflowDetail.textContent = "Create a report in the Web UI to get started.";
+    workflowDetail.dataset.state = "idle";
     workflowJobId.hidden = true;
     return;
   }
 
-  const [title, state, detail] = workflowStates[job.stage] || ["Đang xử lý", "running", "Extension đang thực hiện yêu cầu từ backend."];
-  workflowBadge.dataset.state = state;
-  workflowBadge.textContent = state === "waiting" ? "Cần thao tác" : "Đang xử lý";
-  workflowTitle.textContent = job.scenarioName || title;
-  workflowDetail.textContent = `${title}. ${detail}`;
+  const stage = workflowStates[job.stage] || { state: "running", detail: "Processing" };
+  workflowBadge.dataset.state = stage.state;
+  workflowBadge.textContent = stage.state === "waiting"
+    ? "Action required"
+    : stage.state === "success"
+      ? "Completed"
+      : stage.state === "error"
+        ? "Error"
+        : "Processing";
+  renderWorkflowScenario(job.scenarioName, stage.detail);
+  workflowDetail.textContent = stage.detail;
+  workflowDetail.dataset.state = stage.state;
   workflowJobId.hidden = false;
   workflowJobId.textContent = `Job ${job.jobId}`;
+  workflowJobId.title = job.jobId;
 }
 
 function renderAuthHold(hold) {
@@ -64,8 +143,8 @@ function renderAuthHold(hold) {
     authGuardMessage.textContent = "";
     return;
   }
-  const retryAfter = hold.retryAfter ? new Date(hold.retryAfter).toLocaleString() : "sau khi xác nhận";
-  authGuardMessage.textContent = `VAHAN trả HTTP 401. Extension đã tạm dừng để tránh thử lại liên tục; hãy đóng hộp thoại và chờ đến ${retryAfter}.`;
+  const retryAfter = hold.retryAfter ? new Date(hold.retryAfter).toLocaleString("en-GB") : "after confirmation";
+  authGuardMessage.textContent = `VAHAN returned HTTP 401. The extension is paused to prevent repeated retries. Close the dialog and wait until ${retryAfter}.`;
 }
 
 function setStatus(message = "", kind = "") {
@@ -92,7 +171,7 @@ async function loadPopupState() {
 saveRunnerConfigButton.addEventListener("click", async () => {
   const serverUrl = runnerServerUrl.value.trim().replace(/\/$/, "");
   if (!/^https?:\/\//i.test(serverUrl)) {
-    setStatus("Server URL phải bắt đầu bằng http:// hoặc https://", "error");
+    setStatus("Server URL must start with http:// or https://", "error");
     return;
   }
 
@@ -107,7 +186,7 @@ saveRunnerConfigButton.addEventListener("click", async () => {
         token: runnerToken.value,
       },
     });
-    renderRunnerConnection({ status: "connecting", detail: "Đang kết nối lại backend..." });
+    renderRunnerConnection({ status: "connecting", detail: "Reconnecting to backend..." });
     setStatus("Đã lưu cấu hình. Extension đang kết nối lại.", "success");
   } catch (error) {
     setStatus(error.message || "Không thể lưu cấu hình backend.", "error");
@@ -120,11 +199,11 @@ clearAuthHoldButton.addEventListener("click", async () => {
   clearAuthHoldButton.disabled = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: "CLEAR_VAHAN_AUTH_HOLD" });
-    if (!response?.ok) throw new Error(response?.error || "Không thể xóa trạng thái tạm dừng.");
+    if (!response?.ok) throw new Error(response?.error || "Could not clear the pause.");
     renderAuthHold(null);
-    setStatus("Đã bỏ tạm dừng. Hãy tải lại tab VAHAN trước khi chạy job mới.", "success");
+    setStatus("Pause cleared. Reload the VAHAN tab before starting a new job.", "success");
   } catch (error) {
-    setStatus(error.message || "Không thể xóa trạng thái tạm dừng.", "error");
+    setStatus(error.message || "Could not clear the pause.", "error");
   } finally {
     clearAuthHoldButton.disabled = false;
   }
@@ -134,11 +213,11 @@ reloadVahanTabButton?.addEventListener("click", async () => {
   reloadVahanTabButton.disabled = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: "RELOAD_VAHAN_PAGE" });
-    if (!response?.ok) throw new Error(response?.error || "Không thể tải lại trang VAHAN.");
+    if (!response?.ok) throw new Error(response?.error || "Could not reload the VAHAN page.");
     renderAuthHold(null);
-    setStatus("Đang tải lại trang VAHAN...", "success");
+    setStatus("Reloading the VAHAN page...", "success");
   } catch (error) {
-    setStatus(error.message || "Không thể tải lại trang VAHAN.", "error");
+    setStatus(error.message || "Could not reload the VAHAN page.", "error");
   } finally {
     reloadVahanTabButton.disabled = false;
   }

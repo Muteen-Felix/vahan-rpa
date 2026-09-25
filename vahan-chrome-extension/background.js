@@ -3512,15 +3512,15 @@
     return Number.isFinite(retryAfter) && retryAfter > now2;
   }
   function vahanAuthHoldMessage(hold = {}) {
-    const retryAfter = hold.retryAfter ? new Date(hold.retryAfter).toLocaleString() : "sau khi x\xE1c nh\u1EADn";
-    return `VAHAN \u0111ang y\xEAu c\u1EA7u x\xE1c th\u1EF1c HTTP (${hold.statusCode || 401}). Extension \u0111\xE3 t\u1EA1m d\u1EEBng \u0111\u1EC3 kh\xF4ng th\u1EED l\u1EA1i li\xEAn t\u1EE5c. H\xE3y \u0111\xF3ng h\u1ED9p tho\u1EA1i \u0111\u0103ng nh\u1EADp, ch\u1EDD \u0111\u1EBFn ${retryAfter}, ki\u1EC3m tra truy c\u1EADp trang ch\xEDnh th\u1EE9c r\u1ED3i m\u1EDBi ch\u1EA1y l\u1EA1i.`;
+    const retryAfter = hold.retryAfter ? new Date(hold.retryAfter).toLocaleString("en-GB") : "after confirmation";
+    return `VAHAN requires HTTP authentication (${hold.statusCode || 401}). The extension is paused to prevent repeated retries. Close the sign-in dialog, wait until ${retryAfter}, verify that the official page is accessible, then try again.`;
   }
   function vahanSessionExpiredMessage() {
-    return "Phi\xEAn l\xE0m vi\u1EC7c tr\xEAn VAHAN \u0111\xE3 h\u1EBFt h\u1EA1n (Session Timeout). Vui l\xF2ng t\u1EA3i l\u1EA1i trang VAHAN \u0111\u1EC3 t\u1EA1o phi\xEAn m\u1EDBi.";
+    return "The VAHAN session has expired (session timeout). Reload the VAHAN page to start a new session.";
   }
   function vahanUnreachableMessage(detail = "") {
     const reason = detail ? ` (${detail})` : "";
-    return `Kh\xF4ng th\u1EC3 k\u1EBFt n\u1ED1i \u0111\u1EBFn trang VAHAN${reason}. M\xE1y ch\u1EE7 c\xF3 th\u1EC3 \u0111ang b\u1EA3o tr\xEC ho\u1EB7c m\u1EA5t k\u1EBFt n\u1ED1i m\u1EA1ng.`;
+    return `Cannot reach VAHAN${reason}. The server may be under maintenance or your network may be disconnected.`;
   }
 
   // ui-drift/health-check.mjs
@@ -4185,6 +4185,7 @@
     token: "change-me"
   });
   var HEARTBEAT_INTERVAL_MS = 2e4;
+  var RUNNER_CONNECTION_ALARM = "runner-connection-watchdog";
   var VAHAN_URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en";
   var INITIAL_PAGE_LOAD_TIMEOUT_MS = 75e3;
   var MAX_TAB_IDLE_AGE_MS = 10 * 60 * 1e3;
@@ -4213,6 +4214,8 @@
   var socket;
   var heartbeatTimer;
   var reconnectTimer;
+  var runnerConnectionTask;
+  var runnerReconnectRequested = false;
   var activeConfig;
   var activeJobId;
   var cancelledJobIds = /* @__PURE__ */ new Set();
@@ -4255,7 +4258,7 @@
   };
   var VahanServerError = class extends Error {
     constructor(statusCode = 500) {
-      super(`M\xE1y ch\u1EE7 VAHAN \u0111ang g\u1EB7p s\u1EF1 c\u1ED1 (HTTP ${statusCode}). H\u1EC7 th\u1ED1ng c\xF3 th\u1EC3 \u0111ang b\u1EA3o tr\xEC.`);
+      super(`VAHAN server error (HTTP ${statusCode}). The site may be under maintenance.`);
       this.name = "VahanServerError";
       this.code = VAHAN_SERVER_ERROR_CODE;
       this.statusCode = statusCode;
@@ -4283,7 +4286,7 @@
   function showAuthHoldBadge(hold) {
     chrome.action.setBadgeText?.({ text: "!" });
     chrome.action.setBadgeBackgroundColor?.({ color: "#b42318" });
-    chrome.action.setTitle?.({ title: "VAHAN \u0111ang y\xEAu c\u1EA7u x\xE1c th\u1EF1c \u2014 h\u1EC7 th\u1ED1ng \u0111\xE3 t\u1EA1m d\u1EEBng" });
+    chrome.action.setTitle?.({ title: "VAHAN authentication required \u2014 automation paused" });
     chrome.runtime.sendMessage({ type: "VAHAN_AUTH_REQUIRED", authHold: hold }).catch(() => {
     });
   }
@@ -4388,6 +4391,27 @@
     });
     if (!response?.ok) throw new Error(response?.error || `Could not report ${status}.`);
   }
+  async function restorePreviousJobTab(activeServerJob) {
+    const previousTabId = activeServerJob?.previousTabId;
+    const vahanTabId = activeServerJob?.tabId;
+    if (!Number.isInteger(previousTabId) || !Number.isInteger(vahanTabId) || previousTabId === vahanTabId) return;
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (activeTab?.id !== vahanTabId) return;
+      const previousTab = await chrome.tabs.get(previousTabId);
+      if (previousTab.windowId !== activeTab.windowId) return;
+      await chrome.tabs.update(previousTabId, { active: true });
+    } catch {
+    }
+  }
+  async function finishServerJob(activeServerJob) {
+    if (!activeServerJob?.jobId) return;
+    const { activeServerJob: storedJob } = await chrome.storage.local.get("activeServerJob");
+    if (storedJob?.jobId && storedJob.jobId !== activeServerJob.jobId) return;
+    await restorePreviousJobTab(activeServerJob);
+    if (activeJobId === activeServerJob.jobId) activeJobId = void 0;
+    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+  }
   async function publishCaptcha(jobId, captcha) {
     if (!socket?.connected) throw new Error("Backend is disconnected.");
     const response = await socket.timeout(5e3).emitWithAck("captcha:required", {
@@ -4448,7 +4472,7 @@
     const url2 = tab?.url || "";
     if (isChromeErrorUrl(url2)) {
       const lastError2 = tabLastErrors.get(tabId);
-      throw new VahanUnreachableError(lastError2?.error || "L\u1ED7i k\u1EBFt n\u1ED1i");
+      throw new VahanUnreachableError(lastError2?.error || "Connection error");
     }
     const lastError = tabLastErrors.get(tabId);
     if (lastError && lastError.type === "SERVER_ERROR" && Date.now() - lastError.timestamp < 15e3) {
@@ -4495,9 +4519,12 @@
       chrome.tabs.onUpdated.addListener(listener);
     });
   }
-  async function getVahanTab() {
+  async function getVahanTab({ foreground = false } = {}) {
     await assertNoVahanAuthHold2();
-    const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*" });
+    const tabs = await chrome.tabs.query({
+      url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*",
+      ...foreground ? { lastFocusedWindow: true } : {}
+    });
     let tab = tabs[0];
     let forceReload = false;
     if (tab?.id) {
@@ -4507,9 +4534,10 @@
         forceReload = true;
       }
     } else {
-      tab = await chrome.tabs.create({ url: VAHAN_URL, active: false });
+      tab = await chrome.tabs.create({ url: VAHAN_URL, active: foreground });
     }
     if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
+    if (foreground) await chrome.tabs.update(tab.id, { active: true });
     if (forceReload) {
       await chrome.tabs.update(tab.id, { url: VAHAN_URL });
     }
@@ -4552,7 +4580,7 @@
             const currentTab = await chrome.tabs.get(tabId);
             if (isChromeErrorUrl(currentTab?.url)) {
               const lastError = tabLastErrors.get(tabId);
-              throw new VahanUnreachableError(lastError?.error || "L\u1ED7i k\u1EBFt n\u1ED1i");
+              throw new VahanUnreachableError(lastError?.error || "Connection error");
             }
             if (isVahanRedirectedHomeUrl(currentTab?.url)) {
               throw new VahanSessionExpiredError();
@@ -4688,9 +4716,14 @@
     if (activeJobId === jobId) return;
     if (activeJobId) {
       console.warn(`[VAHAN EXT] Preempting stale job ${activeJobId} with new job ${jobId}`);
-      cancelledJobIds.add(activeJobId);
-      activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      const staleJobId = activeJobId;
+      cancelledJobIds.add(staleJobId);
+      const { activeServerJob: staleServerJob } = await chrome.storage.local.get("activeServerJob");
+      if (staleServerJob?.jobId === staleJobId) await finishServerJob(staleServerJob);
+      else {
+        activeJobId = void 0;
+        await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      }
     }
     activeJobId = jobId;
     cancelledJobIds.delete(jobId);
@@ -4698,20 +4731,49 @@
     chrome.runtime.sendMessage({ type: "SERVER_JOB_ASSIGNED", job }).catch(() => {
     });
     let tabId;
+    let previousTabId;
     try {
+      const [previousTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      previousTabId = previousTab?.id;
       await reportJobStatus(jobId, "OPENING_VAHAN");
-      tabId = await getVahanTab();
+      tabId = await getVahanTab({ foreground: true });
       assertJobActive(jobId);
+      await chrome.storage.local.set({ pendingServerJob: { ...job, tabId, previousTabId } });
       const config = normalizeJobFilters(job.filters);
       await chrome.storage.local.set({
-        activeServerJob: { ...job, tabId, config, stage: "CAPTURING_CAPTCHA" }
+        pendingServerJob: { ...job, tabId, previousTabId },
+        activeServerJob: { ...job, tabId, previousTabId, config, stage: "FILLING_FILTERS" }
+      });
+      await reportJobStatus(jobId, "FILLING_FILTERS");
+      let fillResponse = await sendToVahan(tabId, { type: "FILL_VAHAN", config });
+      if (!fillResponse?.ok && String(fillResponse?.error || "").startsWith("#stateName:")) {
+        await chrome.tabs.update(tabId, { url: VAHAN_URL });
+        await waitForTabComplete(tabId, INITIAL_PAGE_LOAD_TIMEOUT_MS);
+        assertJobActive(jobId);
+        fillResponse = await sendToVahan(tabId, { type: "FILL_VAHAN", config });
+      }
+      if (!fillResponse?.ok) throw new Error(fillResponse?.error || "VAHAN did not accept the filters.");
+      assertJobActive(jobId);
+      const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
+      await chrome.storage.local.set({ vahanConfig: { ...vahanConfig, ...config } });
+      await chrome.storage.local.set({
+        activeServerJob: { ...job, tabId, previousTabId, config, filtersFilled: true, stage: "CAPTURING_CAPTCHA" }
       });
       await reportJobStatus(jobId, "CAPTURING_CAPTCHA");
       const captcha = await sendToVahan(tabId, { type: "CAPTURE_CAPTCHA" });
       if (!captcha?.ok) throw new Error(captcha?.error || "Could not capture the CAPTCHA.");
       assertJobActive(jobId);
       await chrome.storage.local.set({
-        activeServerJob: { ...job, tabId, config, captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA", attempts: 0 }
+        activeServerJob: {
+          ...job,
+          tabId,
+          previousTabId,
+          config,
+          filtersFilled: true,
+          captchaId: captcha.captchaId,
+          stage: "WAITING_CAPTCHA",
+          attempts: 0
+        }
       });
       await publishCaptcha(jobId, captcha);
     } catch (error) {
@@ -4733,8 +4795,7 @@
           if (authHeld) authFailureReportedJobs.add(jobId);
         }
       }
-      activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await finishServerJob({ jobId, tabId, previousTabId });
     }
   }
   async function loadRunnerConfig() {
@@ -4771,18 +4832,23 @@
       if (!socket?.connected) return;
       socket.timeout(5e3).emit("runner:heartbeat", { timestamp: Date.now() }, (error, response) => {
         if (error || !response?.ok) {
-          publishConnection("error", error?.message || response?.error || "Heartbeat failed.");
+          const detail = error?.message || response?.error || "Heartbeat failed.";
+          publishConnection("error", detail);
+          if (!error && response?.ok === false && /not registered/i.test(response.error || "")) {
+            void connectRunner({ force: true }).catch(() => {
+            });
+          }
         }
       });
     }, HEARTBEAT_INTERVAL_MS);
   }
-  async function connectRunner() {
+  async function connectRunnerOnce() {
     clearTimeout(reconnectTimer);
     activeConfig = await loadRunnerConfig();
     void uiHealthCheckController?.refreshScheduleFromBackend();
     socket?.removeAllListeners();
     socket?.disconnect();
-    await publishConnection("connecting", "\u0110ang k\u1EBFt n\u1ED1i backend...");
+    await publishConnection("connecting", "Connecting to backend...");
     socket = lookup2(`${activeConfig.serverUrl}/runner`, {
       transports: ["websocket"],
       auth: {
@@ -4798,23 +4864,29 @@
       timeout: 1e4
     });
     socket.on("connect", async () => {
-      publishConnection("connected", "\u0110\xE3 k\u1EBFt n\u1ED1i backend.");
+      publishConnection("connected", "Backend connected.");
       startHeartbeat();
-      const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+      const { activeServerJob, pendingServerJob } = await chrome.storage.local.get([
+        "activeServerJob",
+        "pendingServerJob"
+      ]);
       if (activeServerJob?.jobId) {
         await reportJobStatus(activeServerJob.jobId, "FAILED", "Extension reconnected or restarted.").catch(() => {
         });
+        await restorePreviousJobTab(activeServerJob);
+      } else if (pendingServerJob?.jobId) {
+        await restorePreviousJobTab(pendingServerJob);
       }
       activeJobId = void 0;
       await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
     });
     socket.on("disconnect", (reason) => {
       stopHeartbeat();
-      publishConnection("disconnected", `M\u1EA5t k\u1EBFt n\u1ED1i: ${reason}`);
+      publishConnection("disconnected", `Disconnected: ${reason}`);
     });
     socket.on("connect_error", (error) => {
       stopHeartbeat();
-      publishConnection("error", error.message || "Kh\xF4ng th\u1EC3 k\u1EBFt n\u1ED1i backend.");
+      publishConnection("error", error.message || "Could not connect to backend.");
     });
     socket.on("ui-health:schedule-updated", (schedule) => {
       uiHealthCheckController?.updateSchedule(schedule?.intervalDays).catch((error) => {
@@ -4833,7 +4905,7 @@
       });
     });
     socket.io.on("reconnect_attempt", () => {
-      publishConnection("connecting", "\u0110ang k\u1EBFt n\u1ED1i l\u1EA1i backend...");
+      publishConnection("connecting", "Reconnecting to backend...");
     });
     socket.on("job:assigned", (job) => executeJob(job).catch(async (error) => {
       const jobId = String(job?.jobId || "");
@@ -4844,13 +4916,22 @@
     socket.on("job:cancelled", async ({ jobId }) => {
       const id = String(jobId);
       cancelledJobIds.add(id);
+      const { activeServerJob, pendingServerJob } = await chrome.storage.local.get([
+        "activeServerJob",
+        "pendingServerJob"
+      ]);
+      if (activeServerJob?.jobId === id) await finishServerJob(activeServerJob);
+      else if (pendingServerJob?.jobId === id) {
+        await restorePreviousJobTab(pendingServerJob);
+        await chrome.storage.local.remove("pendingServerJob");
+      }
       if (activeJobId === id) activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
     });
     socket.on("captcha:submit", async (payload, acknowledge) => {
       const jobId = String(payload?.jobId || "");
+      let activeServerJob;
       try {
-        const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+        ({ activeServerJob } = await chrome.storage.local.get("activeServerJob"));
         if (!activeServerJob || activeServerJob.jobId !== jobId || activeJobId && activeJobId !== jobId) {
           throw new Error("The active VAHAN job no longer matches this CAPTCHA.");
         }
@@ -4867,18 +4948,8 @@
             attempts
           }
         });
-        const fillResponse = await sendToVahan(activeServerJob.tabId, {
-          type: "FILL_VAHAN",
-          config: activeServerJob.config
-        });
-        if (!fillResponse?.ok) {
-          throw new Error(fillResponse?.error || "VAHAN did not accept the filters.");
-        }
+        if (!activeServerJob.filtersFilled) throw new Error("VAHAN filters are not ready yet.");
         assertJobActive(jobId);
-        const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
-        await chrome.storage.local.set({
-          vahanConfig: { ...vahanConfig, ...activeServerJob.config }
-        });
         const currentCaptcha = await sendToVahan(activeServerJob.tabId, { type: "CAPTURE_CAPTCHA" });
         if (!currentCaptcha?.ok) {
           throw new Error(currentCaptcha?.error || "Could not verify the current CAPTCHA.");
@@ -4913,8 +4984,9 @@
         await reportJobStatus(jobId, "WAITING_RESULT");
         acknowledge({ ok: true });
       } catch (error) {
-        if (activeJobId === jobId) activeJobId = void 0;
-        await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+        await reportJobStatus(jobId, "FAILED", error.message).catch(() => {
+        });
+        if (activeServerJob?.jobId === jobId) await finishServerJob(activeServerJob);
         acknowledge({ ok: false, error: error.message });
       }
     });
@@ -4961,6 +5033,32 @@
       }
     });
   }
+  function connectRunner({ force = false } = {}) {
+    if (runnerConnectionTask) {
+      runnerReconnectRequested ||= force;
+      return runnerConnectionTask;
+    }
+    const task = (async () => {
+      do {
+        runnerReconnectRequested = false;
+        await connectRunnerOnce();
+      } while (runnerReconnectRequested);
+    })().catch(async (error) => {
+      stopHeartbeat();
+      await publishConnection("error", error?.message || "Could not start the backend connection.").catch(() => {
+      });
+      throw error;
+    }).finally(() => {
+      if (runnerConnectionTask === task) runnerConnectionTask = void 0;
+    });
+    runnerConnectionTask = task;
+    return task;
+  }
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== RUNNER_CONNECTION_ALARM || socket?.active) return;
+    void connectRunner().catch(() => {
+    });
+  });
   async function handlePageResult(message, sender) {
     const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
     if (!activeServerJob || activeJobId && activeServerJob.jobId !== activeJobId) return;
@@ -4975,16 +5073,14 @@
         `${VAHAN_AUTH_REQUIRED_CODE}: ${vahanAuthHoldMessage(hold || {})}`
       ).catch(() => {
       });
-      activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await finishServerJob(activeServerJob);
       return;
     }
     if (message.result === "INVALID_CAPTCHA") {
       if ((activeServerJob.attempts || 0) >= 3) {
         await reportJobStatus(jobId, "FAILED", "CAPTCHA was invalid 3 consecutive times.").catch(() => {
         });
-        activeJobId = void 0;
-        await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+        await finishServerJob(activeServerJob);
         return;
       }
       let captcha = message.captcha;
@@ -5005,28 +5101,25 @@
         await reportJobStatus(jobId, "FAILED", error.message).catch(() => {
         });
       }
-      activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await finishServerJob(activeServerJob);
       return;
     }
     if (message.result === "COMPLETED") {
-      await reportJobStatus(jobId, "COMPLETED");
-      activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await reportJobStatus(jobId, "FAILED", "The page did not provide a captured Excel report.").catch(() => {
+      });
+      await finishServerJob(activeServerJob);
       return;
     }
     if (message.result === "NO_RECORD") {
-      await reportJobStatus(jobId, "FAILED", "NO_RECORD_FOUND: VAHAN kh\xF4ng c\xF3 d\u1EEF li\u1EC7u kh\u1EDBp b\u1ED9 l\u1ECDc n\xE0y.").catch(() => {
+      await reportJobStatus(jobId, "FAILED", "NO_RECORD_FOUND: VAHAN returned no data for these filters.").catch(() => {
       });
-      activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await finishServerJob(activeServerJob);
       return;
     }
     if (message.result === "FAILED") {
       await reportJobStatus(jobId, "FAILED", message.error || "VAHAN did not return a result.").catch(() => {
       });
-      activeJobId = void 0;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await finishServerJob(activeServerJob);
     }
   }
   async function handleCaptchaChanged(message, sender) {
@@ -5037,14 +5130,23 @@
     if (!captcha?.captchaId || !captcha?.imageDataUrl || captcha.captchaId === activeServerJob.captchaId) return;
     await publishCaptchaChange(activeServerJob, captcha, "captcha:refreshed");
   }
-  chrome.runtime.onInstalled.addListener(() => connectRunner());
-  chrome.runtime.onStartup.addListener(() => connectRunner());
+  chrome.runtime.onInstalled.addListener(() => {
+    void connectRunner().catch(() => {
+    });
+  });
+  chrome.runtime.onStartup.addListener(() => {
+    void connectRunner().catch(() => {
+    });
+  });
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local" || !changes.runnerConfig) return;
     const nextConfig = changes.runnerConfig.newValue;
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => {
-      if (JSON.stringify(nextConfig) !== JSON.stringify(activeConfig)) connectRunner();
+      if (JSON.stringify(nextConfig) !== JSON.stringify(activeConfig)) {
+        void connectRunner({ force: true }).catch(() => {
+        });
+      }
     }, 250);
   });
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -5065,7 +5167,7 @@
     }
     if (message?.type === "OPEN_ACTION_POPUP") {
       if (typeof chrome.action.openPopup !== "function") {
-        sendResponse({ ok: false, error: "T\xEDnh n\u0103ng n\xE0y c\u1EA7n Google Chrome 127 tr\u1EDF l\xEAn." });
+        sendResponse({ ok: false, error: "This feature requires Google Chrome 127 or later." });
         return;
       }
       chrome.action.openPopup().then(() => sendResponse({ ok: true })).catch((error) => sendResponse({ ok: false, error: error.message }));
@@ -5102,12 +5204,14 @@
       return true;
     }
     if (message?.type === "RECONNECT_RUNNER") {
-      connectRunner().then(() => sendResponse({ ok: true })).catch((error) => sendResponse({ ok: false, error: error.message }));
+      connectRunner({ force: true }).then(() => sendResponse({ ok: true })).catch((error) => sendResponse({ ok: false, error: error.message }));
       return true;
     }
   });
   uiHealthCheckController = registerUiHealthCheck(chrome);
   installVahanAuthGuard();
   void loadVahanAuthHold();
-  connectRunner();
+  chrome.alarms.create(RUNNER_CONNECTION_ALARM, { periodInMinutes: 0.5 });
+  void connectRunner().catch(() => {
+  });
 })();

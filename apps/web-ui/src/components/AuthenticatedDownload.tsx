@@ -20,7 +20,7 @@ export function AuthenticatedDownload({ path, fileName, className, children, sty
     try {
       await api.downloadFile(path, fileName);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không tải được file.");
+      setError(reason instanceof Error ? reason.message : "Could not download the file.");
     } finally {
       setLoading(false);
     }
@@ -35,7 +35,7 @@ export function AuthenticatedDownload({ path, fileName, className, children, sty
         onClick={() => void download()}
         disabled={loading}
       >
-        {loading ? "Đang tải…" : children}
+        {loading ? "Downloading…" : children}
       </button>
       {error && <small className="download-error" role="alert">{error}</small>}
     </span>

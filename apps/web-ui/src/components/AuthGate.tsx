@@ -24,11 +24,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       clearAccessToken();
       setPassword("");
       setGate("login");
-      setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      setError("Your session has expired. Please sign in again.");
     };
     const signOut = () => {
       setPassword("");
-      setError("Bạn đã đăng xuất.");
+      setError("You have signed out.");
       setGate("login");
     };
     window.addEventListener(AUTH_REQUIRED_EVENT, expireSession);
@@ -55,7 +55,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         }
       } catch (reason) {
         if (!active) return;
-        setError(reason instanceof Error ? reason.message : "Không kết nối được API.");
+        setError(reason instanceof Error ? reason.message : "Could not connect to the API.");
         setGate("unavailable");
       }
     }
@@ -78,7 +78,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setPassword("");
       setGate("authenticated");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Đăng nhập thất bại.");
+      setError(reason instanceof Error ? reason.message : "Sign-in failed.");
     } finally {
       setSubmitting(false);
     }
@@ -87,50 +87,44 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (gate === "authenticated") return children;
 
   if (gate === "checking") {
-    return <main className="auth-shell"><p>Đang kiểm tra phiên đăng nhập…</p></main>;
+    return <main className="auth-shell"><p>Checking your session…</p></main>;
   }
 
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <a className="brand auth-brand" href="#top" aria-label="VAHAN">
-          <span className="brand-mark">V</span>
-          <span className="brand-copy"><strong>VAHAN</strong><small>REPORT AUTOMATION</small></span>
-        </a>
-
         {gate === "setup" ? (
           <>
-            <p className="eyebrow dark">BẢO VỆ BẢNG ĐIỀU KHIỂN</p>
-            <h1>Chưa cấu hình đăng nhập</h1>
+            <p className="eyebrow dark">DASHBOARD SECURITY</p>
+            <h1>Sign-in is not configured</h1>
             <p className="auth-description">
-              Cấu hình username, mật khẩu tối thiểu 12 ký tự và token secret ngẫu nhiên tối thiểu 32 ký tự
-              trên terminal chạy API, rồi khởi động lại backend.
+              Set a username, a password of at least 12 characters, and a random token secret of at least 32 characters in the API terminal, then restart the backend.
             </p>
             <pre className="auth-setup-code">{`export VAHAN_UI_AUTH_USERNAME="admin"
-export VAHAN_UI_AUTH_PASSWORD="mat-khau-it-nhat-12-ky-tu"
+export VAHAN_UI_AUTH_PASSWORD="password-at-least-12-characters"
 export VAHAN_UI_AUTH_TOKEN_SECRET="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 python -m uvicorn app.main:application --host 127.0.0.1 --port 8000 --reload`}</pre>
             <p className="auth-footnote">
-              Giữ mật khẩu và token secret ở phía máy chủ. Token đăng nhập có hiệu lực 1 giờ.
+              Keep the password and token secret on the server. Sign-in tokens expire after 1 hour.
             </p>
           </>
         ) : gate === "unavailable" ? (
           <>
-            <p className="eyebrow dark">KẾT NỐI API</p>
-            <h1>Chưa kết nối được</h1>
-            <p className="auth-description">{error || "Không thể kiểm tra cấu hình đăng nhập."}</p>
+            <p className="eyebrow dark">API CONNECTION</p>
+            <h1>Could not connect</h1>
+            <p className="auth-description">{error || "Could not check the sign-in configuration."}</p>
             <button className="primary-button" type="button" onClick={() => window.location.reload()}>
-              Thử lại
+              Try again
             </button>
           </>
         ) : (
           <>
-            <p className="eyebrow dark">ĐĂNG NHẬP QUẢN TRỊ</p>
-            <h1>Chào mừng trở lại</h1>
-            <p className="auth-description">Đăng nhập để mở bảng điều khiển VAHAN RPA.</p>
+            <p className="eyebrow dark">ADMIN SIGN-IN</p>
+            <h1>Welcome back</h1>
+            <p className="auth-description">Sign in to open the VAHAN RPA dashboard.</p>
             <form className="auth-form" onSubmit={handleLogin}>
               <label>
-                Tên đăng nhập
+                Username
                 <input
                   autoComplete="username"
                   autoFocus
@@ -141,7 +135,7 @@ python -m uvicorn app.main:application --host 127.0.0.1 --port 8000 --reload`}</
                 />
               </label>
               <label>
-                Mật khẩu
+                Password
                 <input
                   type="password"
                   autoComplete="current-password"
@@ -153,10 +147,10 @@ python -m uvicorn app.main:application --host 127.0.0.1 --port 8000 --reload`}</
               </label>
               {error && <p className="auth-error" role="alert">{error}</p>}
               <button className="primary-button" type="submit" disabled={submitting}>
-                {submitting ? "Đang xác thực…" : "Đăng nhập"}
+                {submitting ? "Signing in…" : "Sign in"}
               </button>
             </form>
-            <p className="auth-footnote">Kết nối bảo vệ bằng access token có thời hạn.</p>
+            <p className="auth-footnote">Your connection is protected by a time-limited access token.</p>
           </>
         )}
       </section>

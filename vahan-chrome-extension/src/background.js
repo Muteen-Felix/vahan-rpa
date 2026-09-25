@@ -28,6 +28,7 @@ const DEFAULT_RUNNER_CONFIG = Object.freeze({
   token: "change-me",
 });
 const HEARTBEAT_INTERVAL_MS = 20_000;
+const RUNNER_CONNECTION_ALARM = "runner-connection-watchdog";
 const VAHAN_URL = "https://analytics.parivahan.gov.in/analytics/vahanpublicreport?lang=en";
 // Cross-border latency (e.g. Vietnam -> India) can make the initial cold load
 // take much longer than a same-region load. This only applies to the first
@@ -63,6 +64,8 @@ const VAHAN_OPTION_SELECTORS = Object.freeze({
 let socket;
 let heartbeatTimer;
 let reconnectTimer;
+let runnerConnectionTask;
+let runnerReconnectRequested = false;
 let activeConfig;
 let activeJobId;
 let cancelledJobIds = new Set();
@@ -111,7 +114,7 @@ class VahanUnreachableError extends Error {
 
 class VahanServerError extends Error {
   constructor(statusCode = 500) {
-    super(`Máy chủ VAHAN đang gặp sự cố (HTTP ${statusCode}). Hệ thống có thể đang bảo trì.`);
+    super(`VAHAN server error (HTTP ${statusCode}). The site may be under maintenance.`);
     this.name = "VahanServerError";
     this.code = VAHAN_SERVER_ERROR_CODE;
     this.statusCode = statusCode;
@@ -143,7 +146,7 @@ function notifyAuthChallengeWaiters(hold) {
 function showAuthHoldBadge(hold) {
   chrome.action.setBadgeText?.({ text: "!" });
   chrome.action.setBadgeBackgroundColor?.({ color: "#b42318" });
-  chrome.action.setTitle?.({ title: "VAHAN đang yêu cầu xác thực — hệ thống đã tạm dừng" });
+  chrome.action.setTitle?.({ title: "VAHAN authentication required — automation paused" });
   chrome.runtime.sendMessage({ type: "VAHAN_AUTH_REQUIRED", authHold: hold }).catch(() => {});
 }
 
@@ -266,6 +269,31 @@ async function reportJobStatus(jobId, status, error) {
   if (!response?.ok) throw new Error(response?.error || `Could not report ${status}.`);
 }
 
+async function restorePreviousJobTab(activeServerJob) {
+  const previousTabId = activeServerJob?.previousTabId;
+  const vahanTabId = activeServerJob?.tabId;
+  if (!Number.isInteger(previousTabId) || !Number.isInteger(vahanTabId) || previousTabId === vahanTabId) return;
+
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (activeTab?.id !== vahanTabId) return;
+    const previousTab = await chrome.tabs.get(previousTabId);
+    if (previousTab.windowId !== activeTab.windowId) return;
+    await chrome.tabs.update(previousTabId, { active: true });
+  } catch {
+    // The user may have closed the original tab while the job was running.
+  }
+}
+
+async function finishServerJob(activeServerJob) {
+  if (!activeServerJob?.jobId) return;
+  const { activeServerJob: storedJob } = await chrome.storage.local.get("activeServerJob");
+  if (storedJob?.jobId && storedJob.jobId !== activeServerJob.jobId) return;
+  await restorePreviousJobTab(activeServerJob);
+  if (activeJobId === activeServerJob.jobId) activeJobId = undefined;
+  await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+}
+
 async function publishCaptcha(jobId, captcha) {
   if (!socket?.connected) throw new Error("Backend is disconnected.");
   const response = await socket.timeout(5_000).emitWithAck("captcha:required", {
@@ -334,7 +362,7 @@ async function verifyTabUrl(tabId) {
   const url = tab?.url || "";
   if (isChromeErrorUrl(url)) {
     const lastError = tabLastErrors.get(tabId);
-    throw new VahanUnreachableError(lastError?.error || "Lỗi kết nối");
+    throw new VahanUnreachableError(lastError?.error || "Connection error");
   }
   const lastError = tabLastErrors.get(tabId);
   if (lastError && lastError.type === "SERVER_ERROR" && Date.now() - lastError.timestamp < 15_000) {
@@ -385,9 +413,12 @@ async function waitForTabComplete(tabId, timeout = 30_000) {
   });
 }
 
-async function getVahanTab() {
+async function getVahanTab({ foreground = false } = {}) {
   await assertNoVahanAuthHold();
-  const tabs = await chrome.tabs.query({ url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*" });
+  const tabs = await chrome.tabs.query({
+    url: "https://analytics.parivahan.gov.in/analytics/vahanpublicreport*",
+    ...(foreground ? { lastFocusedWindow: true } : {}),
+  });
   let tab = tabs[0];
   let forceReload = false;
 
@@ -398,10 +429,14 @@ async function getVahanTab() {
       forceReload = true;
     }
   } else {
-    tab = await chrome.tabs.create({ url: VAHAN_URL, active: false });
+    tab = await chrome.tabs.create({ url: VAHAN_URL, active: foreground });
   }
 
   if (!tab.id) throw new Error("Chrome did not return a VAHAN tab id.");
+
+  // Chrome throttles or freezes some work in hidden tabs. Foreground only
+  // during an active report job; options lookups keep their existing behavior.
+  if (foreground) await chrome.tabs.update(tab.id, { active: true });
 
   if (forceReload) {
     await chrome.tabs.update(tab.id, { url: VAHAN_URL });
@@ -457,7 +492,7 @@ async function sendToVahan(tabId, message) {
           const currentTab = await chrome.tabs.get(tabId);
           if (isChromeErrorUrl(currentTab?.url)) {
             const lastError = tabLastErrors.get(tabId);
-            throw new VahanUnreachableError(lastError?.error || "Lỗi kết nối");
+            throw new VahanUnreachableError(lastError?.error || "Connection error");
           }
           if (isVahanRedirectedHomeUrl(currentTab?.url)) {
             throw new VahanSessionExpiredError();
@@ -616,9 +651,14 @@ async function executeJob(job) {
   if (activeJobId === jobId) return;
   if (activeJobId) {
     console.warn(`[VAHAN EXT] Preempting stale job ${activeJobId} with new job ${jobId}`);
-    cancelledJobIds.add(activeJobId);
-    activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    const staleJobId = activeJobId;
+    cancelledJobIds.add(staleJobId);
+    const { activeServerJob: staleServerJob } = await chrome.storage.local.get("activeServerJob");
+    if (staleServerJob?.jobId === staleJobId) await finishServerJob(staleServerJob);
+    else {
+      activeJobId = undefined;
+      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    }
   }
 
   activeJobId = jobId;
@@ -627,25 +667,52 @@ async function executeJob(job) {
   chrome.runtime.sendMessage({ type: "SERVER_JOB_ASSIGNED", job }).catch(() => {});
 
   let tabId;
+  let previousTabId;
   try {
+    const [previousTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    previousTabId = previousTab?.id;
     await reportJobStatus(jobId, "OPENING_VAHAN");
-    tabId = await getVahanTab();
+    tabId = await getVahanTab({ foreground: true });
     assertJobActive(jobId);
+    await chrome.storage.local.set({ pendingServerJob: { ...job, tabId, previousTabId } });
 
     const config = normalizeJobFilters(job.filters);
     await chrome.storage.local.set({
-      activeServerJob: { ...job, tabId, config, stage: "CAPTURING_CAPTCHA" },
+      pendingServerJob: { ...job, tabId, previousTabId },
+      activeServerJob: { ...job, tabId, previousTabId, config, stage: "FILLING_FILTERS" },
     });
 
-    // Capture CAPTCHA before touching the report filters. The user can start
-    // reading/entering it immediately while the official page remains fast
-    // and idle; filters are filled only after the user submits the code.
+    // Fill the report while the page is foregrounded, then publish the CAPTCHA
+    // from the final form state. This removes form work from the user's wait
+    // after CAPTCHA recognition or manual entry.
+    await reportJobStatus(jobId, "FILLING_FILTERS");
+    let fillResponse = await sendToVahan(tabId, { type: "FILL_VAHAN", config });
+    if (!fillResponse?.ok && String(fillResponse?.error || "").startsWith("#stateName:")) {
+      // VAHAN can retain the previous case's regional State option list after
+      // switching to ALL STATES. Open the report URL afresh once, then fill
+      // the entire case again so no stale dependent filter can survive.
+      await chrome.tabs.update(tabId, { url: VAHAN_URL });
+      await waitForTabComplete(tabId, INITIAL_PAGE_LOAD_TIMEOUT_MS);
+      assertJobActive(jobId);
+      fillResponse = await sendToVahan(tabId, { type: "FILL_VAHAN", config });
+    }
+    if (!fillResponse?.ok) throw new Error(fillResponse?.error || "VAHAN did not accept the filters.");
+    assertJobActive(jobId);
+    const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
+    await chrome.storage.local.set({ vahanConfig: { ...vahanConfig, ...config } });
+
+    await chrome.storage.local.set({
+      activeServerJob: { ...job, tabId, previousTabId, config, filtersFilled: true, stage: "CAPTURING_CAPTCHA" },
+    });
     await reportJobStatus(jobId, "CAPTURING_CAPTCHA");
     const captcha = await sendToVahan(tabId, { type: "CAPTURE_CAPTCHA" });
     if (!captcha?.ok) throw new Error(captcha?.error || "Could not capture the CAPTCHA.");
     assertJobActive(jobId);
     await chrome.storage.local.set({
-      activeServerJob: { ...job, tabId, config, captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA", attempts: 0 },
+      activeServerJob: {
+        ...job, tabId, previousTabId, config, filtersFilled: true,
+        captchaId: captcha.captchaId, stage: "WAITING_CAPTCHA", attempts: 0,
+      },
     });
     await publishCaptcha(jobId, captcha);
   } catch (error) {
@@ -666,8 +733,7 @@ async function executeJob(job) {
         if (authHeld) authFailureReportedJobs.add(jobId);
       }
     }
-    activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    await finishServerJob({ jobId, tabId, previousTabId });
   }
 }
 
@@ -707,20 +773,24 @@ function startHeartbeat() {
     if (!socket?.connected) return;
     socket.timeout(5_000).emit("runner:heartbeat", { timestamp: Date.now() }, (error, response) => {
       if (error || !response?.ok) {
-        publishConnection("error", error?.message || response?.error || "Heartbeat failed.");
+        const detail = error?.message || response?.error || "Heartbeat failed.";
+        publishConnection("error", detail);
+        if (!error && response?.ok === false && /not registered/i.test(response.error || "")) {
+          void connectRunner({ force: true }).catch(() => {});
+        }
       }
     });
   }, HEARTBEAT_INTERVAL_MS);
 }
 
-async function connectRunner() {
+async function connectRunnerOnce() {
   clearTimeout(reconnectTimer);
   activeConfig = await loadRunnerConfig();
   void uiHealthCheckController?.refreshScheduleFromBackend();
   socket?.removeAllListeners();
   socket?.disconnect();
 
-  await publishConnection("connecting", "Đang kết nối backend...");
+  await publishConnection("connecting", "Connecting to backend...");
   socket = io(`${activeConfig.serverUrl}/runner`, {
     transports: ["websocket"],
     auth: {
@@ -737,11 +807,17 @@ async function connectRunner() {
   });
 
   socket.on("connect", async () => {
-    publishConnection("connected", "Đã kết nối backend.");
+    publishConnection("connected", "Backend connected.");
     startHeartbeat();
-    const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+    const { activeServerJob, pendingServerJob } = await chrome.storage.local.get([
+      "activeServerJob",
+      "pendingServerJob",
+    ]);
     if (activeServerJob?.jobId) {
       await reportJobStatus(activeServerJob.jobId, "FAILED", "Extension reconnected or restarted.").catch(() => {});
+      await restorePreviousJobTab(activeServerJob);
+    } else if (pendingServerJob?.jobId) {
+      await restorePreviousJobTab(pendingServerJob);
     }
     activeJobId = undefined;
     await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
@@ -749,12 +825,12 @@ async function connectRunner() {
 
   socket.on("disconnect", (reason) => {
     stopHeartbeat();
-    publishConnection("disconnected", `Mất kết nối: ${reason}`);
+    publishConnection("disconnected", `Disconnected: ${reason}`);
   });
 
   socket.on("connect_error", (error) => {
     stopHeartbeat();
-    publishConnection("error", error.message || "Không thể kết nối backend.");
+    publishConnection("error", error.message || "Could not connect to backend.");
   });
 
   socket.on("ui-health:schedule-updated", (schedule) => {
@@ -776,7 +852,7 @@ async function connectRunner() {
   });
 
   socket.io.on("reconnect_attempt", () => {
-    publishConnection("connecting", "Đang kết nối lại backend...");
+    publishConnection("connecting", "Reconnecting to backend...");
   });
 
   socket.on("job:assigned", (job) => executeJob(job).catch(async (error) => {
@@ -787,13 +863,22 @@ async function connectRunner() {
   socket.on("job:cancelled", async ({ jobId }) => {
     const id = String(jobId);
     cancelledJobIds.add(id);
+    const { activeServerJob, pendingServerJob } = await chrome.storage.local.get([
+      "activeServerJob",
+      "pendingServerJob",
+    ]);
+    if (activeServerJob?.jobId === id) await finishServerJob(activeServerJob);
+    else if (pendingServerJob?.jobId === id) {
+      await restorePreviousJobTab(pendingServerJob);
+      await chrome.storage.local.remove("pendingServerJob");
+    }
     if (activeJobId === id) activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
   });
   socket.on("captcha:submit", async (payload, acknowledge) => {
     const jobId = String(payload?.jobId || "");
+    let activeServerJob;
     try {
-      const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
+      ({ activeServerJob } = await chrome.storage.local.get("activeServerJob"));
       if (!activeServerJob || activeServerJob.jobId !== jobId || (activeJobId && activeJobId !== jobId)) {
         throw new Error("The active VAHAN job no longer matches this CAPTCHA.");
       }
@@ -811,23 +896,11 @@ async function connectRunner() {
         },
       });
 
-      // The CAPTCHA was intentionally captured before the filters. Only now,
-      // after the user has supplied the code, fill the official report form.
-      const fillResponse = await sendToVahan(activeServerJob.tabId, {
-        type: "FILL_VAHAN",
-        config: activeServerJob.config,
-      });
-      if (!fillResponse?.ok) {
-        throw new Error(fillResponse?.error || "VAHAN did not accept the filters.");
-      }
+      if (!activeServerJob.filtersFilled) throw new Error("VAHAN filters are not ready yet.");
       assertJobActive(jobId);
-      const { vahanConfig = {} } = await chrome.storage.local.get("vahanConfig");
-      await chrome.storage.local.set({
-        vahanConfig: { ...vahanConfig, ...activeServerJob.config },
-      });
 
-      // Filling dynamic controls can cause the official page to refresh its
-      // CAPTCHA. Do not submit a code against a different image.
+      // Confirm the final CAPTCHA identity before forwarding the recognized or
+      // user-entered text to VAHAN.
       const currentCaptcha = await sendToVahan(activeServerJob.tabId, { type: "CAPTURE_CAPTCHA" });
       if (!currentCaptcha?.ok) {
         throw new Error(currentCaptcha?.error || "Could not verify the current CAPTCHA.");
@@ -863,8 +936,8 @@ async function connectRunner() {
       await reportJobStatus(jobId, "WAITING_RESULT");
       acknowledge({ ok: true });
     } catch (error) {
-      if (activeJobId === jobId) activeJobId = undefined;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await reportJobStatus(jobId, "FAILED", error.message).catch(() => {});
+      if (activeServerJob?.jobId === jobId) await finishServerJob(activeServerJob);
       acknowledge({ ok: false, error: error.message });
     }
   });
@@ -912,6 +985,35 @@ async function connectRunner() {
   });
 }
 
+function connectRunner({ force = false } = {}) {
+  if (runnerConnectionTask) {
+    runnerReconnectRequested ||= force;
+    return runnerConnectionTask;
+  }
+
+  const task = (async () => {
+    do {
+      runnerReconnectRequested = false;
+      await connectRunnerOnce();
+    } while (runnerReconnectRequested);
+  })()
+    .catch(async (error) => {
+      stopHeartbeat();
+      await publishConnection("error", error?.message || "Could not start the backend connection.").catch(() => {});
+      throw error;
+    })
+    .finally(() => {
+      if (runnerConnectionTask === task) runnerConnectionTask = undefined;
+    });
+  runnerConnectionTask = task;
+  return task;
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== RUNNER_CONNECTION_ALARM || socket?.active) return;
+  void connectRunner().catch(() => {});
+});
+
 async function handlePageResult(message, sender) {
   const { activeServerJob } = await chrome.storage.local.get("activeServerJob");
   if (!activeServerJob || (activeJobId && activeServerJob.jobId !== activeJobId)) return;
@@ -926,16 +1028,14 @@ async function handlePageResult(message, sender) {
       "FAILED",
       `${VAHAN_AUTH_REQUIRED_CODE}: ${vahanAuthHoldMessage(hold || {})}`,
     ).catch(() => {});
-    activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    await finishServerJob(activeServerJob);
     return;
   }
 
   if (message.result === "INVALID_CAPTCHA") {
     if ((activeServerJob.attempts || 0) >= 3) {
       await reportJobStatus(jobId, "FAILED", "CAPTCHA was invalid 3 consecutive times.").catch(() => {});
-      activeJobId = undefined;
-      await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+      await finishServerJob(activeServerJob);
       return;
     }
     // A VAHAN invalid-message node can arrive before it swaps the image. Never
@@ -958,15 +1058,13 @@ async function handlePageResult(message, sender) {
     } catch (error) {
       await reportJobStatus(jobId, "FAILED", error.message).catch(() => {});
     }
-    activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    await finishServerJob(activeServerJob);
     return;
   }
 
   if (message.result === "COMPLETED") {
-    await reportJobStatus(jobId, "COMPLETED");
-    activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    await reportJobStatus(jobId, "FAILED", "The page did not provide a captured Excel report.").catch(() => {});
+    await finishServerJob(activeServerJob);
     return;
   }
 
@@ -975,16 +1073,14 @@ async function handlePageResult(message, sender) {
   // tiền tố NO_RECORD_FOUND để phía Web UI (batch runner) nhận diện và CHẠY TIẾP kịch bản
   // kế tiếp thay vì dừng cả hàng đợi như một lỗi thật.
   if (message.result === "NO_RECORD") {
-    await reportJobStatus(jobId, "FAILED", "NO_RECORD_FOUND: VAHAN không có dữ liệu khớp bộ lọc này.").catch(() => {});
-    activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    await reportJobStatus(jobId, "FAILED", "NO_RECORD_FOUND: VAHAN returned no data for these filters.").catch(() => {});
+    await finishServerJob(activeServerJob);
     return;
   }
 
   if (message.result === "FAILED") {
     await reportJobStatus(jobId, "FAILED", message.error || "VAHAN did not return a result.").catch(() => {});
-    activeJobId = undefined;
-    await chrome.storage.local.remove(["pendingServerJob", "activeServerJob"]);
+    await finishServerJob(activeServerJob);
   }
 }
 
@@ -997,15 +1093,17 @@ async function handleCaptchaChanged(message, sender) {
   await publishCaptchaChange(activeServerJob, captcha, "captcha:refreshed");
 }
 
-chrome.runtime.onInstalled.addListener(() => connectRunner());
-chrome.runtime.onStartup.addListener(() => connectRunner());
+chrome.runtime.onInstalled.addListener(() => { void connectRunner().catch(() => {}); });
+chrome.runtime.onStartup.addListener(() => { void connectRunner().catch(() => {}); });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local" || !changes.runnerConfig) return;
   const nextConfig = changes.runnerConfig.newValue;
   clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(() => {
-    if (JSON.stringify(nextConfig) !== JSON.stringify(activeConfig)) connectRunner();
+    if (JSON.stringify(nextConfig) !== JSON.stringify(activeConfig)) {
+      void connectRunner({ force: true }).catch(() => {});
+    }
   }, 250);
 });
 
@@ -1033,7 +1131,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "OPEN_ACTION_POPUP") {
     if (typeof chrome.action.openPopup !== "function") {
-      sendResponse({ ok: false, error: "Tính năng này cần Google Chrome 127 trở lên." });
+      sendResponse({ ok: false, error: "This feature requires Google Chrome 127 or later." });
       return;
     }
     chrome.action.openPopup()
@@ -1081,7 +1179,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "RECONNECT_RUNNER") {
-    connectRunner()
+    connectRunner({ force: true })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -1094,4 +1192,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 uiHealthCheckController = registerUiHealthCheck(chrome);
 installVahanAuthGuard();
 void loadVahanAuthHold();
-connectRunner();
+chrome.alarms.create(RUNNER_CONNECTION_ALARM, { periodInMinutes: 0.5 });
+void connectRunner().catch(() => {});
