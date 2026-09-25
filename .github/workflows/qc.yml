@@ -1,4 +1,4 @@
-name: qc
+name: CI
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  qc:
+  gate:
     permissions:
       contents: read
       checks: write
