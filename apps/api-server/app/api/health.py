@@ -5,4 +5,5 @@ router = APIRouter(tags=["health"])
 
 @router.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    raise RuntimeError("Giả lập lỗi 500 để test Schemathesis!")
+    # return {"status": "ok"}
