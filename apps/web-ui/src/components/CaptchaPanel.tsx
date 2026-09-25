@@ -6,12 +6,11 @@ interface Props {
   challenge: CaptchaChallenge | null;
   submitting: boolean;
   refreshing: boolean;
-  autoApply: boolean;
   onSubmit: (value: string) => Promise<void>;
   onRefresh: () => Promise<void>;
 }
 
-export function CaptchaPanel({ challenge, submitting, refreshing, autoApply, onSubmit, onRefresh }: Props) {
+export function CaptchaPanel({ challenge, submitting, refreshing, onSubmit, onRefresh }: Props) {
   const [value, setValue] = useState("");
   useEffect(() => setValue(""), [challenge?.captchaId]);
   if (!challenge) return null;
@@ -32,28 +31,7 @@ export function CaptchaPanel({ challenge, submitting, refreshing, autoApply, onS
       >
         {refreshing ? "ĐANG TẢI CAPTCHA MỚI..." : "↻ TẢI CAPTCHA MỚI"}
       </button>
-      <label>Mã CAPTCHA
-        <input
-          value={value}
-          maxLength={6}
-          autoComplete="off"
-          disabled={submitting || refreshing}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="Nhập 6 ký tự"
-        />
-      </label>
-      <button
-        className="primary-button"
-        disabled={submitting || refreshing || value.trim().length !== 6}
-        onClick={async () => {
-          await onSubmit(value.trim());
-          setValue("");
-        }}
-      >
-        {submitting ? "Đang chuẩn bị báo cáo..." : autoApply ? "Gửi mã → Điền bộ lọc → Apply" : "Gửi mã và điền bộ lọc"}
-      </button>
-      {!autoApply && <p className="security-note">Sau khi gửi, hãy kiểm tra và bấm Apply trên tab VAHAN.</p>}
-      <p className="security-note">🔒 Hệ thống không đọc hoặc giải CAPTCHA tự động.</p>
+      <p className="security-note">Nhập CAPTCHA thủ công trên VAHAN. Khi có từ 6 ký tự, extension sẽ tự bấm Apply.</p>
     </section>
   );
 }

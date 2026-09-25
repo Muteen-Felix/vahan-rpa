@@ -62,6 +62,7 @@ VAHAN_API_SOCKETIO_CORS_ORIGINS=*
 VAHAN_API_RUNNER_TOKEN=change-me
 VAHAN_API_RUNNER_DISCONNECT_GRACE_SECONDS=30
 VAHAN_UI_HEALTH_LOG_DIR=runtime/ui-health-logs
+VAHAN_CAPTCHA_IMAGE_DIR=runtime/images1
 ```
 
 Backend hiện đọc biến môi trường của process và chưa tự load file `.env`. Nếu
@@ -69,6 +70,7 @@ muốn dùng giá trị khác mặc định, đặt biến trong cùng PowerShel
 
 ```powershell
 $env:VAHAN_API_RUNNER_TOKEN = "your-secret-token"
+$env:VAHAN_CAPTCHA_IMAGE_DIR = "runtime/images1"
 ```
 
 Backend mặc định cho phép Web UI và extension unpacked hiện tại gọi REST API.

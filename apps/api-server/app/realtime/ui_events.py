@@ -5,6 +5,7 @@ from socketio.exceptions import TimeoutError as SocketIOTimeoutError
 from app.models.job import JobStatus, can_transition
 from app.realtime.server import sio
 from app.services import services
+from app.ocr import ocr_to_text
 
 
 CAPTCHA_FORWARD_TIMEOUT_SECONDS = 45
@@ -31,44 +32,44 @@ async def _fail_captcha_submission(job_id: UUID, runner_id: str, error: str) -> 
 
 
 async def _forward_captcha_submission(
-    job_id: UUID,
-    runner_id: str,
-    runner_socket_id: str,
-    captcha_id: str,
-    value: str,
-) -> None:
-    """Forward the slow, browser-facing part outside the UI ACK request."""
-    try:
-        acknowledgement = await sio.call(
-            "captcha:submit",
-            {
-                "jobId": str(job_id),
-                "captchaId": captcha_id,
-                "value": value,
-            },
-            to=runner_socket_id,
-            namespace="/runner",
-            timeout=CAPTCHA_FORWARD_TIMEOUT_SECONDS,
-        )
-    except SocketIOTimeoutError:
-        await _fail_captcha_submission(
-            job_id,
-            runner_id,
-            "Extension không hoàn tất thao tác CAPTCHA trong thời gian cho phép.",
-        )
-        return
-    except Exception as error:  # pragma: no cover - defensive boundary for a background task
-        await _fail_captcha_submission(
-            job_id,
-            runner_id,
-            f"Không thể gửi CAPTCHA tới extension: {error}",
-        )
-        return
+    job_id: UUID,  # UUID của công việc đang chờ gửi mã CAPTCHA.
+    runner_id: str,  # ID của extension runner để cập nhật lỗi nếu gửi thất bại.
+    runner_socket_id: str,  # Socket ID của extension nhận sự kiện.
+    captcha_id: str,  # ID ảnh CAPTCHA mà người dùng đã nhập mã.
+    text1: str,  # Giá trị CAPTCHA nhận từ giao diện qua biến text1.
+) -> None:  # Hàm chạy nền, không trả về dữ liệu.
+    """Chuyển mã CAPTCHA tới extension ngoài thời gian chờ phản hồi của giao diện."""  # Nêu mục đích của hàm.
+    try:  # Bắt đầu gửi mã và chờ extension xác nhận đã xử lý.
+        acknowledgement = await sio.call(  # Gửi sự kiện Socket.IO và chờ phản hồi từ extension.
+            "captcha:submit",  # Tên sự kiện mà extension đang lắng nghe.
+            {  # Tạo dữ liệu gửi kèm sự kiện.
+                "jobId": str(job_id),  # Gửi ID công việc dưới dạng chuỗi.
+                "captchaId": captcha_id,  # Gửi ID CAPTCHA để đối chiếu ảnh hiện hành.
+                "value": ocr_to_text.OCR_RESULT or text1,  # Gán kết quả OCR hoặc text1 vào trường value.
+            },  # Kết thúc dữ liệu sự kiện.
+            to=runner_socket_id,  # Chỉ gửi tới đúng kết nối của extension runner.
+            namespace="/runner",  # Gửi trên namespace dành cho runner.
+            timeout=CAPTCHA_FORWARD_TIMEOUT_SECONDS,  # Giới hạn thời gian chờ extension phản hồi.
+        )  # Hoàn tất lệnh gửi sự kiện và nhận xác nhận.
+    except SocketIOTimeoutError:  # Xử lý trường hợp extension không phản hồi đúng hạn.
+        await _fail_captcha_submission(  # Đánh dấu công việc thất bại và thông báo lỗi lên giao diện.
+            job_id,  # Chỉ rõ công việc cần cập nhật trạng thái.
+            runner_id,  # Chỉ rõ runner liên quan đến lỗi.
+            "Extension không hoàn tất thao tác CAPTCHA trong thời gian cho phép.",  # Lý do hết thời gian chờ.
+        )  # Hoàn tất cập nhật lỗi cho công việc.
+        return  # Dừng hàm vì đã xử lý xong lỗi timeout.
+    except Exception as error:  # pragma: no cover - xử lý dự phòng cho lỗi trong tác vụ nền.
+        await _fail_captcha_submission(  # Đánh dấu công việc thất bại khi phát sinh lỗi khác.
+            job_id,  # Chỉ rõ công việc cần cập nhật trạng thái.
+            runner_id,  # Chỉ rõ runner liên quan đến lỗi.
+            f"Không thể gửi CAPTCHA tới extension: {error}",  # Ghi nguyên nhân lỗi để tiện kiểm tra.
+        )  # Hoàn tất cập nhật lỗi cho công việc.
+        return  # Dừng hàm sau khi lỗi đã được xử lý.
 
-    if acknowledgement and acknowledgement.get("ok"):
-        return
-    error = (acknowledgement or {}).get("error", "Extension từ chối xử lý CAPTCHA.")
-    await _fail_captcha_submission(job_id, runner_id, error)
+    if acknowledgement and acknowledgement.get("ok"):  # Kiểm tra extension có xác nhận xử lý thành công không.
+        return  # Kết thúc bình thường khi extension xác nhận thành công.
+    error = (acknowledgement or {}).get("error", "Extension từ chối xử lý CAPTCHA.")  # Lấy lỗi trả về hoặc dùng thông báo mặc định.
+    await _fail_captcha_submission(job_id, runner_id, error)  # Cập nhật trạng thái thất bại và gửi lỗi lên giao diện.
 
 
 @sio.event(namespace="/ui")
@@ -131,10 +132,10 @@ async def submit_captcha(_sid: str, payload: dict) -> dict:
     try:
         job_id = UUID(str(payload["jobId"]))
         captcha_id = str(payload["captchaId"])
-        value = str(payload["value"]).strip()
+        text1 = str(payload.get("text1", payload.get("value", ""))).strip()
     except (KeyError, TypeError, ValueError):
         return {"ok": False, "error": "Invalid CAPTCHA submission."}
-    if len(value) != 6:
+    if len(text1) != 6:
         return {"ok": False, "error": "CAPTCHA must contain exactly 6 characters."}
 
     job = await services.jobs.get(job_id)
@@ -163,7 +164,7 @@ async def submit_captcha(_sid: str, payload: dict) -> dict:
         job.runner_id,
         runner.socket_id,
         captcha_id,
-        value,
+        text1,
     )
     return {"ok": True, "accepted": True}
 

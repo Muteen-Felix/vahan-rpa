@@ -11,9 +11,6 @@ Backend control plane for the React Web UI and VAHAN browser extension.
 - Socket.IO namespaces: `/ui` and `/runner`.
 - In-memory runner registry and job repository.
 - Runner registration, heartbeat and disconnect handling.
-- Job assignment/status routing.
-- CAPTCHA image and human-entered value routing.
-
 Runner/job/schedule state is intentionally lost when the process restarts.
 UI health CSV reports are persisted on disk so they survive a backend restart.
 PostgreSQL, Redis, Celery and authentication are outside Phase 1.

@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Scenario, VahanFilters } from "../contracts";
 import { api } from "../services/api-client";
 
 interface BatchLogEntry {
+  index: number;
   name: string;
   status: "ok" | "empty" | "error";
   detail: string;
@@ -14,13 +15,14 @@ interface BatchLogEntry {
 interface Props {
   onImport: (scenarios: Scenario[]) => void;
   onRunAll: (scenarios: Scenario[]) => void;
+  onRunFrom: (index: number) => void;
+  onRetryFailed: () => void;
   onStop: () => void;
   running: boolean;
   progress: { done: number; total: number; current: string };
-  batchStatus: "idle" | "running" | "completed" | "stopped" | "error";
+  batchStatus: "idle" | "running" | "completed" | "completed_with_errors" | "stopped" | "error";
   log: BatchLogEntry[];
-  canResume: boolean;
-  onResume: () => void;
+  failedAtIndex: number | null;
   disabled: boolean;
 }
 
@@ -65,11 +67,23 @@ function parseScenarioFile(raw: string): Scenario[] {
   });
 }
 
-export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, batchStatus, log, canResume, onResume, disabled }: Props) {
+export function ScenarioImport({
+  onImport, onRunAll, onRunFrom, onRetryFailed, onStop, running, progress,
+  batchStatus, log, failedAtIndex, disabled,
+}: Props) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [selectedStartIndex, setSelectedStartIndex] = useState(0);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (failedAtIndex === null || !scenarios.length) {
+      setSelectedStartIndex(0);
+      return;
+    }
+    setSelectedStartIndex(failedAtIndex + 1 < scenarios.length ? failedAtIndex + 1 : failedAtIndex);
+  }, [failedAtIndex, scenarios.length]);
 
   async function handleFile(file: File) {
     setError("");
@@ -129,6 +143,11 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
           Đang chạy theo cấu hình trong JSON. Phần “Cấu hình báo cáo” bên dưới đã được bỏ qua.
         </p>
       )}
+      {scenarios.length > 0 && !error && (
+        <p className="option-note">
+          Case lỗi được tự bỏ qua để chạy tiếp. Bạn có thể chọn case bắt đầu hoặc chạy lại case lỗi gần nhất.
+        </p>
+      )}
       {error && <p className="error-message">{error}</p>}
 
       {fileName && !running && !error && (
@@ -168,10 +187,31 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
               Dừng sau job hiện tại
             </button>
           )}
-          {!running && batchStatus === "error" && canResume && (
-            <button className="retry-button" type="button" disabled={disabled} onClick={onResume}>
+          {!running && (
+            <label className="scenario-start-select">
+              Chọn case để chạy tiếp từ
+              <select
+                value={selectedStartIndex}
+                disabled={disabled}
+                onChange={(event) => setSelectedStartIndex(Number(event.target.value))}
+              >
+                {scenarios.map((scenario, index) => (
+                  <option key={scenario.name + "-" + index} value={index}>
+                    Case {index + 1}: {scenario.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {!running && (
+            <button className="secondary-button scenario-continue-button" type="button" disabled={disabled} onClick={() => onRunFrom(selectedStartIndex)}>
+              Chạy từ case đã chọn
+            </button>
+          )}
+          {!running && failedAtIndex !== null && scenarios[failedAtIndex] && (
+            <button className="retry-button" type="button" disabled={disabled} onClick={onRetryFailed}>
               <span className="retry-icon" aria-hidden="true">↻</span>
-              Chạy lại từ mục bị lỗi
+              Chạy lại case lỗi #{failedAtIndex + 1}
             </button>
           )}
         </>
@@ -183,6 +223,8 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
             ? `Đang chạy ${progress.done + 1}/${progress.total}: ${progress.current}`
             : batchStatus === "completed"
               ? `Đã hoàn tất ${progress.done}/${progress.total}.`
+              : batchStatus === "completed_with_errors"
+                ? `Đã chạy ${progress.done}/${progress.total}; ${log.filter((entry) => entry.status === "error").length} case lỗi đã được bỏ qua.`
               : batchStatus === "stopped"
                 ? `Đã dừng ở ${progress.done}/${progress.total}.`
                 : batchStatus === "error"
@@ -196,7 +238,7 @@ export function ScenarioImport({ onImport, onRunAll, onStop, running, progress, 
           {log.map((entry, index) => {
             const icon = entry.status === "ok" ? "✓" : entry.status === "empty" ? "○" : "✗";
             return (
-              <li key={`${entry.name}-${index}`} data-status={entry.status}>
+              <li key={entry.index + "-" + index} data-status={entry.status}>
                 <strong>{icon} {entry.name}</strong>
                 <span>{entry.detail}</span>
                 {entry.excelFileName && entry.jobId && (

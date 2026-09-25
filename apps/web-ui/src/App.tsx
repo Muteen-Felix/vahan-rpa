@@ -26,7 +26,7 @@ const ACTIVE_JOB_STORAGE_KEY = "vahanActiveJobId";
 const UI_SOCKET_ACK_TIMEOUT_MS = 15_000;
 const CAPTCHA_REFRESH_ACK_TIMEOUT_MS = 25_000;
 type AppSection = "configure" | "activity" | "settings";
-type BatchStatus = "idle" | "running" | "completed" | "stopped" | "error";
+type BatchStatus = "idle" | "running" | "completed" | "completed_with_errors" | "stopped" | "error";
 
 function isSocketTimeout(reason: unknown): boolean {
   const message = reason instanceof Error ? reason.message : String(reason || "");
@@ -59,6 +59,7 @@ export default function App() {
   const [reportsTrigger, setReportsTrigger] = useState(0);
   const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0, current: "" });
   const [batchLog, setBatchLog] = useState<{
+    index: number;
     name: string;
     status: "ok" | "empty" | "error";
     detail: string;
@@ -245,7 +246,7 @@ export default function App() {
     }
   }
 
-  async function submitCaptcha(value: string) {
+  async function submitCaptcha(text1: string) {
     if (!job || !captcha) return;
     setSubmittingCaptcha(true);
     setError("");
@@ -253,7 +254,7 @@ export default function App() {
     try {
       const acknowledgement = await uiSocket.timeout(UI_SOCKET_ACK_TIMEOUT_MS).emitWithAck(
         "captcha:submitted",
-        { jobId: job.id, captchaId: captcha.captchaId, value },
+        { jobId: job.id, captchaId: captcha.captchaId, text1 },
       ) as Acknowledgement;
       if (!acknowledgement.ok) throw new Error(acknowledgement.error || "Không gửi được CAPTCHA.");
       setCaptcha(null);
@@ -321,81 +322,100 @@ export default function App() {
     return terminal;
   }
 
-  async function runScenarioQueue(queue: Scenario[]) {
+  async function runScenarioQueue(
+    queue: Scenario[],
+    { startIndex = 0, clearLog = true }: { startIndex?: number; clearLog?: boolean } = {},
+  ) {
     if (!queue.length || batchRunning) return;
     batchStopRef.current = false;
     setBatchRunning(true);
     setBatchStatus("running");
-    setBatchLog([]);
-    setFailedAtIndex(null);
-    setBatchProgress({ done: 0, total: queue.length, current: queue[0].name });
+    if (clearLog) {
+      setBatchLog([]);
+      setFailedAtIndex(null);
+    }
+    const total = scenarios.length || startIndex + queue.length;
+    setBatchProgress({ done: startIndex, total, current: queue[0].name });
 
     let outcome: BatchStatus = "completed";
-    let processed = 0;
+    let hadErrors = false;
+    let done = startIndex;
+
+    function recordScenario(entry: {
+      index: number;
+      name: string;
+      status: "ok" | "empty" | "error";
+      detail: string;
+      jobId?: string;
+      excelFileName?: string | null;
+    }) {
+      setBatchLog((current) => {
+        const existingIndex = current.findIndex((item) => item.index === entry.index);
+        if (existingIndex < 0) return [...current, entry];
+        const next = [...current];
+        next[existingIndex] = entry;
+        return next;
+      });
+    }
 
     for (let i = 0; i < queue.length; i++) {
       if (batchStopRef.current) {
         outcome = "stopped";
         break;
       }
+      const scenarioIndex = startIndex + i;
       const scenario = queue[i];
-      setBatchProgress({ done: i, total: queue.length, current: scenario.name });
-
-      const runnerId = await pickAvailableRunnerWithRetry();
-      if (!runnerId) {
-        setBatchLog((log) => [...log, {
-          name: scenario.name, status: "error",
-          detail: "Dừng batch: không còn extension runner nào ONLINE và rảnh.",
-        }]);
-        outcome = "error";
-        setFailedAtIndex(i);
-        break;
-      }
+      setBatchProgress({ done: scenarioIndex, total, current: scenario.name });
 
       try {
+        const runnerId = await pickAvailableRunnerWithRetry();
+        if (!runnerId) throw new Error("Không có extension runner nào ONLINE và rảnh.");
         const result = await runOneScenarioJob(runnerId, scenario.filters, scenario.name);
-        processed = i + 1;
-        setBatchProgress({ done: processed, total: queue.length, current: scenario.name });
         if ((result.error || "").startsWith("NO_RECORD_FOUND")) {
           // Filter hợp lệ nhưng VAHAN không có dữ liệu khớp — không phải lỗi hệ thống,
           // không dừng batch, chạy tiếp kịch bản kế tiếp.
-          setBatchLog((log) => [...log, {
+          recordScenario({
+            index: scenarioIndex,
             name: scenario.name, status: "empty",
             detail: "VAHAN xác nhận không có báo cáo sau thời gian chờ (No record found) — bỏ qua, chạy tiếp.",
-          }]);
+          });
         } else if (result.status === "COMPLETED") {
-          setBatchLog((log) => [...log, {
+          recordScenario({
+            index: scenarioIndex,
             name: scenario.name,
             status: "ok",
-            detail: `Job ${result.id} hoàn tất.`,
+            detail: "Job " + result.id + " hoàn tất.",
             jobId: result.id,
             excelFileName: result.excelFileName,
-          }]);
+          });
+          setFailedAtIndex((current) => current === scenarioIndex ? null : current);
         } else {
-          setBatchLog((log) => [...log, {
+          hadErrors = true;
+          recordScenario({
+            index: scenarioIndex,
             name: scenario.name, status: "error",
-            detail: result.error || `Job kết thúc ở trạng thái ${result.status} — dừng batch.`,
-          }]);
-          outcome = "error";
-          setFailedAtIndex(i);
-          break;
+            detail: (result.error || ("Job kết thúc ở trạng thái " + result.status + ".")) + " Đã bỏ qua case này và chạy case tiếp theo.",
+          });
+          setFailedAtIndex(scenarioIndex);
         }
       } catch (reason) {
-        setBatchLog((log) => [...log, {
+        hadErrors = true;
+        recordScenario({
+          index: scenarioIndex,
           name: scenario.name, status: "error",
-          detail: reason instanceof Error ? reason.message : "Lỗi không rõ khi tạo job.",
-        }]);
-        outcome = "error";
-        setFailedAtIndex(i);
-        break;
+          detail: (reason instanceof Error ? reason.message : "Lỗi không rõ khi tạo job.") + " Đã bỏ qua case này và chạy case tiếp theo.",
+        });
+        setFailedAtIndex(scenarioIndex);
       }
+      done = scenarioIndex + 1;
+      setBatchProgress({ done, total, current: scenario.name });
     }
 
-    if (outcome === "completed" && batchStopRef.current && processed < queue.length) {
+    if (outcome === "completed" && batchStopRef.current && done < startIndex + queue.length) {
       outcome = "stopped";
     }
-    setBatchProgress((current) => ({ ...current, done: processed }));
-    setBatchStatus(outcome);
+    setBatchProgress((current) => ({ ...current, done }));
+    setBatchStatus(outcome === "completed" && hadErrors ? "completed_with_errors" : outcome);
     setBatchRunning(false);
   }
 
@@ -403,9 +423,14 @@ export default function App() {
     batchStopRef.current = true;
   }
 
-  function resumeScenarioQueue() {
-    if (failedAtIndex === null) return;
-    runScenarioQueue(scenarios.slice(failedAtIndex));
+  function runFromScenarioIndex(index: number) {
+    if (!Number.isInteger(index) || index < 0 || index >= scenarios.length) return;
+    runScenarioQueue(scenarios.slice(index), { startIndex: index, clearLog: false });
+  }
+
+  function retryFailedScenario() {
+    if (failedAtIndex === null || !scenarios[failedAtIndex]) return;
+    runScenarioQueue([scenarios[failedAtIndex]], { startIndex: failedAtIndex, clearLog: false });
   }
 
   async function cancelJob() {
@@ -487,13 +512,14 @@ export default function App() {
                     <ScenarioImport
                       onImport={handleScenarioImport}
                       onRunAll={runScenarioQueue}
+                      onRunFrom={runFromScenarioIndex}
+                      onRetryFailed={retryFailedScenario}
                       onStop={stopBatch}
                       running={batchRunning}
                       progress={batchProgress}
                       batchStatus={batchStatus}
                       log={batchLog}
-                      canResume={failedAtIndex !== null}
-                      onResume={resumeScenarioQueue}
+                      failedAtIndex={failedAtIndex}
                       disabled={busy}
                     />
                     {/* {scenarios.length === 0 && (
@@ -506,7 +532,6 @@ export default function App() {
                       challenge={captcha}
                       submitting={submittingCaptcha}
                       refreshing={refreshingCaptcha}
-                      autoApply={job?.filters.autoApply ?? false}
                       onSubmit={submitCaptcha}
                       onRefresh={refreshCaptcha}
                     />

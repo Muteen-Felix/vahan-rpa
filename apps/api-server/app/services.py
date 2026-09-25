@@ -7,6 +7,7 @@ from app.repositories import (
     UiHealthLogStore,
     InMemoryUiHealthScheduleRepository,
 )
+from app.repositories.captcha_image_store import CaptchaImageStore
 
 
 @dataclass(slots=True)
@@ -15,6 +16,7 @@ class Services:
     runners: InMemoryRunnerRegistry
     ui_health: InMemoryUiHealthScheduleRepository
     ui_health_logs: UiHealthLogStore
+    captcha_images: CaptchaImageStore
 
 
 services = Services(
@@ -22,4 +24,8 @@ services = Services(
     runners=InMemoryRunnerRegistry(),
     ui_health=InMemoryUiHealthScheduleRepository(),
     ui_health_logs=UiHealthLogStore(settings.ui_health_log_dir),
+    captcha_images=CaptchaImageStore(
+        settings.captcha_image_dir,
+        path_template=settings.captcha_image_path_template,
+    ),
 )
