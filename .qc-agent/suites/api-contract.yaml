@@ -19,7 +19,8 @@ tasks:
     max_examples: 25
     seed: 1337
     # qc-agent:begin refine exclude_path
-    # qc-agent:todo REFINE: chưa biết endpoint nào không nên fuzz (upload, xoá dữ liệu thật): CI đề xuất từ OpenAPI sống, hoặc chạy lại init --openapi
+    exclude_path:
+    - "/api/jobs/{job_id}/upload-excel"  # POST nhận multipart/form-data: fuzz tệp không có nghĩa và tốn thời gian
     # qc-agent:end
   oracle:
     kind: checks

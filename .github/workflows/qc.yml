@@ -17,7 +17,7 @@ jobs:
     with:
       project: vahan-rpa
       image: ghcr.io/muteen-felix/qc-agent@sha256:25e6f3cd93e22e706f1325bc525cf449ea79308b3d99c4b88fd6717a63384ac0
-      sut_health_path: "/health"
+      sut_health_path: "/api/health"
       sut_ui_dockerfile: ".qc-agent/Dockerfile.ui"
       sut_ui_context: "apps/web-ui"
       sut_ui_port: "8080"
