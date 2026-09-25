@@ -103,6 +103,61 @@ async function waitForOptions(selector, labels, timeout = 15000) {
   throw new Error(`${selector}: dynamic options did not load within ${timeout} ms.`);
 }
 
+async function refreshXAxisOptions(yAxisLabel, { resetSelection = false } = {}) {
+  const yAxis = document.querySelector("#yAxis");
+  const xAxis = document.querySelector("#xAxis");
+  if (!yAxis || !xAxis) throw new Error("Could not find #yAxis or #xAxis.");
+  const match = getOptionMap(yAxis).find((option) => option.label === normalize(yAxisLabel));
+  if (!match) throw new Error(`#yAxis: could not find "${yAxisLabel}".`);
+
+  // VAHAN restores X-Axis from a hidden field while rebuilding its options.
+  // Clear both values during job fills so a previous scenario cannot affect
+  // the requested selection. Option lookups keep the page's current choice.
+  const hiddenXAxis = document.querySelector("#xAxis_hidden");
+  if (resetSelection) {
+    xAxis.value = "";
+    if (hiddenXAxis) hiddenXAxis.value = "";
+  }
+  yAxis.value = match.value;
+  yAxis.dispatchEvent(new Event("change", { bubbles: true }));
+  yAxis.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  await delay(50);
+  return [...xAxis.options]
+    .filter((option) => option.value)
+    .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim());
+}
+
+async function waitForXAxisOptions(yAxisLabel, labels, timeout = 15000) {
+  const deadline = Date.now() + timeout;
+  const expected = labels.map(normalize);
+  let available = [];
+  let matchedSince = 0;
+  while (Date.now() < deadline) {
+    const xAxis = document.querySelector("#xAxis");
+    if (xAxis) {
+      available = [...xAxis.options]
+        .filter((option) => option.value)
+        .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim());
+      const availableNormalized = available.map(normalize);
+      const allAvailable = expected.every((label) => availableNormalized.includes(label));
+      if (allAvailable) {
+        // Keep the requested option present briefly so an old option list
+        // visible during VAHAN's AJAX refresh is not mistaken for the new one.
+        if (!matchedSince) matchedSince = Date.now();
+        if (Date.now() - matchedSince >= 400) return;
+      } else {
+        matchedSince = 0;
+      }
+    }
+    await delay(200);
+  }
+  const missing = labels.filter((label, index) => !available.map(normalize).includes(expected[index]));
+  throw new Error(
+    `#xAxis: requested option(s) "${missing.join(", ")}" did not load for Y-Axis "${yAxisLabel}" `
+    + `within ${timeout} ms. Available X-Axis options: ${available.join(", ") || "(none)"}.`,
+  );
+}
+
 async function selectLabels(selector, rawValue) {
   const labels = splitValues(rawValue);
   const select = document.querySelector(selector);
@@ -190,17 +245,8 @@ async function fetchMakers(search) {
 }
 
 async function getXAxisOptions(yAxisLabel) {
-  const yAxis = document.querySelector("#yAxis");
-  if (!yAxis || !yAxisLabel) return [];
-  const match = getOptionMap(yAxis).find((option) => option.label === normalize(yAxisLabel));
-  if (!match) return [];
-  yAxis.value = match.value;
-  yAxis.dispatchEvent(new Event("change", { bubbles: true }));
-  yAxis.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  await delay(50);
-  return [...document.querySelectorAll("#xAxis option")]
-    .map((option) => (option.label || option.textContent || "").replace(/\s+/g, " ").trim())
-    .filter(Boolean);
+  if (!yAxisLabel) return [];
+  return refreshXAxisOptions(yAxisLabel);
 }
 
 async function getStateOptions(delhiNcrLabel) {
@@ -271,10 +317,15 @@ async function fillVahan(config) {
   }
   if (has("yAxis")) {
     await selectLabels("#yAxis", config.yAxis);
-    document.querySelector("#yAxis")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await refreshXAxisOptions(splitValues(config.yAxis)[0], { resetSelection: true });
   }
   if (has("xAxis") && splitValues(config.xAxis).length) {
-    await waitForOptions("#xAxis", splitValues(config.xAxis));
+    const yAxis = document.querySelector("#yAxis");
+    const selectedYAxis = yAxis && [...yAxis.options].find((option) => option.value === yAxis.value);
+    const yAxisLabel = splitValues(config.yAxis)[0]
+      || selectedYAxis?.label
+      || selectedYAxis?.textContent?.trim();
+    await waitForXAxisOptions(yAxisLabel || "(current selection)", splitValues(config.xAxis));
     await selectLabels("#xAxis", config.xAxis);
   }
   if (has("autoApply")) configureAutoApply(config.autoApply);
@@ -387,6 +438,7 @@ function observeCaptchaChanges() {
 }
 
 function submitRemoteCaptcha(value, autoApply) {
+  autoApply = true;
   const input = document.querySelector("#externalCaptcha");
   if (!input) throw new Error("Could not find the CAPTCHA input on VAHAN.");
   input.focus();
@@ -428,6 +480,7 @@ function watchApplyButton(button) {
 }
 
 function configureAutoApply(enabled) {
+  enabled = true;
   autoApplyCleanup?.();
   autoApplyCleanup = undefined;
 
@@ -448,7 +501,7 @@ function configureAutoApply(enabled) {
     captcha.removeEventListener("input", onInput);
   };
   const submit = () => {
-    if (submitted || captcha.value.trim().length !== 6) return;
+    if (submitted || captcha.value.trim().length < 6) return;
     submitted = true;
     cleanup();
     updateFloatingStep("captcha", "done");
@@ -459,7 +512,7 @@ function configureAutoApply(enabled) {
   };
   const onInput = () => {
     clearTimeout(timer);
-    if (captcha.value.trim().length === 6) timer = setTimeout(submit, 800);
+    if (captcha.value.trim().length >= 6) timer = setTimeout(submit, 800);
   };
 
   captcha.addEventListener("input", onInput);

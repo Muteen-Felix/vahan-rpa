@@ -1,15 +1,53 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from uuid import UUID
+from pathlib import Path
 
 from app.config import settings
 from app.models.job import JobStatus, can_transition
 from app.realtime.server import sio
 from app.services import services
+from app.ocr import ocr_to_text
+from app.realtime.ui_events import _forward_captcha_submission
 
 
 _disconnect_tasks: dict[str, asyncio.Task] = {}
+_logger = logging.getLogger(__name__)
+
+
+async def _save_captcha_image(job_id: UUID, image_data_url: str) -> Path | dict:
+    try:
+        return await services.captcha_images.save(job_id, image_data_url)
+    except ValueError:
+        return {"ok": False, "error": "Invalid CAPTCHA image data."}
+    except OSError:
+        _logger.exception("Could not save CAPTCHA image for job %s", job_id)
+        return {"ok": False, "error": "Could not save the CAPTCHA image in backend storage."}
+
+
+async def _auto_solve_captcha(job_id: UUID, runner_id: str, socket_id: str, captcha_id: str, image_path: Path) -> bool:
+    try:
+        text = await asyncio.to_thread(ocr_to_text.recognize, image_path)
+    except Exception:
+        _logger.exception("OCR failed for job %s", job_id)
+        text = ""
+
+    if text:
+        updated = await services.jobs.update_status(job_id, JobStatus.SUBMITTING)
+        await sio.emit("job:status", updated.model_dump(mode="json", by_alias=True), room=f"job:{job_id}", namespace="/ui")
+        sio.start_background_task(
+            _forward_captcha_submission,
+            job_id,
+            runner_id,
+            socket_id,
+            captcha_id,
+            text,
+        )
+        return True
+    return False
+
 
 
 async def _expire_disconnected_runner(runner_id: str, socket_id: str) -> None:
@@ -133,12 +171,17 @@ async def captcha_required(sid: str, payload: dict) -> dict:
         return {"ok": False, "error": "Job does not belong to this runner."}
     if not can_transition(job.status, JobStatus.WAITING_CAPTCHA):
         return {"ok": False, "error": "Job cannot request CAPTCHA in its current state."}
+    storage_result = await _save_captcha_image(job_id, image_data_url)
+    if isinstance(storage_result, dict):
+        return storage_result
     await services.jobs.update_status(
         job_id,
         JobStatus.WAITING_CAPTCHA,
         captcha_id=captcha_id,
         captcha_image_data_url=image_data_url,
     )
+    if await _auto_solve_captcha(job_id, runner.id, sid, captcha_id, storage_result):
+        return {"ok": True}
     await sio.emit(
         "captcha:required",
         {
@@ -173,12 +216,17 @@ async def captcha_invalid(sid: str, payload: dict) -> dict:
         return {"ok": False, "error": "Job does not belong to this runner."}
     if job.status not in {JobStatus.SUBMITTING, JobStatus.WAITING_RESULT}:
         return {"ok": False, "error": "Job is not waiting for a VAHAN result."}
+    storage_result = await _save_captcha_image(job_id, image_data_url)
+    if isinstance(storage_result, dict):
+        return storage_result
     updated = await services.jobs.update_status(
         job_id,
         JobStatus.WAITING_CAPTCHA,
         captcha_id=captcha_id,
         captcha_image_data_url=image_data_url,
     )
+    if await _auto_solve_captcha(job_id, runner.id, sid, captcha_id, storage_result):
+        return {"ok": True}
     await sio.emit(
         "captcha:invalid",
         {
@@ -219,10 +267,15 @@ async def captcha_refreshed(sid: str, payload: dict) -> dict:
         return {"ok": False, "error": "Job does not belong to this runner."}
     if job.status != JobStatus.WAITING_CAPTCHA:
         return {"ok": False, "error": "Job is not waiting for CAPTCHA."}
+    storage_result = await _save_captcha_image(job_id, image_data_url)
+    if isinstance(storage_result, dict):
+        return storage_result
     updated = await services.jobs.update_status(
         job_id, JobStatus.WAITING_CAPTCHA,
         captcha_id=captcha_id, captcha_image_data_url=image_data_url,
     )
+    if await _auto_solve_captcha(job_id, runner.id, sid, captcha_id, storage_result):
+        return {"ok": True}
     await sio.emit(
         "captcha:refreshed",
         {"jobId": str(job_id), "captchaId": captcha_id, "imageDataUrl": image_data_url},
